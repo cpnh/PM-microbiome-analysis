@@ -1,0 +1,130 @@
+# Raw Metagenome Quality Control
+
+Analysis begins with running quality control on raw metagenome sequence files. Raw files are trimmed and filtered of adapter sequences and low quality base calls (Phread quality scores $\geq$ 20 i.e. 99% base call accuracy [@Ewing1998]), such as those usually found at the beginning and end of a read.
+
+## Adapter trimming and read filtering
+
+*Fastp* is an efficient quality control tool that removes adapter sequences, low‐quality reads, and provides base correction and deduplication methods, which would otherwise create noise in sequencing data, ultimately impacting analysis accuracy [@Chen2023].
+
+To perform *fastp* sample processing, the following script can be used:
+
+```{bash}
+#| label: fastp script contents
+#| eval: false
+{{< include ../../scripts/run_fastp.sh >}}
+```
+
+::: callout-important
+Remember to declare your environment variables in
+[*environment.required*](../../_environment.required)
+:::
+
+```{bash}
+#| eval: false
+#| label: fastp QC and trimming
+#| output: true
+
+mkdir -p $FASTP_OUT/logs
+
+find "$IN" -maxdepth 1 -type f \( -name "*_R1.fq.gz" -o -name "*_R1.fastq.gz" \) | \
+  while read -r r1; do \
+    r2="${r1/_R1/_R2}" 
+    echo "$r1 $r2 $FASTP_OUT $(basename ${r1%%_R1.*})"; \
+  done | \
+    parallel --progress --bar --eta --colsep ' ' -j $THREADS '(echo "Processing {1}"; bash scripts/run_fastp.sh {1} {2} {3} {4}) 2>&1 | tee "{3}/logs/log_{4}.log"'
+```
+
+Fastp processed files are stored in `{bash} "$FASTP_OUT"` and undergo the next stage of quality control: human host read decontamination.
+
+### QC report generation
+
+`fastp` outputs `.json` or `.html` reports detailing the results of the file processing, e.g. duplication rates, number of adapter sequences removed, number of low quiality reads filtered etc. MultiQC is a helpful tool to combine these reports into a single interative `.html` file that makes it easier to determine sample quality over a large number of files. 
+
+```{bash}
+#| eval: false
+#| label: multiqc report
+
+multiqc --outdir $MULTIQC_REPORT --title "Basic Metagenome Statistics after fastp Processing" --interactive --export --data-format tsv --quiet --profile-runtime $FASTP_OUT 2>&1 | tee $LOGS/multiqc-report.log
+
+```
+
+## Removal of contaminating sequences
+
+Microbiome samples taken from any host will contain varying amounts of host DNA that are amplified during sequencing. Even with pre-sequencing methods such as host DNA depletion, host reads can still create noise in a dataset. *In silico* techniques rely on mapping reads to the host's genome. Sample used in this project are from human rectal swabs. Human read decontamination approaches rely on a single reference genome (typically GRCh38) leading to potential false negatives caused by variant sequences present in diverse human populations. Pangenomes offer the potential to capture some of this diversity.
+
+The following process, inspired by the work of [@Knight2024], uses [PanDora](https://github.com/promicrobial/PanDora), a non-redundant human pangenome reference database containing GRCh38 (NCBI RefSeq GCF_000001405.40), CHM13v2.0 (NCBI RefSeq: GCF_009914755.1), and variant sequences from 94 Human Pangenome Reference Consortium (HPRC) assemblies (available on [GitHub](https://github.com/human-pangenomics/HPP_Year1_Assemblies) or NCBI; PRJNA730823). The database was constructed using [panSieve](https://github.com/promicrobial/panSieve), a tool for extracting unique sequences from pangenome graphs (GFA file format).
+
+### Illumina PhiX Spikein Removal
+
+Removal of PhiX, a common Illumina spikein.
+
+```{bash}
+#| eval: false
+#| label: removing human host DNA and sequencing contaminants
+#| output: true
+
+mkdir -p $PHIX_CLEANED/logs
+
+#filtering of all reads that have a 31-mer match to PhiX, a common Illumina spikein
+find "$FASTP_OUT" -maxdepth 1 -type f -name "*fastp_R1*" | \
+  while read -r r1; do \
+    r2="${r1/fastp_R1/fastp_R2}" 
+    echo "$r1 $r2 $PHIX_CLEANED $(basename ${r1%%_R1.*})"; \
+  done | \
+    parallel --progress --bar --eta --colsep ' ' -j $THREADS '(echo "Processing {4}"; bbduk.sh in={1} in2={2} out={3}/{4}_filtered_R1.fq out2={3}/{4}_filtered_R2.fq outs={3}/{4}_filtered_unpaired.fq ref=/programs/bbmap-39.10/resources/phix174_ill.ref.fa.gz k=31 hdist=1 stats={3}/{4}.stats.txt) 2>&1 | tee "{3}/logs/log_{4}.log"'
+
+```
+
+### Human read removal
+
+#### Downloading Human Pangenome Reference Database
+
+#TODO
+
+```{bash}
+#| eval: false
+#| label: downloading the PanDora database
+```
+
+Edit 04-16-25: PanDora can be located on BioHPC at the following path `/local/storage/shared/analyses/ref/pandora/`
+
+#### Sample k-mer mapping to PanDora
+
+```{bash}
+#| eval: false
+#| label: human read removal
+#removing human sequences using pandora database
+
+mkdir -p $CLEAN_FILE_DIR/logs
+
+# BBduk pandoraV2.0.fasta k=25 ktrim=N mcf=0.5
+find "$PHIX_CLEANED" -maxdepth 1 -type f -name "*_R1.fq" | \
+  while read -r r1; do \
+    r2="${r1/_R1/_R2}" 
+    echo "$r1 $r2 $CLEAN_FILE_DIR $(basename ${r1%%_R1.*}) $DECON_DB"; \
+  done | \
+    parallel --progress --bar --eta --colsep ' ' -j $THREADS '(echo "Processing {4}"; bbduk.sh in={1} in2={2} out={3}/{4}_filtered_R1.fq out2={3}/{4}_filtered_R2.fq outs={3}/{4}_filtered_unpaired.fq ref={5} -Xmx120g k=25 ktrim=N mcf=0.5 stats={3}/logs/{4}.stats.txt) 2>&1 | tee "{3}/logs/log_{4}.log"'
+
+```
+
+#### Extracting the percentage of contaminants removed
+
+```{bash}
+#| eval: false
+#| label: extract % contaminant removed 
+#retuns the total percentage of reads matched to the reference sequence
+
+grep Matched $CLEAN_FILE_DIR/logs/*stats.txt | awk '{gsub(/%/,""); print}'> $CLEAN_FILE_DIR/logs/stats.summary
+```
+
+The maximum percentage of human reads removed from samples was
+\*\*`{bash} sort -n -r $CLEAN_FILE_DIR/logs/stats.summary | tail -n1` \*\*
+
+The maximum percentage of human reads removed from samples was
+\*\*`{bash} sort -n -r $CLEAN_FILE_DIR/logs/stats.summary | head -n1` \*\*
+
+At this point, all samples have been trimmed of adapter sequences, filtered for low quality reads, and decontaminated from human sequences. From here on, samples can be used in downstream analysis pipelines.
+
+##### Visualisation of decontaminates removed
+
+#ADD R code here

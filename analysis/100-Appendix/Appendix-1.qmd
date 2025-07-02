@@ -1,0 +1,256 @@
+## Appendix 1
+
+The following content is an appendix to analysis performed during
+[QC](../01-quality-control).
+
+### Comparison of local and end-to-end alignment protocols
+
+A test mapping procedure was performed on the same metagenome to access if end-to-end
+or local alignment should be used. The quality of these mapping algorithms were
+assessed using mapping quality scores (MAPQ).
+
+::: {.callout-note appearance="simple"}
+Mapping Quality Scores quantify the probability that a read is misplaced. They were
+introduced by Heng Li and Richard Durbin in their paper describing MAQ and are usually
+reported on a Phred scale. -
+(source)\[https://genome.sph.umich.edu/wiki/Mapping_Quality_Scores\]
+:::
+
+#### Bowtie2 alignment scoring procedure
+
+The following is pasted from the Bowtie2 manual:
+
++------------------+-----------------------------------------------------------------+
+| ```              | In this mode, Bowtie 2 requires that the entire read align from |
+| --end-to-end     | one end to the other, without any trimming (or "soft clipping") |
+| ```              | of characters from either end. The match bonus                  |
+|                  | [`--ma`](https://b%20ow%20t                                     |
+|                  | ie-bio.sourceforge.net/bowtie2/manual.shtml#bowtie2-options-ma) |
+|                  | always equals 0 in this mode, so all alignment scores are less  |
+|                  | than or equal to 0, and the greatest possible alignment score   |
+|                  | is 0. This is mutually exclusive                                |
+|                  | with[`--local`](https://bowtie-bio.sourcefo%20rg%20e            |
+|                  | .net/bowtie2/manual.shtml#bowtie2-options-local).`--end-to-end` |
+|                  | is the default mode.                                            |
++------------------+-----------------------------------------------------------------+
+| ```              | In this mode, Bowtie 2 does not require that the entire read    |
+| --local          | align from one end to the other. Rather, some characters may be |
+| ```              | omitted ("soft clipped") from the ends in order to achieve the  |
+|                  | greatest possible alignment score. The match bonus              |
+|                  | [`--ma`](https://b%20ow%20t                                     |
+|                  | ie-bio.sourceforge.net/bowtie2/manual.shtml#bowtie2-options-ma) |
+|                  | is used in this mode,and the best possible alignment score is   |
+|                  | equal to the match bonus                                        |
+|                  | ([`--ma`](https://bo%20wt%20i                                   |
+|                  | e-bio.sourceforge.net/bowtie2/manual.shtml#bowtie2-options-ma)) |
+|                  | times the length of the read. Specifying `--local` and one of   |
+|                  | the presets (e.g.`--local --very-fast`) is equivalent to        |
+|                  | specifying the local version of the preset                      |
+|                  | (`--very-fast-local`). This is mutually exclusive with          |
+|                  | [`--end-to-end`](https://bowtie-bio.sourceforge.n%20et%20/      |
+|                  | bowtie2/manual.shtml#bowtie2-options-end-to-end).`--end-to-end` |
+|                  | is the default mode.                                            |
++------------------+-----------------------------------------------------------------+
+
+**End-to-end alignment score example**
+
+> A mismatched base at a high-quality  position in the read receives a penalty of -6
+> by default. A length-2  read gap receives a penalty of -11 by default (-5 for the
+> gap open, -3  for the first extension, -3 for the second extension). Thus, in
+>  end-to-end alignment mode, if the read is 50 bp long and it matches  the reference
+> exactly except for one mismatch at a high-quality  position and one length-2 read
+> gap, then the overall score is -(6 +  11) = -17.
+>
+>    
+>
+> The best possible alignment score in end-to-end mode is 0, which  happens when there
+> are no differences between the read and the  reference.
+
+**Local alignment score example**
+
+> A mismatched base at a high-quality  position in the read receives a penalty of -6
+> by default. A length-2  read gap receives a penalty of -11 by default (-5 for the
+> gap open, -3  for the first extension, -3 for the second extension). A base that
+>  matches receives a bonus of +2 be default. Thus, in local alignment  mode, if the
+> read is 50 bp long and it matches the reference exactly  except for one mismatch at
+> a high-quality position and one length-2  read gap, then the overall score equals
+> the total bonus, 2 \* 49, minus  the total penalty, 6 + 11, = 81.
+>
+>    
+>
+> The best possible score in local mode equals the match bonus times the  length of
+> the read. This happens when there are no differences between  the read and the
+> reference.
+
+#### Test alignment
+
+```{bash}
+#| label: test bowtie2 alignment
+
+#find the trimmed read 1 metagenome seq files and replace "_R1.trim.dep.fq.gz" with nothing- this ensures that the base sample name e.g. "SO_8465_6161_B" is used for both R1 and R2. The base name is piped into parallel (to run several (x5: -j 5) alignments cocurrently with an estimated time (--eta)). Each alignment is run using bowtie installed in the mumbai_analysis docker image. --threads = 8 CPU cores will be used to run a single alignemt (=> if parallel is running 5 jobs each on 8 CPUs, then a total of 40 are nedded (5*8)) -q = tells the software that the inputs are FASTQ files (this is default; see doc if files are NOT FASTQ); -x = location and basename of the bowtie database (same as last argument in bowtie2-build); -1 =R1; -2 = R2 (-U can be used for unpaired reads); -S name of the output SAM file
+
+db=/local/storage/nc564/bowtie_aligned_mumbai_ID14768/databases/bowtie2/WoLr2
+
+#sensitive end-to-end mode
+
+bowtie2 --threads 50 -q --end-to-end --very-sensitive -x $db -1 /local/storage/nc564/raw_seq_QC/depleted_trimmed_files_mumbai_ID14768/SO_8465_5156_B_R1.trim.dep.fq -2 /local/storage/nc564/raw_seq_QC/depleted_trimmed_files_mumbai_ID14768/SO_8465_5156_B_R2.trim.dep.fq -S /local/storage/nc564/bowtie_aligned_mumbai_ID14768/test_mumbai_wol_alignment_end_to_end.sam
+
+#sensitive local mode
+bowtie2 --threads 50 -q --local --very-sensitive -x $db -1 /local/storage/nc564/raw_seq_QC/depleted_trimmed_files_mumbai_ID14768/SO_8465_5156_B_R1.trim.dep.fq -2 /local/storage/nc564/raw_seq_QC/depleted_trimmed_files_mumbai_ID14768/SO_8465_5156_B_R2.trim.dep.fq -S /local/storage/nc564/bowtie_aligned_mumbai_ID14768/test_mumbai_wol_alignment_local.sam
+
+#local alignment had the highest alignement rate: 87.05% (E2E) vs 91.90% (local)
+```
+
+#### Alignment evaluation
+
+```{bash}
+#| label: evaluating alignment modes
+#evaluate the alignement to chose the best alignement parameters to use for the rest of the samples
+
+find /local/storage/nc564/bowtie_aligned_mumbai_ID14768 -maxdepth 1 -type f -name "*.sam" | sed 's@.sam@@' | parallel -j 5 --eta docker1 run -v /local/storage/nc564/:/home2/nc564 --rm biohpc_nc564/mumbai_analysis samtools sort -@ 11 -o {}.bam {}.sam
+
+samtools index -M --threads 15 /local/storage/nc564/bowtie_aligned_mumbai_ID14768/*.bam
+
+find /local/storage/nc564/bowtie_aligned_mumbai_ID14768 -maxdepth 1 -type f -name "*.bam" | sed 's@.bam@@' | parallel -j 5 --eta "docker1 run -v /local/storage/nc564/:/home2/nc564 --rm biohpc_nc564/mumbai_analysis samtools stats --threads 30 {}.bam > {}.bam.stat"
+
+#creates png and html files for QC graphs 
+find /local/storage/nc564/bowtie_aligned_mumbai_ID14768 -maxdepth 1 -type f -name "*.bam" | sed 's@.bam@@' | parallel -j 5 --eta "docker1 run -v /local/storage/nc564/:/home2/nc564 --rm biohpc_nc564/mumbai_analysis plot-bamstats -l -p {}.bam {}.bam.stat"
+
+plot-bamstats -l -p test_mumbai_wol_alignment_local.bam test_mumbai_wol_alignment_local.bam.stat
+
+plot-bamstats -l -p test_mumbai_wol_alignment_end_to_end.bam test_mumbai_wol_alignment_end_to_end.bam.stat
+
+#export only the mapping quality scores (MAPQ)
+grep ^MAPQ test_mumbai_wol_alignment_local.bam.stat | cut -f 2- > local_quality
+grep ^MAPQ test_mumbai_wol_alignment_end_to_end.bam.stat | cut -f 2- > E2E_quality
+```
+
+```{r}
+#| label:  visualising MAPQ value distributions
+#| eval: false
+#| fig-cap: Comparison of local and end-to-end Bowtie2 alignment MAPQ scores
+
+#load data
+local <- read.delim("local_quality", header = FALSE)
+colnames(local) <- c("MAPQ", "local")
+e2e <- read.delim("E2E_quality", header = FALSE)
+colnames(e2e) <- c("MAPQ", "e2e")
+
+merge <- list(local, e2e)
+
+merge <- merge %>% reduce(full_join, by = "MAPQ")
+
+merge %>%
+  pivot_longer(cols = c(local, e2e)) %>%
+  ggplot(aes(x = MAPQ, y = value)) +
+    geom_bar(position = position_dodge(), stat = "identity", aes(fill = name)) + # nolint
+    xlab("MAPQ") +
+    ylab("No. of Reads") +
+    theme(axis.text.x = element_text(size = 14, face='bold', color='black'),axis.text.y = element_text(size = 14, face='bold', color='black'),axis.title.x = element_text(size = 14, face='bold', color = 'black'), plot.title = element_text(hjust=0.5,face = "bold", size= 26),legend.title=element_blank(), legend.position = 'bottom', legend.text=element_text(size = 14, face='bold', color='black'),axis.title.y = element_text(size = 14, face='bold', color='black')) + # nolint
+    scale_x_continuous(breaks = c(0:45))
+
+```
+
+After further reading into the subject (see labbook entry), and the error rates
+reported by plot-bamstats (see .html files), I think it is best to proceed with E2E
+alignment.
+
+### Percentage of human contaminant reads removed from microbiome samples
+
+### SAMtools Flagstats
+
+(since been added to the main run bowtie script)
+
+```{bash}
+#| eval: false
+#| label: flagstats
+
+for i in /local/storage/shared/Bowtie2-WoL2-alignment/*.bam; do
+
+j="$(basename $i .bam)"
+
+samtools flagstats -@ 120 "${i}" > "results/Bowtie-WoL2-alignment-stats/flagstats/${j}.flagstats"
+
+done
+
+scripts/flafstat-summary results/Bowtie-WoL2-alignment-stats/*
+```
+
+#### MAPQ scores
+
+```{r}
+#| eval: true
+source(normalizePath("utils/r-utils.r"))
+source(normalizePath("_environment.required"))
+
+map <- read.delim(file.path(RESULTS, "Bowtie-WoL2-alignment-stats/combined_quality_scores.tsv"))
+
+# Create visualization
+# 1. Basic MAPQ distribution
+mapq_plot <- ggplot(map, aes(x = MAPQ_score, y = count, fill = sample)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_y_log10() +  # Log scale for better visualization
+  theme_minimal() +
+  labs(
+    title = "MAPQ Score Distribution",
+    x = "MAPQ Score",
+    y = "Count (log10 scale)",
+    fill = "Sample"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.major = element_line(color = "gray80"),
+    panel.grid.minor = element_line(color = "gray90"), legend.position="none"
+  )
+
+# 2. Percentage visualization
+mapq_percent <- map %>%
+  group_by(sample) %>%
+  mutate(
+    percentage = (count/sum(count))*100
+  ) %>%
+  ggplot(aes(x = MAPQ_score, y = percentage, fill = sample)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_minimal() +
+  labs(
+    title = "MAPQ Score Distribution (Percentage)",
+    x = "MAPQ Score",
+    y = "Percentage of Reads",
+    fill = "Sample"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.major = element_line(color = "gray80"),
+    panel.grid.minor = element_line(color = "gray90"), legend.position="none"
+  )
+
+# 3. Cumulative distribution
+mapq_cumulative <- map %>%
+  group_by(sample) %>%
+  arrange(MAPQ_score) %>%
+  mutate(
+    cumulative_percent = cumsum(count)/sum(count) * 100
+  ) %>%
+  ggplot(aes(x = MAPQ_score, y = cumulative_percent, color = sample)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(
+    title = "Cumulative MAPQ Score Distribution",
+    x = "MAPQ Score",
+    y = "Cumulative Percentage",
+    color = "Sample"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.major = element_line(color = "gray80"),
+    panel.grid.minor = element_line(color = "gray90"), legend.position="none"
+  )
+
+library(patchwork)
+mapq_plot / mapq_percent / mapq_cumulative +
+  plot_layout(heights = c(1, 1, 1))
+
+```
+
+

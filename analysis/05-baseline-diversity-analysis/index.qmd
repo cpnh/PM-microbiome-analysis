@@ -1,0 +1,14 @@
+# Baseline Sample Diversity Analysis
+
+::: callout-note
+The focus of this section is to calculate bacterial community diversity statistics on baseline samples only. Longitudinal analysis will be performed in [section 5](../05-base-end-diversity-analysis/index.qmd).
+:::
+
+Numerous studies have investigated the development and composition of the infant microbiota during the neonatal period and the first year of life, determining that infant microbiotas stablize to resemble an adult-like composition by the age of 3 [@Koenig2010; @Azad2013; @Costello2013; @Krebs2013 @Dogra2015; @Thompson2015; @Zhou2015; @Madan2016; @Koleva2017; @Murphy2017; @Sordillo2017; @Talsness2017; @Wampach2017; @Butcher2018; @Lee2018; @Tang2016; @Fallani2011; @Yatsunenko2012; @Lugli2023; @Wang2021; @Veeraraghavan2023; @DiGuglielmo2022; @DeFilippo2010].
+
+However, these studies have generally focused on healthy children from high-resource settings such as Europe or the USA [@Browne2024], and may not generalise across diverse populations, or to lower resource settings such as urban slums. Children living in urban slums have a higher likelihood of poor nutrition and sanitation. Malnourished children living in urban slums are characterized by a high burden of inflammation (determined by elevated CRP) and infection (e.g. elevated gastrointestinal infections), resulting in gut microbial immaturity and delayed microbial development [@Subramanian2014]. 
+
+Therefore, one of the primary goals of this secondary analysis (see [@Mehta2022] for the primary RCT) was to characterize the development of the gut microbiome during the 2nd year of life. Brave
+
+There are 168 baseline samples with metagenome sequencing available.
+

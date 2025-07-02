@@ -1,0 +1,1514 @@
+## Baseline and Endpoint Alpha Diversity
+
+### Data Preparation
+
+```{r}
+#| echo: false
+#| eval: true
+#| label: setup
+
+# This initial code block loads custom utility functions and environment variables
+# These are stored in separate files to keep the main analysis clean and organized
+source("utils/r-utils.r")
+source("_environment.required")
+```
+
+```{r}
+#| eval: true
+#| label: custom variables
+
+armColours = c("CPM" = "#FC8D62", "FeZnPM" = "#8DA0CB")
+
+```
+
+
+Load previously rarefied (normalized) bacterial sequence data:
+
+```{r}
+#| eval: true
+#| label: load rarefied read data
+
+(seqdata_bac <- readRDS(paste0(RARE_RESULTS, "/rarefied_bacteria.rds")))
+
+#move rownmaes to sample name column
+sample_data(seqdata_bac) <- cbind(
+  sample_names = rownames(sample_data(seqdata_bac)),
+  sample_data(seqdata_bac)
+)
+```
+
+The initial microbiome dataset was filtered to include only matched baseline-endpoint pairs, resulting in 82 matched pairs.
+
+Sample names were standardized by removing technical suffixes (like '_wol_alignment')
+
+```{r}
+#| eval:  true
+#| label: subset data
+
+#only 82 sample have matching baseline and endpoint samples
+base_end_paired_samples <-
+  microbiome::meta(seqdata_bac) %>% #whole dataset metadata file
+  rownames_to_column() %>%
+  dplyr::select(
+    sample = rowname,
+    displayid,
+    timepoint = any_other_relevant_information
+  ) %>%
+  mutate(displayid = str_trim(displayid, side = "both")) %>%
+  group_by(displayid) %>%
+  dplyr::filter(all(c("1Baseline", "3Endpoint") %in% timepoint)) %>%
+  ungroup() #base-mid-end sample n = 228
+
+write.csv(
+  base_end_paired_samples,
+  "data/metadata/base-end-paired-samples.csv",
+  row.names = FALSE
+)
+
+bac_base_end <- seqdata_bac
+
+sample_data(bac_base_end) <- cbind(
+  sample_names = rownames(sample_data(bac_base_end)),
+  sample_data(bac_base_end)
+)
+
+bac_base_end <- phyloseq::subset_samples(
+  bac_base_end,
+  displayid %in% base_end_paired_samples$displayid
+) #Base-Mid-End samples
+
+bac_base_end <- phyloseq::subset_samples(
+  bac_base_end,
+  timepoint %in% c("1Baseline", "3Endpoint")
+) #82 base-end sample
+
+otu_table(bac_base_end) <- t(otu_table(bac_base_end)) #ensure OGUs are rownames
+```
+
+#### Bacterial Relative Abundances
+
+Relative abundances are calculated to show the proportion of each bacterial group in a sample.
+
+Calculate relative abundances and modify taxonomy to collapse Bacillota into a single genus rather than Bacillota_A, Bacillota_B etc. 
+
+```{r}
+#| eval: true
+#| label: calculate relative abundances
+#save absolute abundances in a separate variable
+absAbund <- bac_base_end
+
+#OGU table to relative abundances
+otu_table(bac_base_end) <- otu_table(
+  microbiome::abundances(bac_base_end, "compositional"),
+  taxa_are_rows = T
+)
+
+#slight modification to group Bacillota subgroups into one
+tax_table(bac_base_end) <- tax_df(bac_base_end) %>%
+  mutate(across(where(is.character), str_trim)) %>%
+  mutate(Phylum = str_remove(Phylum, "_[a-zA-Z]\\b")) %>%
+  mutate(Genus = str_remove(Genus, "_[a-zA-Z]\\b")) %>%
+  mutate(
+    Phylum = case_when(
+      Phylum == "" ~ "Unknown",
+      str_detect(Phylum, "\\d") ~ "Unclassified",
+      !str_detect(
+        Phylum,
+        "Actinobacteriota|Pseudomonadota|Bacteroidota|Verrucomicrobiota|Campylobacterota|Bacillota"
+      ) ~
+        "Other",
+      TRUE ~ Phylum
+    )
+  ) %>%
+  mutate(
+    Genus = case_when(
+      str_detect(Genus, "\\d") ~ "Unclassified",
+      Genus == "" ~ "Unknown",
+      TRUE ~ Genus
+    )
+  ) %>%
+  as.matrix()
+
+```
+
+##### Top Phyla at at between Baseline and Endpoint
+
+Create an ampvis object from phyloseq object
+
+```{r}
+#| eval: true
+#| label: create ampvis object
+
+library(ampvis2)
+
+d <- amp_load(
+  otutable = otu_table(bac_base_end),
+  microbiome::meta(bac_base_end),
+  taxonomy = tax_table(bac_base_end)
+)
+```
+
+```{r}
+#| eval: true
+#| label: heatmap
+#| fig-cap: Relative abundance of bacterial phyla at baseline and endpoint separated by intervention arm.
+
+#top phyla across all samples at each timepoint by arm group
+
+#default settings plot relative abundances (normalise = TRUE) therefore set to FALSE
+p <- amp_boxplot(
+  d,
+  group_by = "trt_timept",
+  normalise = FALSE,
+  tax_aggregate = "Phylum",
+  tax_show = 20,
+  point_size = 0,
+  plot_flip = T
+)
+
+p + geom_jitter(color = "black", size = 1.5, stat = "identity", width = 0.35)
+```
+
+##### Top Genera at Baseline and Endpoint between Intervention Arms
+
+```{r}
+#| eval: true
+#| label: top genera at baseline
+#| fig-cap: Relative abundance of the top 20 bacterial genera at at baseline and endpoint separated by intervention arm.
+
+p <- amp_boxplot(
+  d,
+  group_by = "trt_timept",
+  normalise = FALSE,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  point_size = 0,
+  tax_show = 20,
+  plot_flip = T
+)
+
+p + geom_jitter(color = "black", size = 1.5, stat = "identity", width = 0.35)
+```
+
+
+#### Calulation of Baseline and Endpoint Alpha Diversity Statistics
+
+Multiple diversity metrics were calculated for each sample to capture different aspects of community structure:
+
+- Observed features: Simple count of bacterial species
+- Chao1: Estimates true species richness, accounting for unobserved species
+- Shannon: Measures both richness and evenness of bacterial communities
+- Pielou's Evenness: Quantifies how equally abundant different species are
+- Faith's PD: Considers evolutionary relationships between species
+
+Statistical comparisons were performed between treatment groups at each timepoint using Wilcoxon tests due to non-normal distribution of diversity metrics.
+
+```{r}
+#| eval: true
+#| label: calculate base-end alpha diveristy
+alpha.bve <- microbiome::alpha(absAbund, index = "all")
+
+#returns Faith's phylogenetic diversity (pd) and species richness (SR = observed)
+pd.bve <- picante::pd(
+  samp = t(otu_df((absAbund))),
+  tree = phy_tree(absAbund),
+  include.root = FALSE
+)
+colnames(pd.bve) <- c("pd", "sr")
+
+#merge alpha metrics with metadata
+bac_base_end_meta <- microbiome::meta(bac_base_end) %>%
+  left_join(
+    .,
+    rownames_to_column(alpha.bve),
+    by = c("sample_names" = "rowname")
+  ) %>%
+  left_join(
+    .,
+    rownames_to_column(pd.bve),
+    by = c("sample_names" = "rowname")
+  ) %>%
+  mutate(arm = case_when(trt == 0 ~ "CPM", trt == 1 ~ "FeZnPM")) %>%
+  mutate(
+    timepoint = case_when(
+      str_detect(timepoint, "Baseline") ~ "Baseline",
+      str_detect(timepoint, "Endpoint") ~ "Endpoint"
+    )
+  )
+
+rownames(bac_base_end_meta) <- bac_base_end_meta$sample_names
+
+#update metadata table
+sample_data(bac_base_end) <- bac_base_end_meta
+sample_data(absAbund) <- bac_base_end_meta
+
+```
+
+```{r}
+#| eval: true
+#| label: differences between intervention arms
+
+#subset for individuals with a baseline and matching end point
+#only 82 sample have matching baseline and endpoint samples
+dfB_E.stats <-
+  bac_base_end_meta %>%
+  dplyr::select(
+    displayid,
+    timepoint,
+    arm,
+    observed_features = observed,
+    chao1,
+    diversity_shannon,
+    evenness_pielou,
+    pd
+  ) %>%
+  pivot_longer(
+    cols = !c(displayid, timepoint, arm),
+    names_to = "diversity_metric"
+  ) %>%
+  group_by(displayid)
+
+```
+
+```{r}
+#| eval: true
+#| label: summary stats
+#| tbl-cap: Baseline and matching endpoint alpha diveristy summary statistics
+
+#print summary stats
+dfB_E.stats %>%
+  group_by(timepoint, arm, diversity_metric) %>%
+  get_summary_stats(value, type = "common") %>%
+  kable()
+```
+
+```{r}
+#| eval: true
+#| label: comparison stats
+
+#is there a significant difference between treatments at baseline and endpoint?
+#unpaired between group comparisons: arm_base vs. ctrl_base & arm_end vs. ctrl_end
+unpaired_wilcox_endpoint <- dfB_E.stats %>%
+  group_by(timepoint, diversity_metric) %>%
+  pairwise_wilcox_test(value ~ arm, paired = FALSE, p.adjust.method = "BH") %>%
+  add_xy_position(x = "timepoint", step.increase = 0)
+
+#is there a significant difference between baseline and endpoint within treatment group?
+#paired within group comparisions: arm_base vs. arm_end & ctrl_base vs. ctrl_end
+paired_wilcox_overtime <- dfB_E.stats %>%
+  group_by(arm, diversity_metric) %>%
+  pairwise_wilcox_test(
+    value ~ timepoint,
+    paired = TRUE,
+    p.adjust.method = "BH"
+  ) %>%
+  add_xy_position(x = "timepoint", step.increase = 0)
+
+overall_paired_wilcox_overtime <- dfB_E.stats %>%
+  group_by(diversity_metric) %>%
+  pairwise_wilcox_test(
+    value ~ timepoint,
+    paired = TRUE,
+    p.adjust.method = "BH"
+  ) %>%
+  add_xy_position(x = "timepoint", step.increase = 0)
+```
+
+
+```{r}
+#| eval: true
+#| label: baseline intervention arm alpha diversity plots
+#| fig-cap: Alpha diversity statistics among baseline and endpoint samples separated by intervention arm (n = 82).
+
+plot_names <- c(
+  'pd' = "Faith's Phylogentic Diversity",
+  'observed' = "Observed Features",
+  'diversity_shannon' = "Shannon Diversity Index",
+  'evenness_pielou' = "Pielou Evenness",
+  "chao1" = "Chao diversity Index"
+)
+
+#visualise as boxplot
+
+dfB_E.stats %>%
+  group_by(diversity_metric) %>%
+  ggplot(aes(x = timepoint, y = value)) +
+  geom_boxplot(aes(fill = arm), outlier.shape = NA) +
+  geom_jitter(aes(color = ), size = 1.5, stat = "identity", width = 0.35) +
+  facet_wrap(
+    . ~ factor(diversity_metric),
+    2,
+    3,
+    scales = "free",
+    labeller = as_labeller(plot_names)
+  ) +
+  stat_pvalue_manual(
+    paired_wilcox_overtime,
+    label = "p = {p}",
+    step.increase = 0.08,
+    color = "arm"
+  ) +
+  stat_pvalue_manual(
+    unpaired_wilcox_endpoint,
+    label = "p = {p}",
+    step.increase = 0.05
+  ) +
+  xlab(NULL) +
+  ylab(NULL) +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.1))) +
+  scale_x_discrete(labels = c("Baseline", "Endpoint")) +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1),
+    strip.text = element_text(size = 14, face = 'bold', color = 'black')
+  )
+
+```
+
+
+##### Alpha Diveristy Summary Table
+
+```{r}
+#| eval: true
+#| label: tbl-ms-3
+#| tbl-cap: Microbiome composition and diversity statistics at baseline and endpoint (n = 82)
+
+aggregate_phyla <- microbiome::aggregate_taxa(bac_base_end, level = "Phylum")
+phyla_list <- names(as.data.frame(t(otu_df(aggregate_phyla))))
+aggregate_genera <- microbiome::aggregate_taxa(bac_base_end, level = "Genus")
+
+top10_genera_list <- names(sort(
+  apply(as.data.frame(t(otu_table(aggregate_genera))), 2, median),
+  decreasing = T
+)[1:10])
+top10_genera <- as.data.frame(t(otu_table(aggregate_genera))) %>%
+  dplyr::select(all_of(top10_genera_list))
+
+bac_base_end_meta <- bac_base_end_meta %>%
+  left_join(
+    .,
+    rownames_to_column(as.data.frame(t(otu_df(aggregate_phyla)))),
+    by = c("sample_names" = "rowname")
+  ) %>%
+  left_join(
+    .,
+    rownames_to_column(top10_genera),
+    by = c("sample_names" = "rowname")
+  )
+
+saveRDS(bac_base_end_meta, "data/metadata/base-end-metadata.rds")
+
+mbTab <- bac_base_end_meta %>%
+  dplyr::select(
+    displayid,
+    timepoint,
+    arm,
+    `Observed features` = observed,
+    `Chao 1 Index` = chao1,
+    `Shannon Diversity Index` = diversity_shannon,
+    Evenness = evenness_pielou,
+    `Faiths Phylogenetic Diversity` = pd
+  ) %>%
+  mutate_at(
+    vars(
+      `Observed features`,
+      `Chao 1 Index`,
+      `Shannon Diversity Index`,
+      Evenness,
+      `Faiths Phylogenetic Diversity`
+    ),
+    as.numeric
+  )
+vda <- function(data, variable, by, ...) {
+  # Compute VD.A
+  A <- effsize::VD.A(as.formula(glue::glue("`{variable}` ~ {by}")), data = data)
+  tibble(vda_estimate = A$estimate, vda_magnitude = A$magnitude)
+}
+(p <- bac_base_end_meta %>%
+  dplyr::select(
+    timepoint,
+    arm,
+    `Observed features` = observed,
+    `Chao 1 Index` = chao1,
+    `Shannon Diversity Index` = diversity_shannon,
+    Evenness = evenness_pielou,
+    `Faiths Phylogenetic Diversity` = pd,
+    all_of(phyla_list),
+    all_of(top10_genera_list)
+  ) %>%
+  mutate_at(vars(everything()), type.convert, as.is = TRUE) %>%
+  tbl_strata(
+    strata = timepoint,
+    .tbl_fun = ~ .x %>%
+      tbl_summary(
+        by = arm,
+        type = list(Unclassified = "continuous", Unknown = "continuous"),
+        missing = "no",
+        statistic = list(
+          all_continuous() ~ "{median}  \n({IQR}; {min}-{max})", # stats and format for continuous columns
+          all_categorical() ~ "{n} / {N}  \n({p}%)"
+        )
+      ) %>% # stats and format for categorical columns
+      add_stat(fns = list(all_continuous() ~ vda)) %>%
+      add_n() %>%
+      add_overall() %>%
+      add_p(pvalue_fun = function(x) pvalue_format(x)) %>%
+      add_q(pvalue_fun = function(x) pvalue_format(x)) %>%
+      bold_p(q = T) %>%
+      modify_fmt_fun(list(vda_magnitude ~ as.character)) %>%
+      modify_header(list(
+        vda_estimate ~ "**Effect Size Estimate**",
+        vda_magnitude ~ "**Magnitude**"
+      )),
+    .header = "**{strata}**, N = {n}"
+  ) %>%
+  as_gt() %>%
+  fmt_markdown(columns = where(~ is.character(.x))) %>%
+  fmt_number(
+    columns = where(~ is.numeric(.x)),
+    drop_trailing_zeros = TRUE,
+    use_seps = FALSE
+  ) %>%
+  fmt_number(
+    columns = where(~ is.numeric(.x) < 0.0001),
+    pattern = "<0.0001"
+  ) %>%
+  fmt_number(columns = where(~ is.numeric(.x) < 0.001), pattern = "<0.001") %>%
+  fmt_number(columns = where(~ is.numeric(.x) < 0.01), pattern = "<0.01") %>%
+  fmt_number(columns = where(~ is.numeric(.x) < 0.05), pattern = "<0.05"))
+
+dir.create(
+  file.path(RESULTS, "base-end-diversity-analysis"),
+  showWarnings = FALSE,
+  recursive = TRUE
+)
+
+htmltools::save_html(
+  gt::as_raw_html(p),
+  file.path(RESULTS, "base-end-diversity-analysis", "base-end-alpha-div.tbl")
+)
+
+```
+
+```{r}
+#| eval: true
+#| label: base-end differences
+#| fig-cap: Boxplot representing the changes in bacterial alpha diversity statistics from baseline and endpoint
+#| tbl-cap: Changes in bacterial alpha diversity statistics from baseline and endpoint
+
+#calculate the percent change in median and IQR
+diff <- mbTab %>%
+  pivot_longer(
+    cols = !c(displayid, timepoint, arm),
+    names_to = "diversity_metric"
+  ) %>%
+  group_by(displayid) %>%
+  pivot_wider(names_from = timepoint, values_from = value) %>%
+  group_by(diversity_metric) %>%
+  mutate(diff = (Endpoint - Baseline) / Baseline * 100)
+
+diff %>%
+  ggplot(aes(x = arm, y = diff)) +
+  geom_boxplot() +
+  scale_color_manual(values = armColours) +
+  facet_wrap(~diversity_metric, scales = "free")
+
+diff %>%
+  summarise(
+    mean = mean(diff),
+    median = median(diff),
+    min = min(diff),
+    max = max(diff),
+    IQR = max(diff) - min(diff)
+  ) %>%
+  kable()
+
+```
+
+#### Modelling changes in Alpha Diversity over time using Linear Mixed Models
+
+::: {.callout-warning}
+
+`warning: boundary (singular) fit: see help('isSingular')`
+
+The above warning implies that there are elements of the variance-covariance matrix that have been estimated to be 0 in random intercept/slope models, this leads to random-effect variance estimates of (nearly) zero, or estimates of correlations that are (almost) exactly -1 or 1.
+
+Perfect or near perfect collinearity among random effects can happen when the model is overparameterized, and some of the estimated variance components are not identifiable due to linear dependencies between the variables. 
+
+If you encounter this singularity warning in one model but not another (yet fixed terms remain the same), this may suggest that there is an issue specific to the interaction between the explanatory variable and the specified random effects structure. It's possible that the variability captured by the random intercept for the "subject" group is negligible for this particular outcome. However, check the varaible has been transformed etc.
+
+If the random intercept has no effect, and there are no differences between individuals at baseline, the random intercept can be removed from the model without any effect.
+:::
+
+##### Parameter Setup
+
+Before building the models, several key variables were prepared:
+
+- Subject IDs were assigned to track individual participants
+- Treatment groups were coded as factors (CPM vs FeZnPM)
+- Time was standardized to days since feeding started
+- Age was scaled to make it comparable with other variables
+
+No missing values were allowed in key variables
+
+```{r}
+#| eval:  true
+#| label: define predictor variables
+#identify covariates for the model
+
+check_metadata <- function(var) {
+  cat("Checking:", deparse(substitute(var)), "\n")
+  cat("Class:", class(var), "\n")
+  cat("NAs:", sum(is.na(var)), "\n")
+  cat("Length:", length(var), "\n")
+  cat("-------------------\n")
+}
+check_metadata(subject <- bac_base_end_meta$displayid) #categorical
+check_metadata(arm_group <- as.factor(as.character(bac_base_end_meta$arm))) #categorical factor
+
+check_metadata(timepoint <- bac_base_end_meta$timepoint) #categorical
+
+check_metadata(timepoint_group <- as.character(bac_base_end_meta$visit_typeno)) #categorical
+
+time <- scale_values(as.numeric(bac_base_end_meta$timesincefeedstart)) #numeric (days)
+
+check_metadata(time <- ifelse(time < 0, 0, time))
+
+check_metadata(
+  age <- scale_values(as.numeric(bac_base_end_meta$agedays_rounded))
+) #numeric (days)
+```
+
+The *age* and *time* variables are (unsurprisingly) highly correlated. Multicollinearity causes issues in being able to identify the unique effects of different covariates. To address this but still account for age in the model, a new variable was created to represent participants age at baseline. *time* and *age* are correlated meaning that they cannot be used together as is in the model due to issues with model interpretation and multicollinearity (unique effects cannot be determined).
+
+```{r}
+#| eval: true
+#| label: creating the age at baseline variable
+age_B_unscaled <- bac_base_end_meta %>%
+  group_by(displayid) %>%
+  mutate(agedays_rounded = as.numeric(agedays_rounded)) %>%
+  arrange(agedays_rounded, .by_group = TRUE) %>%
+  mutate(
+    ageAtBaseline = case_when(
+      str_detect(timepoint, "Baseline") ~ agedays_rounded,
+      FALSE ~ NA
+    )
+  ) %>%
+  fill(ageAtBaseline) %>%
+  ungroup() %>%
+  dplyr::select(ageAtBaseline) %>%
+  unlist() #turns df into numeric vector
+
+check_metadata(age_B <- scale_values(age_B_unscaled)) #age of individual at baseline numeric (days)
+```
+
+##### Initial Unmodified Model
+
+Recall that alpha diversity statistics for baseline-endpoint paired samples (`alpha.bve`) have been joined with metadata variable(`bac_base_end_meta`). Model covaraites are as defined above, and the outcome variable (y) will be each individual alpha diversity statistic.
+
+Each model included:
+
+- Fixed effects: treatment, time, and their interaction
+- Random effects: individual participant variation
+- Age at baseline as a covariate
+
+Models were fitted using Restricted Maximum Likelihood (REML) estimation. REML was chosen over Maximum Likelihood (ML) because:
+
+- It produces unbiased estimates of variance components
+- It accounts for the loss of degrees of freedom from estimating fixed effects
+- It's particularly suitable for mixed models with unbalanced data
+
+```{r}
+#| eval: true
+#| label: LMMs
+library(nlme)
+
+diversity_stats <- data.frame(
+  chao = as.numeric(bac_base_end_meta$chao1),
+  shannon = as.numeric(bac_base_end_meta$diversity_shannon),
+  evenness = as.numeric(bac_base_end_meta$evenness_pielou),
+  pd = as.numeric(bac_base_end_meta$pd)
+)
+
+alpha_lmms <- list(
+  shannon_lmm = lme(
+    shannon ~ arm_group * time + age_B,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  chao_lmm = lme(
+    chao ~ arm_group * time + age_B,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  even_lmm = lme(
+    evenness ~ arm_group * time + age_B,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm = lme(
+    pd ~ arm_group * time + age_B,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  )
+)
+```
+
+One of the assumptions of random intercept/slope models is that the random errors (residuals) are independant and normally distributed. The below function checks these assumptions:
+
+```{r}
+#| eval: true
+#| label: check model assumptions
+#| message: false
+
+residualPlots <- mapply(
+  residual_plots,
+  model = alpha_lmms,
+  model_name = names(alpha_lmms)
+)
+```
+
+##### Data Transformation
+
+The residuals are non normal. Therefore, the data requires transformation. After trial and error, the following transformations were most appropriate for ensuring the subsequent model's residuals met the assumed normal distribution:
+
+- Shannon & Pielou: Squared transformation
+- Chao1 & Faith's PD: Natural log transformation
+
+```{r}
+#| eval: true
+#| label: transforming alpha diversity metrics
+alpha_lmms_transformed <- list(
+  chao_lmm_transformed = lme(
+    log(chao) ~ arm_group * time + age_B,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  shannon_lmm_transformed = lme(
+    shannon^2 ~ arm_group * time + age_B,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_transformed = lme(
+    evenness^2 ~ arm_group * time + age_B,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_transformed = lme(
+    log(pd) ~ arm_group * time + age_B,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  )
+)
+```
+
+```{r}
+#| eval: true
+#| label: residual diagnostics on newly transformed data
+#| message: false
+
+transformedResidualPlots <- mapply(
+  residual_plots,
+  model = alpha_lmms_transformed,
+  model_name = names(alpha_lmms_transformed)
+)
+```
+
+##### Model Summaries
+
+Note that the following outputs will be reported on the scale of the transformation used on the outcome variable, e.g. log scale. This may make the results a little difficult to interpret. Many of these summaries will report the same things.
+
+###### Standard summary
+
+```{r}
+#| eval: true
+#| label: tbl-lmm-sum
+#| tbl-cap: Model output summary for LMM including baseline age (ageB) as a fixed effect.
+lapply(alpha_lmms_transformed, summary)
+```
+
+###### Stargazer
+
+```{r}
+#| eval: true
+#| label: tbl-stargazer
+#| tbl-cap: Summary of linear mixed models used to predict alpha diversity statistics
+#| results: asis
+
+stargazer::stargazer(header = FALSE, alpha_lmms_transformed, type = "html")
+```
+
+###### Extended Model Stats
+
+```{r}
+#| eval: true
+#| label: tbl-lmm-1
+#| tbl-cap: Model statistics for LMM including baseline age (ageB) as a fixed effect.
+lapply(alpha_lmms_transformed, model_stats)
+```
+
+###### Narrative model summary
+
+```{r}
+#| eval: true
+#| label: tbl-lmm-2
+#| tbl-cap: Model statistics for LMM including baseline age (ageB) as a fixed effect.
+lapply(alpha_lmms_transformed, report::report)
+```
+
+###### ANOVA of model terms
+
+```{r}
+#| eval: true
+#| label: tbl-lmm-3
+#| tbl-cap: Statistical analysis using ANOVA on the importance of fixed effects in LMM including baseline age (ageB) as a fixed effect.
+lapply(lapply(alpha_lmms_transformed, anova), knitr::kable) #same result as emmeans anova below
+```
+
+##### Using EMMEANS to determine significant changes in alpha diversity
+
+Estimated marginal means (EMMs) (also known as least-squares means) are somewhat simular to marginal means except that the marginal mean is adjusted for covariates. 
+
+EMMs provides population-level estimates that:
+
+- Account for the model's structure and covariates
+- Compare groups without designating a reference group
+- Back-transform results to original scales for easier interpretation
+
+Comparisons were made at specific timepoints:
+
+- Baseline (time = 0)
+- Endpoint (time = 1)
+
+Sidak adjustment (default) was used to control for multiple comparisons.
+
+The intercept in summary outputs will always denote the 1st level in the model and is used as the reference group to which all other effects are compared to. 
+
+In the context of this analysis, the reference group is intervention arm 0 (CPM). The estimate reported for model effects are the differences between that effect term and the reference (intercept) term, on the transformation scale of the data. The intercept P-value signifies if the estimate is significantly different to zero (NOT THE REFERENCE GROUP). This can be confusing to interpret, especially for complex models. 
+
+The emmeans package helps with this by treating all groups as equal (no reference group), and by back-transforming the data to the original scale to be more easily interpreted.
+
+Standard errors are expected to be more or less the same in a balanced dataset but this can be influenced by the numbers of observations in each grouping variable. `r sum(arm_group==0)/2` and `r sum(arm_group==1)/2` tell us that there are 39 and 43 individuals in each intervention arm. This number is divided by two because there is a baseline and endpoint for each person.
+
+```{r}
+#| eval: true
+#| label: tbl-emms
+#| tbl-cap: Estimated marginal means for alpha diversity statistics within each intervention arm
+
+library(emmeans)
+
+emmeans <- lapply(alpha_lmms_transformed, function(x) {
+  emmeans(
+    x,
+    ~ arm_group + time + age_B,
+    at = list(time = c(0, 1)),
+    type = "response",
+    adjust = "sidak"
+  )
+})
+
+#easy reading markdown tables
+lapply(emmeans, knitr::kable)
+```
+
+```{r}
+#| eval: true
+#| label: fig-emms-arm
+#| fig-cap: Changes in the estimated marginal means of alpha diversity statistics within each intervention arm
+
+# Create an empty list to store plots
+plot_list <- list()
+
+# Loop through each item in the list
+for (i in names(emmeans)) {
+  # Create a plot for each item (replace with your actual plot creation code)
+  plot <- emmip(emmeans[[i]], arm_group ~ time, CIs = T) +
+    ggtitle(paste(str_extract(i, "^[^_]*"))) +
+    theme(
+      legend.position = "bottom",
+      plot.title = element_text(size = 10, face = "bold")
+    )
+
+  # Add the plot to the list
+  plot_list[[i]] <- plot
+}
+
+#Arrange and display the plots using grid.arrange
+ggpubr::annotate_figure(ggpubr::ggarrange(
+  plotlist = plot_list,
+  ncol = 2,
+  nrow = 2,
+  common.legend = T
+))
+```
+
+1. Did diversity change over the 9-month period?
+   
+  - Compared average diversity at baseline vs endpoint
+  - Combined both treatment groups
+
+::: question
+
+Does 9 months daily feeding of PM-based foods result in differences in the gut microbiome in terms of mean $\alpha$ diversity metrics i.e. does average at baseline = average at endpoint?
+
+:::
+
+::: h0
+
+$$
+\begin{array}{cc}
+\frac{Arm0B + Arm1B}{2} = \frac{Arm0E + Arm1E}{2} \\
+\Rightarrow \frac{Arm0B}{2} + \frac{Arm1B}{2} - \frac{Arm0E}{2} - \frac{Arm1E}{2} = 0 \\
+\Rightarrow \frac{Arm0E}{2} + \frac{Arm1E}{2} - \frac{Arm0B}{2} - \frac{Arm1B}{2} = 0
+\end{array}
+$$
+
+:::
+
+The coeficients for the contrast are as follows (**depends on the order of the emmeans output**): 
+
+- time 0 = baseline
+- time 1 = endpoint
+- Coefficients = -0.5, -0.5, 0.5, 0.5
+
+```{r}
+#| eval: true
+#| label: tbl-emm-arm
+#| results: asis
+#| tbl-cap: Changes in alpha diveristy estimated marginal means over time by intervention arm.
+
+#store results for graph
+emmeans_BvsE <- lapply(emmeans, function(x) {
+  contrast(x, method = list(c(-0.5, -0.5, 0.5, 0.5)), adjust = "bonferroni")
+})
+
+# Convert each emmeans result to a data frame and add a label column
+labeled_tables <- Map(
+  function(x, name) {
+    df <- as.data.frame(x)
+    df$Comparison <- name
+    return(df)
+  },
+  emmeans_BvsE,
+  names(emmeans_BvsE)
+)
+
+# Combine all tables into one
+combined_df <- do.call(rbind, labeled_tables)
+
+# Reorder columns to put Comparison first
+combined_df <- combined_df[, c(
+  "Comparison",
+  setdiff(names(combined_df), "Comparison")
+)]
+
+# Print as one table
+knitr::kable(combined_df, digits = 4)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-emm-arm-eff
+#| tbl-cap: The effect size of temporal changes in alpha diveristy estimated marginal means by intervention arm.
+
+lapply(
+  lapply(emmeans, function(x) {
+    contrast(x, method = "eff", adjust = "bonferroni")
+  }),
+  knitr::kable
+)
+```
+
+2. Did treatments have different effects?
+  
+  - Examined if changes in diversity differed between CPM and FeZnPM
+  - Considered interaction between time and treatment
+
+::: question
+
+Is there a difference between the mean $\alpha$ diversity of individuals fed either PM or FeZnPM-based foods across 9 months of feeding? i.e. Is the change in mean $\alpha$ diversity different between intervention arms?
+
+:::
+
+::: h0
+
+$$
+\begin{array}{cc}
+(Arm0B - Arm0E) = (Arm1B - Arm1E) \\
+\Rightarrow Arm0B - Arm0E - Arm1B + Arm1E = 0
+\end{array}
+$$
+
+:::
+
+The coeficients for the contrast are as follows (**depends on the order of the emmeans output**): 
+
+- time 0 = baseline
+- time 1 = endpoint
+- Coefficients = -1, 1, 1, -1
+
+```{r}
+#| eval:  true
+#| label: tbl-emm-arm-contrasts
+#| tbl-cap: Contrast coeficients
+#| results: asis
+
+emmeans_CPMvsFeZnPM <- lapply(emmeans, function(x) {
+  contrast(x, method = list(c(-1, 1, 1, -1)), adjust = "bonferroni")
+})
+
+lapply(
+  lapply(emmeans, function(x) {
+    contrast(x, method = list(c(-1, 1, 1, -1)), adjust = "bonferroni")
+  }),
+  knitr::kable
+)
+```
+
+**Estimate**: Represents the estimated difference between the two levels being compared. It suggests that the first level has a lower value (-50.59 units) than the average of the other three levels combined.
+
+The impact of age at baseline was examined by:
+
+- Creating estimates at different age percentiles (0, 25, 50, 75, 100%)
+- Checking if treatment effects varied with starting age
+- Visualizing age-related patterns in diversity changes
+
+::: question
+
+Does FeZnPM change/improve the gut microbiome in some children more than others based on age at baseline?
+
+:::
+
+```{r}
+#| eval: true
+#| label: effect of baseline age in model estimation
+age_emmeans <- lapply(alpha_lmms_transformed, function(x) {
+  emmeans(
+    x,
+    ~ arm_group + time + age_B,
+    at = list(age_B = c(0, 0.25, 0.5, 0.75, 1), time = c(0, 1)),
+    type = "response",
+    adjust = "sidak"
+  )
+})
+```
+
+```{r}
+#| eval:  true
+#| label: fig-emms-age
+#| fig-cap: Changes in the estimated marginal means of alpha diversity statistics within each intervention arm adjusted for age at baseline.
+
+plot_list <- list()
+
+# Loop through each item in the list
+for (i in names(age_emmeans)) {
+  # Create a plot for each item (replace with your actual plot creation code)
+  plot <- emmip(age_emmeans[[i]], arm_group ~ age_B, CIs = T) +
+    ggtitle(paste(str_extract(i, "^[^_]*"))) +
+    theme(
+      legend.position = "bottom",
+      plot.title = element_text(size = 10, face = "bold")
+    )
+
+  # Add the plot to the list
+  plot_list[[i]] <- plot
+}
+
+#Arrange and display the plots
+#basically the same as the ggplots below except not to the correct scale as the orginal data. Covariates not backtransformed
+ggpubr::annotate_figure(
+  ggpubr::ggarrange(
+    plotlist = plot_list,
+    ncol = 2,
+    nrow = 2,
+    common.legend = T
+  ),
+  top = "Change in diversity statistics"
+)
+```
+
+```{r}
+#| eval:  true
+#| label: tbl-age-contrasts
+#| tbl-cap: Estimated marginal means adjusting for age at baseline.
+#| results: asis
+
+lapply(
+  lapply(age_emmeans, function(x) {
+    pairs(x, adjust = "bonferroni")
+  }),
+  knitr::kable
+)
+```
+
+The resulting tables are in units on a 0-1 scale for the number of days for the time and age covariates. The response column is the already back-transformed diversity statistic (done by emmeans). The following can be used to backtransform them, where `x` is the desired diversity metric column:
+
+```{r}
+#| eval: false
+backtransform_scaled_values(
+  scaled_value = x,
+  original_data = as.numeric(bac_base_end_meta$timesincefeedstart)
+)
+backtransform_scaled_values(scaled_value = x, original_data = age_B_unscaled)
+```
+
+An ANOVA/ANCOVA can be perfomed to determine if the grouping variable, in this case the intervention arm, is an important category for determining the outcome variable.
+
+::: h0
+
+$H_0$: the mean outcome is the same between groups i.e.
+
+$$
+\mu_x1 = \mu_x2 = \mu_x3 = \mu_x4
+$$
+
+:::
+
+::: h1
+
+$H_1$: the mean outcome is different between groups i.e.
+
+$$
+\mu_x1 \neq \mu_x2 \neq \mu_x3 \neq \mu_x4
+$$
+
+:::
+
+Here only the intercept and time variable are significant. Therefore, we must reject $H_1$ and accept $H_0$. The mean diversity statistic response variable is equal between intervention arm 0 and 1
+
+```{r}
+#| eval: true
+#| label: tbl-anova
+#| tbl-cap: ANOVA
+#| results: asis
+
+lapply(lapply(alpha_lmms_transformed, anova), knitr::kable)
+```
+
+###### Graphing alpha diversity statistic LMMs
+
+```{r}
+#| eval: true
+#| label: fig-emms-alpha
+#| fig-cap: Alpha diversity EMMs plots
+#| fig-width: 18
+#| fig-height: 12
+
+shannon_p <- bac_base_end_meta %>%
+  ggplot(aes(
+    x = backtransform_scaled_values(
+      scaled_value = time,
+      original_data = as.numeric(bac_base_end_meta$timesincefeedstart)
+    ),
+    y = as.numeric(diversity_shannon),
+    colour = arm
+  )) +
+  geom_point() +
+  geom_line(
+    aes(
+      y = sqrt(predict(alpha_lmms_transformed$shannon_lmm_transformed)),
+      group = displayid,
+      colour = arm
+    ),
+    alpha = 0.5
+  ) + # sqrt used to backtransform
+  geom_smooth(
+    method = "lm",
+    se = F,
+    color = "black",
+    formula = y ~ x,
+    linetype = 'dotted',
+    linewidth = 3
+  ) + #overall regression arm
+  annotate(
+    "text",
+    x = -Inf,
+    y = Inf,
+    hjust = -1,
+    vjust = 2,
+    label = bquote(atop(
+      "Baseline vs Endpoint:" ~
+        p ==
+          .(ifelse(
+            round(
+              summary(emmeans_BvsE$shannon_lmm_transformed[1])[, "p.value"],
+              3
+            ) <
+              0.0001,
+            "<0.0001",
+            round(
+              summary(emmeans_BvsE$shannon_lmm_transformed[1])[, "p.value"],
+              3
+            )
+          )),
+      "CPM vs FeZnPM:" ~
+        p ==
+          .(ifelse(
+            round(
+              summary(emmeans_CPMvsFeZnPM$shannon_lmm_transformed[1])[,
+                "p.value"
+              ],
+              3
+            ) <
+              0.0001,
+            "<0.0001",
+            round(
+              summary(emmeans_CPMvsFeZnPM$shannon_lmm_transformed[1])[,
+                "p.value"
+              ],
+              3
+            )
+          ))
+    ))
+  ) +
+  xlab("Time Since Feed Start (days)") +
+  ylab("Shannon Diversity Index") +
+  theme(legend.position = "none") +
+  scale_color_manual(values = armColours) +
+  labs(color = "Intervention Arm")
+
+evenness_p <- bac_base_end_meta %>%
+  ggplot(aes(
+    x = backtransform_scaled_values(
+      scaled_value = time,
+      original_data = as.numeric(bac_base_end_meta$timesincefeedstart)
+    ),
+    y = as.numeric(evenness_pielou),
+    colour = arm
+  )) +
+  geom_point() +
+  geom_line(
+    aes(
+      y = sqrt(predict(alpha_lmms_transformed$evenness_lmm_transformed)),
+      group = displayid,
+      colour = arm
+    ),
+    alpha = 0.5
+  ) +
+  geom_smooth(
+    method = "lm",
+    se = F,
+    color = "black",
+    formula = y ~ x,
+    linetype = 'dotted',
+    linewidth = 3
+  ) +
+  annotate(
+    "text",
+    x = -Inf,
+    y = Inf,
+    hjust = -1,
+    vjust = 2,
+    label = bquote(atop(
+      "Baseline vs Endpoint:" ~
+        p ==
+          .(ifelse(
+            round(
+              summary(emmeans_BvsE$evenness_lmm_transformed[1])[, "p.value"],
+              3
+            ) <
+              0.0001,
+            "<0.0001",
+            round(
+              summary(emmeans_BvsE$evenness_lmm_transformed[1])[, "p.value"],
+              3
+            )
+          )),
+      "CPM vs FeZnPM:" ~
+        p ==
+          .(ifelse(
+            round(
+              summary(emmeans_CPMvsFeZnPM$evenness_lmm_transformed[1])[,
+                "p.value"
+              ],
+              3
+            ) <
+              0.0001,
+            "<0.0001",
+            round(
+              summary(emmeans_CPMvsFeZnPM$evenness_lmm_transformed[1])[,
+                "p.value"
+              ],
+              3
+            )
+          ))
+    ))
+  ) +
+  xlab("Time Since Feed Start (days)") +
+  ylab("Pielou Evenness Index") +
+  theme(legend.position = "none") +
+  scale_color_manual(values = armColours) +
+  labs(color = "Intervention Arm")
+
+chao_p <- bac_base_end_meta %>%
+  ggplot(aes(
+    x = backtransform_scaled_values(
+      scaled_value = time,
+      original_data = as.numeric(bac_base_end_meta$timesincefeedstart)
+    ),
+    y = as.numeric(chao1),
+    colour = arm
+  )) +
+  geom_point() +
+  geom_line(
+    aes(
+      y = exp(predict(alpha_lmms_transformed$chao_lmm_transformed)),
+      group = displayid,
+      colour = arm
+    ),
+    alpha = 0.5
+  ) +
+  geom_smooth(
+    method = "lm",
+    se = F,
+    color = "black",
+    formula = y ~ x,
+    linetype = 'dotted',
+    linewidth = 3
+  ) +
+  annotate(
+    "text",
+    x = -Inf,
+    y = Inf,
+    hjust = -1,
+    vjust = 2,
+    label = bquote(atop(
+      "Baseline vs Endpoint:" ~
+        p ==
+          .(ifelse(
+            round(
+              summary(emmeans_BvsE$chao_lmm_transformed[1])[, "p.value"],
+              3
+            ) <
+              0.0001,
+            "<0.0001",
+            round(summary(emmeans_BvsE$chao_lmm_transformed[1])[, "p.value"], 3)
+          )),
+      "CPM vs FeZnPM:" ~
+        p ==
+          .(ifelse(
+            round(
+              summary(emmeans_CPMvsFeZnPM$chao_lmm_transformed[1])[, "p.value"],
+              3
+            ) <
+              0.0001,
+            "<0.0001",
+            round(
+              summary(emmeans_CPMvsFeZnPM$chao_lmm_transformed[1])[, "p.value"],
+              3
+            )
+          ))
+    ))
+  ) +
+  xlab("Time Since Feed Start (days)") +
+  ylab("Chao Abundance Index") +
+  theme(legend.position = "none") +
+  scale_color_manual(values = armColours) +
+  labs(color = "Intervention Arm")
+
+pd_p <- bac_base_end_meta %>%
+  ggplot(aes(
+    x = backtransform_scaled_values(
+      scaled_value = time,
+      original_data = as.numeric(bac_base_end_meta$timesincefeedstart)
+    ),
+    y = as.numeric(pd),
+    colour = arm
+  )) +
+  geom_point() +
+  geom_line(
+    aes(
+      y = exp(predict(alpha_lmms_transformed$pd_lmm_transformed)),
+      group = displayid,
+      colour = arm
+    ),
+    alpha = 0.5
+  ) +
+  geom_smooth(
+    method = "lm",
+    se = F,
+    color = "black",
+    formula = y ~ x,
+    linetype = 'dotted',
+    linewidth = 3
+  ) +
+  annotate(
+    "text",
+    x = -Inf,
+    y = Inf,
+    hjust = -1,
+    vjust = 2,
+    label = bquote(atop(
+      "Baseline vs Endpoint:" ~
+        p ==
+          .(ifelse(
+            round(summary(emmeans_BvsE$pd_lmm_transformed[1])[, "p.value"], 3) <
+              0.0001,
+            "<0.0001",
+            round(summary(emmeans_BvsE$pd_lmm_transformed[1])[, "p.value"], 3)
+          )),
+      "CPM vs FeZnPM:" ~
+        p ==
+          .(ifelse(
+            round(
+              summary(emmeans_CPMvsFeZnPM$pd_lmm_transformed[1])[, "p.value"],
+              3
+            ) <
+              0.0001,
+            "<0.0001",
+            round(
+              summary(emmeans_CPMvsFeZnPM$pd_lmm_transformed[1])[, "p.value"],
+              3
+            )
+          ))
+    ))
+  ) +
+  xlab("Time Since Feed Start (days)") +
+  ylab("Faith's Phylogenetic diversity Index") +
+  theme(legend.position = "none") +
+  scale_color_manual(values = armColours) +
+  labs(color = "Intervention Arm")
+
+ggpubr::ggarrange(
+  chao_p,
+  shannon_p,
+  evenness_p,
+  pd_p,
+  ncol = 2,
+  nrow = 2,
+  common.legend = T,
+  legend = "bottom",
+  labels = "AUTO"
+)
+```
+
+#### Additional analysis
+
+Two sets of models were compared:
+
+1. Full models including age at baseline
+2. Simplified models without age
+
+This comparison helps understand:
+
+- Whether age adds meaningful information
+- If simpler models are sufficient
+- The robustness of treatment effects
+
+```{r}
+#| eval: true
+#| label: transforming diversity metrics
+alpha_lmms_transformed2 <- list(
+  chao_lmm_transformed2 = lme(
+    chao ~ arm_group * time,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  shannon_lmm_transformed2 = lme(
+    shannon^2 ~ arm_group * time,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_transformed2 = lme(
+    evenness^2 ~ arm_group * time,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_transformed2 = lme(
+    log(pd) ~ arm_group * time,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  )
+)
+```
+
+\  
+One of the assumptions of random intercept/slope models is that the random errors (residuals) are independant and normally distributed
+
+```{r}
+#| eval: false
+#| label: check model assumptions2
+
+for (i in seq_along(alpha_lmms_transformed2)) {
+  residual_plots(
+    model = alpha_lmms_transformed2[[i]],
+    model_name = names(alpha_lmms_transformed2)[i],
+    print = TRUE
+  )
+}
+```
+
+Note that the following outputs will be reported on the scale of the transformation used on the outcome varaible, e.g. log scale. This may make the results a little difficult to interrupt.
+
+```{r}
+#| eval: true
+#| label: summary tables2
+#| results: asis
+#| tbl-cap: Model results summary for LMM including baseline age (ageB) as a fixed effect.
+
+#view summary table
+
+stargazer::stargazer(header = FALSE, alpha_lmms_transformed2, type = "html")
+```
+
+```{r}
+#| eval: true
+#| tbl-cap: Model statistics for LMM including baseline age (ageB) as a fixed effect.
+lapply(alpha_lmms_transformed2, model_stats)
+```
+
+```{r}
+#| eval: true
+#| tbl-cap: Statistical analysis using ANOVA on the importance of fixed effects in LMM including baseline age (ageB) as a fixed effect.
+lapply(lapply(alpha_lmms_transformed2, anova), knitr::kable)
+```
+
+\blandscape
+
+```{r}
+#| eval:  true
+#| label: model compaison stargazer table2
+#| results: asis
+#| tbl-cap: Comparison of random intercept models with our without baseline age (ageB) included as a fixed effect.
+
+stargazer::stargazer(
+  alpha_lmms_transformed,
+  alpha_lmms_transformed2,
+  header = FALSE,
+  type = "html"
+)
+```
+
+\elandscape
+
+```{r}
+#| eval: true
+#| label: save key files as rds to start other analyses from
+rm(
+  list = setdiff(
+    ls(),
+    c(
+      "seqdata",
+      "seqdata_bac",
+      "seqdata_arc",
+      "metadata",
+      "taxonomy",
+      "base_end_paired_samples",
+      "absAbund",
+      "bac_base_end"
+    )
+  )
+)
+save.image("data/seqdata.RData")
+```

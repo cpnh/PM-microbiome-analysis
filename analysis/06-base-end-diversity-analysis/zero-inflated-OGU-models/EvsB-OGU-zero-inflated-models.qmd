@@ -1,0 +1,187 @@
+## Investigating changes in OGU abundance over time using Zero-inflated Beta Regression Models with Random Effects
+
+```{r}
+#| echo: false
+#| eval: true
+#| label: setup
+
+# This initial code block loads custom utility functions and environment variables
+# These are stored in separate files to keep the main analysis clean and organized
+source("utils/r-utils.r")
+source("scripts/OGeeU.r")
+source("scripts/zeroGUS.r")
+
+source("_environment.required")
+load("data/seqdata.RData")
+
+suppressPackageStartupMessages({
+  library(ZIBR)
+  library(glmmTMB)
+  })
+
+dir.create(file.path(RESULTS, "EvsB-OGU-ZIBR"), showWarnings = FALSE, recursive = TRUE)
+
+```
+
+```{r}
+#| eval: true
+#| label: data prep
+
+data <- prepare_ogu_data(absAbund) # converted to relative abundance data after filtering
+outcome <- data$ogu_data
+
+# checks prevalence
+# Removes rare species
+# counts how many non-zero values are in each column
+# Returns TRUE if more than 40% of values are non-zero
+filter_index1 <- apply(outcome, 2, function(X) {
+  sum(X > 0) > 0.4 * length(X)
+})
+
+# checks abundance
+# Removes low abundance species
+# finds the 90th percentile value and returns TRUE if greater than 1
+
+# filter_index2 <- apply(outcome, 2, function(X) {
+#   quantile(X, 0.9) > 1
+# })
+
+# outcome <- outcome[, filter_index1 & filter_index2]
+outcome <- outcome[, filter_index1]
+
+outcome <- as.matrix(outcome)
+
+predictors <- prepare_predictors(data$meta_data)
+predictors <- predictors %>%
+  mutate(arm = case_when(arm == "CPM" ~ 0, arm == "FeZnPM" ~ 1)) %>%
+  rownames_to_column(var = "sample") %>%
+  mutate(
+    baseline_sample = str_replace(sample, "_G_E|_B_E|_E|_G_B|_B_B", "_B"),
+    sample = str_remove(sample, "_G"),
+  ) %>%
+  mutate(sample = str_replace(sample, "_B_B", "_B")) %>%
+  mutate(sample = str_replace(sample, "_B_E", "_E")) 
+
+rownames(outcome) <- str_replace(
+  str_replace(str_remove(rownames(outcome), "_G"), "_B_B", "_B"),
+  "_B_E",
+  "_E"
+)
+
+names <- colnames(outcome)
+
+tmp <- glmmTMB(outcome[,1] ~ arm*time+age_B + (1|subject), zi = ~arm*time, data=predictors, family = poisson)
+
+compareZI(outcome[,1] ~ arm*time+age_B + (1|subject), zi = ~arm*time, data=predictors)
+
+if (diagnose(tmp) == FALSE) {
+  diagnose(tmp)
+
+}
+summary(tmp)
+
+ff <- fixef(tmp)$zi
+round(plogis(c(CPM=unname(ff[1]),ff[-1]+ff[1])),3)
+
+plot(simulateResiduals(tmp))
+
+```
+
+```{r}
+models <- list()
+p_taxa_list_zibr <- list()
+
+for (j in names) {
+  if (any(is.na(predictors) | is.null(predictors))) {
+    stop("Predictor variables cannot contain NA values")
+  }
+
+  df <- data.frame(
+    Baseline = outcome[predictors$baseline_sample, j],
+    predictors[, c("time", "arm")]
+  )
+
+  rownames(df) <- predictors$sample
+
+  if (any(is.na(df) | is.null(df))) {
+    stop("Predictor variables cannot contain NA values")
+    view(df)
+  }
+
+  # df <- data.frame(y = y, predictors) %>%
+  #   arrange(subject, time) %>% select(y, arm, time)
+  subject_ind <- predictors$subject
+  time_ind <- predictors$time
+  if (length(subject_ind) != length(time_ind) && nrow(predictors)) {
+    stop("Input variables are not the same length")
+  }
+
+  y <- outcome[predictors$sample, j]
+
+  if (!all(data$y > 0 & data$y < 1)) {
+    stop("Response must be between 0 and 1")
+  }
+
+  if (any(is.na(y) | is.null(y))) {
+    stop("Outcome variable contains NA values")
+  } else {
+    est <- tryCatch(
+      {
+        ZIBR::zibr(
+          logistic_cov = df,
+          beta_cov = df,
+          Y = y,
+          subject_ind = subject_ind,
+          time_ind = time_ind,
+          quad_n = 30,
+          verbose = TRUE
+        )
+      },
+      error = function(e) {
+        # Print dimensions of problematic matrices
+        print(paste("Error:", e))
+        return(NULL)
+      }
+    )
+    # models[j] <- est
+    # p_taxa_list_zibr[j, ] <- est$joint.p
+  }
+}
+```
+
+```{r}
+#| eval: true
+#| label: auto
+
+results <- run_zibr_pipeline (
+  phyloseq_obj = bac_base_end,
+  output_dir = file.path(RESULTS, "EvsB-OGU-GEE")
+)
+
+# 3. Get summary of results
+cat("Total OGUs analyzed:", nrow(results$model_results$convergence_summary), "\n")
+cat("Significant OGUs:", nrow(results$significant_ogus), "\n")
+
+# 4. Create summary plots
+plots <- create_summary_plots(results)
+print(plots$p_value_dist)
+print(plots$volcano_plot)
+
+# 5. Examine a specific significant OGU
+# Replace "OGU_ID" with an actual OGU ID from your significant results
+ogu_details <- examine_ogu(results, "OGU_ID")
+
+# 6. Access detailed results for further analysis
+significant_ogus <- results$significant_ogus
+model_summaries <- results$model_results$convergence_summary
+
+# 7. Export results to Excel for easier viewing
+if (require(openxlsx)) {
+  write.xlsx(
+    list(
+      Convergence_Summary = results$model_results$convergence_summary,
+      Significant_OGUs = results$significant_ogus
+    ),
+    file = file.path(output_dir, "ZIBR_Results.xlsx")
+  )
+}

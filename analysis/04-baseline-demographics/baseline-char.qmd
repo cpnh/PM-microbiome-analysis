@@ -1,0 +1,74 @@
+```{r}
+#| echo: false
+#| eval: true
+#| label: setup
+
+# This initial code block loads custom utility functions and environment variables
+# These are stored in separate files to keep the main analysis clean and organized
+source("utils/r-utils.r")
+source("_environment.required")
+baseline_metadata <- readRDS("data/metadata/baseline-metadata.rds")
+```
+
+```{r}
+#| eval: true
+#| label:  metadata comparison data prep
+m1 <- baseline_metadata %>% 
+                rownames_to_column(var = "RowNames") %>%
+                select(
+                    `Age (months)` = agemonths_base, 
+                    Female = sexf, 
+                    `Intervention arm`=trt, 
+                    `Birth mode vaginal (vs. Caesarean)` = del_type,
+                    `Birth weight (kg)` =  bwt,
+                    `Current weight (kg)` = cwt,
+                    `Mid-upper arm circumference (cm)` = muac_avg,
+                    `Head circumference (cm)` = hc_avg,
+                    `Head circumference-for-age Z-score` = zhc,
+                    `Length (cm)` = ln_avg ,
+                    `Length-for-age Z-score (LAZ)` = zlen,
+                    `Stunting (LAZ < -2)` = stunt_base,
+                    `Weight-for-age Z-score (WAZ) ` = zwei ,
+                    `Underweight (WAZ < -2)` =  underwt_base,
+                    `Weight-for-length Z-score (WLZ) ` = zwfl,
+                    `Wasting (WLZ < -2)` =  wast_base,
+                    `Ferritin (ng/ml)` =  fer_base,
+                    `Iron deficiency (<12 ng/ml) ` = fer_def12_base,
+                    `Ferritin (ng/ml)* adjusted for CRP` = fer_crpadjbr , # using BRINDA
+                    `Iron deficiency (<12 ng/ml)* adjusted for CRP` = fer_crpbr_def12, # using BRINDA
+                    `Zinc (µg/dL)` = zinc,
+                    `Zinc deficiency (<70 µg/dL) ` =  zinc_def70, # <70 µg/dL
+                    `Hemoglobin (g/dl)` = hb_base,
+                    `Anemia (hemoglobin < 11 g/dl) ` =  anemia_base,
+                    `C-reactive protein (CRP) ≥ 5 mg/L ` = crp_elev5 ,
+                    `Diarrhea today or within past 4 weeks ` =  freq3diarr, # 1,2&3
+                    `Fever today or within past 4 weeks ` = freqfever ,# 1,2&3
+                    `Cough today or within past 4 weeks` =  freqcough, # 1,2&3
+                    `Observed features` = observed, 
+                    `Chao 1 Index` = chao1, 
+                    `Shannon Entropy`=diversity_shannon, 
+                    Evenness = evenness_pielou,
+                    `Faith's Phylogenetic Diversity` = pd) %>%
+                mutate_at(vars(everything()), str_trim) %>%
+                type.convert(., as.is = TRUE) %>%
+                mutate(
+                `Birth weight (kg)` =  (`Birth weight (kg)`)/1000,
+                `Current weight (kg)` = (`Current weight (kg)`),
+                `Low birth weight (<2.5 kg)` =  (`Birth weight (kg)`) <= 2.5,
+                `Birth mode vaginal (vs. Caesarean)` = case_when(
+                    `Birth mode vaginal (vs. Caesarean)` == "1" ~ "Vaginal",
+                    `Birth mode vaginal (vs. Caesarean)` == "2" ~ "Caesarian"),
+                `Diarrhea today or within past 4 weeks ` =  case_when(
+                    `Diarrhea today or within past 4 weeks ` == "1" ~ "Today",
+                    `Diarrhea today or within past 4 weeks ` == "2" ~ "Last 7 days",
+                    `Diarrhea today or within past 4 weeks ` == "3" ~ "Last 4 weeks"),
+                `Fever today or within past 4 weeks ` = case_when(
+                    `Fever today or within past 4 weeks ` == "1" ~ "Today",
+                    `Fever today or within past 4 weeks ` == "2" ~ "Last 7 days",
+                    `Fever today or within past 4 weeks ` == "3" ~ "Last 4 weeks"),
+                `Cough today or within past 4 weeks` = case_when(
+                    `Cough today or within past 4 weeks` == "1" ~ "Today",
+                    `Cough today or within past 4 weeks` == "2" ~ "Last 7 days",
+                    `Cough today or within past 4 weeks` == "3" ~ "Last 4 weeks")) %>%
+                mutate(subset = "All Baseline Samples")
+```

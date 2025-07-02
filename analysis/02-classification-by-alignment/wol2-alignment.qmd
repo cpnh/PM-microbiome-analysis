@@ -1,0 +1,103 @@
+## Alignment to WoL2
+
+### Downloading WoL2 Bowtie Database
+
+The second version of WoL, containing \> 15,000 genomes, is only available on this
+[FTP site](ftp.microbio.me/pub/wol2/). The first version is available on the
+[website](https://biocore.github.io/wol/), which contains $\approx$ 10,000 reference
+genomes.
+
+```{bash}
+#| eval: false
+#| label: WoL2 download
+
+wget -N -P $REF/WoL2-Bowtie2DB/ -r -np -nH --cut-dirs=4 ftp://ftp.microbio.me/pub/wol2/databases/bowtie2/
+```
+
+### Local vs End-to-End Alignment
+
+Apparently, for metagenome data, local alignment is preferred
+([source](https://www.biostars.org/p/197850/#335451)) but in the literature most
+researchers use end-to-end (global/paired end) alignment protocols. The Woltka wiki
+([source](https://github.com/qiyunzhu/woltka/blob/master/doc/align.md#alignment-with-bowtie2))
+also advises to use E2E alignment with Bowtie2. A test alignment confirmed this (see
+Appendix 1), and so samples were aligned E2E.
+
+### Bowtie2 End-to-End Alignment to WoL2
+
+The following script executes Bowtie2 and samtools for alignment and alignment
+statistics, which will determine the number of raw reads that aligned to the WoL2 database, .
+
+```{bash}
+#| eval: false
+#| label: script contents
+#| code-summary: View script contents
+
+{{< include ../../scripts/run_bowtie.sh >}}
+```
+
+```{bash}
+#| eval: false
+#| label: Bowtie2 alignment to WoL2
+#| output: false
+
+echo "Running Bowtie2 alignment to WoL2 on files in $CLEAN_FILE_DIR"
+
+mkdir -p $WOL_OUT/logs
+
+find "$CLEAN_FILE_DIR" -maxdepth 1 -type f -name "*_R1.fq" | \                         
+  while read -r r1; do \
+    r2="${r1/_R1/_R2}" 
+    echo "$r1 $r2 $BT_REF $WOL_OUT $(basename ${r1%%_filtered_R1.*})"; \
+  done | \
+    parallel --progress --bar --eta --colsep ' ' -j 3 --results "$WOL_OUT/logs/parallel_logs" --tag --joblog "$WOL_OUT/logs/parallel_joblog.txt" '(echo "Processing {5}"; bash $WORKDIR/scripts/run_bowtie.sh {1} {2} {3} {4} 2>&1 | tee "{4}/logs/log_{5}.log")'
+
+```
+
+
+#### Alignment statistics
+
+Alignment statistics are calculated using the following script:
+
+```{bash}
+#| eval: false
+#| label: alignment-stats script contents
+#| code-summary: View script contents
+
+{{< include ../../scripts/alignment-stats.r >}}
+```
+
+```{bash}
+#| eval: false
+#| label: sequence alignment percentages
+#| fig-cap: A histogram showing the percentage of total raw sequences that aligned to the Web of Life v2 reference phylogeny using the short-read sequence aligner, Bowtie2.
+
+Rscript scripts/alignment-stats.r -i $WOL_OUT -o $WOL_RESULTS 2>&1 | tee $LOGS/alignment-stats.log
+```
+
+#### Coverage Calculation 
+
+```{bash}
+#| eval: false
+#| label: calculate-coverage script contents
+#| code-summary: View script contents
+
+{{< include ../../scripts/calculate-coverage.sh >}}
+```
+
+```{bash}
+#| eval: false
+#| label: coverage calculation
+
+bash $WORKDIR/scripts/calculate-coverage.sh -i $WOL_OUT -o $WOL_RESULTS/coverage_analysis -t $THREADS 2>&1 | tee $LOGS/calculate-coverage.log
+
+```
+
+```{bash}
+#| eval: false
+#| label: coverage stats
+
+Rscript $WORKDIR/scripts/coverage-stats.r -i $WOL_RESULTS -o $WOL_RESULTS/coverage_analysis -p "*.txt" -v 2>&1 | tee $LOGS/coverage-stats.log
+```
+
+The average coverage scores across samples are contained in `coverage_summary.csv`. For detailed coverage statistics for each OGU, see `combined_coverage_stats.csv` or individual coverage files.

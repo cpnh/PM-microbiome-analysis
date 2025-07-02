@@ -1,0 +1,5 @@
+# Baseline Characteristics
+
+- Available baseline samples: n = 168
+  - CPM = 82
+  - FeZnPM = 86

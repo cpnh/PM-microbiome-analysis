@@ -1,0 +1,91 @@
+## Operational Genomic Unit Classification
+
+### Downloading WoL2 Woltka Supporting Material
+
+The following files have been curated to match the WoL2 phylogeny and need to be downloaded to be able to run *Woltka*.
+
+```{bash}
+#| eval: false
+#| label: Woltka download
+
+mkdir -p $REF/WoL2-Woltka
+
+while IFS= read -r line; do echo "$line"; done < ref/WoL2-Woltka/woltka-downloads.txt |
+parallel -j 5 --eta "wget -N -P $REF/WoL2-Woltka -r -np -nH --cut-dirs=2 {}"
+```
+
+### Assinging reads to Operational Genomic Units using Woltka
+
+::: callout-caution
+### File format
+
+*Woltka* does not directly accept `.bam` files but they can be piped into it `.sam` files are not available (`-` stands for stdout).
+
+```{bash}
+samtools view input.bam | woltka classify -i - -o output.biom
+```
+
+or for a directory of files:
+
+```{bash}
+find "$WOL_OUT" -maxdepth 1 -type f -name "*.bam" | \
+  while read -r bam; do \
+    sam="${bam/.bam/.sam}" 
+    echo "$bam $sam"; \
+  done | \
+    parallel -j 7 --progress --bar --eta --colsep ' ' "samtools view --threads $THREADS {1} > {2}"
+```
+
+:::
+
+```{bash}
+#| label: fastp script contents
+#| eval: false
+#| code-summary: View script contents
+{{< include ../../scripts/wol2sop.sh >}}
+```
+
+
+```{bash}
+#| eval: false
+#| label: woltka classify
+
+bash scripts/wol2sop.sh --db $REF/WoL2-Woltka --input $WOL_OUT --output $WOLTKA_OUT --outfmt tsv --filext .sam --fundbs go,kegg --compound --coverage --idmaps 2>&1 | tee $LOGS/wol2-woltka-classify.log
+```
+
+### Converting biom files to tsv
+
+If you opt for biom format instead of tsv, you can convert to tsv using the code below:
+
+```{bash}
+#| eval: false
+#| label: biom file conversion to tsv
+
+#convert the biom table to a .tsv table to read more easily
+find $WOLTKA_OUT -type f -maxdepth 1 -name "*.biom" | \                         
+  while read -r biom; do \
+    tsv="${biom/.biom/.tsv}" 
+    echo "$biom $tsv"; \
+  done | \
+  parallel -j $THREADS --eta "biom convert --to-tsv -i {1} -o {2}"
+```
+
+### Calculating total features per file
+
+```{r}
+library(tidyverse)
+
+Sys.getenv(c("WOLTKA_OUT"))
+
+tmp <- read.delim(paste0(WOLTKA_OUT, "/ogu-taxonomy/ogus.tsv"), header = TRUE, row.names = 1)
+
+tmp$Name = NULL #an artifact of Woltka it seems (empty column)
+
+#re-export table without the name column
+write.table(tmp, paste0(WOLTKA_OUT, "/ogu-taxonomy/ogu.tsv"), sep = "\t", row.names = FALSE, quote = FALSE)
+
+tmp <- t(tmp)
+tmp <- as.data.frame(rowSums(tmp)) %>% rownames_to_column()
+
+write.table(tmp, paste0(WOLTKA_OUT, "/total-ogu.tsv"), sep = "\t", row.names = FALSE, col.names = c("sample", "#features"), quote = FALSE)
+```

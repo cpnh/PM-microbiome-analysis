@@ -1,0 +1,32 @@
+# Bacterial Differential Abundance Analysis
+
+## Differential Abundance Analysis in Microbiome Analysis
+
+Differential abundance analysis (DA) identifies microbial taxa that significantly differ in abundance between experimental conditions or time points, in addition to quantifying the magnitude and direction of changes (increase or decrease).
+
+**Challenges and Limitations:**
+
+- High dimensionality (many taxa, few samples)
+- Compositional nature of microbiome data
+- Zero-inflation (many taxa absent in samples)
+- High variability between samples
+
+**Key Statistical Considerations:**
+
+- Effective control of the false discovery rate (FDR) for multiple testing e.g Benjamini-Hochberg procedure is needed
+- Effect size estimation
+  - Reported on a $log_2$ fold change between comparators
+  - Indicates magnitude and direction of change
+- Normalization
+  - Account for different sequencing depths
+  - Rarefaction 
+- Handling compositional nature of microbiome data
+
+**Common Methods:**
+
+- *edgeR/limma-voom:* Originally for RNA-seq, adapted for microbiome
+- *DESeq2:* Handles zero-inflation and overdispersion
+- *ANCOM:* Accounts for compositional nature
+- *ALDEx2:* Uses Bayesian approach with compositional data
+
+#TODO add citations

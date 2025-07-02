@@ -1,0 +1,1988 @@
+## Subgroup analysis: Iron deficient and Anemic Children
+
+```{r}
+#| echo: false
+#| eval: true
+#| label: setup
+#| include: false
+
+# This initial code block loads custom utility functions and environment variables
+# These are stored in separate files to keep the main analysis clean and organized
+source(normalizePath("utils/r-utils.r"))
+source(normalizePath("_environment.required"))
+load(normalizePath("data/seqdata.RData"))
+
+metadata <- read_delim(normalizePath(METADATA))
+bac_base_end_meta <- readRDS(normalizePath("data/metadata/base-end-metadata.rds"))
+baseline_metadata <- readRDS(normalizePath("data/metadata/baseline-metadata.rds"))
+
+suppressPackageStartupMessages(library(emmeans))
+suppressPackageStartupMessages(library(nlme))
+suppressPackageStartupMessages(library(ggpubr))
+suppressPackageStartupMessages(library(gridExtra))
+
+dir.create(file.path(RESULTS, "iron-status-subgroup-analysis"), showWarnings = FALSE, recursive = TRUE)
+```
+
+::: question
+
+We are interested in examining a subset of individuals who were iron deficient at baseline. Questions include:
+
+- do iron deficient individuals respond differently than iron sufficient individuals?
+- do iron deficient individuals improve in iron status overtime depending on intervention group
+- how many individuals overall are iron deficient?
+- are there any iron associated microbial signatures (analysis by Catherine)
+- Can the Microbiome serve as a signature of dietary intakes of pearl millet (analysis by Catherine)
+- is iron status at baseline a significant determinant of changes in number of observed, species, alpha diversity, beta diversity.
+
+:::
+
+Recall that alpha diversity statistics have been previously calculated in [Section 6](analysis/06-base-end-diversity-analysis/bacterial-alpha-diversity-analysis.qmd). Below is just a reminder of that code. Note that diversity statistics were calculated using absolute abundances as the microbiome package calculates relative abundances in-function the phyloseq object being used here contains abundance calculations.
+
+```{r}
+#| eval: false
+## assume non-parametic data to make analysis easier (dont want to remove outliers)
+alpha.bve <- microbiome::alpha(absAbund, index = "all")
+
+## returns Faith's phylogenetic diversity (PD) and species richness (SR = observed = chao1)
+pd.bve <- picante::pd(samp = as.data.frame(t(otu_table(absAbund))), tree = phy_tree(absAbund), include.root = FALSE)
+```
+
+### Defining Iron Status and Anaemia
+
+There are multiple types of anaemia, not necessarily due to iron deficiency. For example, inflammation or infection can also cause low blood count therefore low red blood cells is not enough to diagnose, iron deficient anaemia. 
+
+Iron deficiency/anaemia diagnostic criteria:
+
+- serum ferritin levels
+- hemoglobin levels (g/L)
+  - most frequent biomarker used to diagnose anaemia
+  - known to very naturally by age, elevation, smoking status, physiological status, such as pregnancy, or race
+  - WHO recommends making an adjustments for certain ethnic groups e.g African-Americans, Jamaican girls, and individuals from Greenland
+  - must be combined with serum ferritin/transferrin receptor levels to diagnose iron deficient anaemia
+![Hemoglobin Cut-offs]("../../_assets/hb_anemia.png")
+- serum transferrin receptor
+- calculating the total iron binding capacity
+
+Based on WHO guidelines [@WHO2011; @WHO2024] we define iron status subgroups as follows:
+
+Sub group characteristics:
+
+- Children who are iron deficient at baseline (<12 ng/mL)
+- Children who are iron depleted at baseline (<25 ng/mL)
+- Children who are iron replete at baseline ($\geq$ 25 ng/mL)
+
+Note that instead of $\geq$ 12ng/mL and $\leq$ 25ng/mL for depleted iron status it will include everyone under 25ng/mL
+
+### Iron Status at Baseline
+
+#### Data preparation
+
+```{r}
+#| eval: true
+#| label: iron status variable
+
+baseline_metadata <- baseline_metadata %>%
+  mutate(
+    baseline_iron_status = case_when(
+      fer_base < 12 ~ "deficient",
+      fer_base >= 12 & fer_base < 25 ~ "depleted",
+      fer_base >= 25 ~ "replete",
+      TRUE ~ "Unknown"
+    ),
+    sex = case_when(
+      sexf == 1 ~ "Female",
+      sexf == 0 ~ "Male"
+    )
+  ) %>%
+  dplyr::filter(str_detect(baseline_iron_status, "deficient|depleted|replete")) # remove those with no ferritin measurements
+
+saveRDS(baseline_metadata, normalizePath("data/metadata/baseline-metadata.rds"))
+
+```
+
+```{r}
+#| eval: true
+#| warning: false
+#| label: tbl-iron-base-arm
+#| tbl-cap: Comparison of iron status at baseline between intervention arms
+(p <- baseline_metadata %>%
+  dplyr::select(arm,`Anemia at Baseline` = anemia_base, baseline_iron_status, fer, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Entropy` = diversity_shannon, Evenness = evenness_pielou, `Faith's Phylogenetic Diversity` = pd) %>%
+  group_by(baseline_iron_status) %>%
+  gt_strata(strata = "baseline_iron_status", by = "arm"))
+
+htmltools::save_html(gt::as_raw_html(p), file.path(RESULTS, "iron-status-subgroup-analysis/baseline-iron-status-summary.tbl"))
+
+```
+
+```{r}
+#| eval: true
+#| warning: false
+#| label: tbl-iron-base
+#| tbl-cap: compare iron status at baseline
+(p <- baseline_metadata %>%
+  dplyr::select(arm,`Anemia at Baseline` = anemia_base, baseline_iron_status, fer, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Entropy` = diversity_shannon, Evenness = evenness_pielou, `Faith's Phylogenetic Diversity` = pd) %>%
+  dplyr::filter(str_detect(baseline_iron_status, "deficient|depleted|replete")) %>%
+  gt_strata(strata = "arm", by = "baseline_iron_status", vda = FALSE))
+
+htmltools::save_html(gt::as_raw_html(p), file.path(RESULTS, "iron-status-subgroup-analysis/baseline-iron-status.tbl"))
+```
+
+```{r}
+#| eval: true
+#| warning: false
+#| label: tbl-ferritin-arm
+#| tbl-cap: ferritin differences
+(p <- baseline_metadata %>%
+  dplyr::select(arm,`Anemia at Baseline` = anemia_base, baseline_iron_status, fer, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Entropy` = diversity_shannon, Evenness = evenness_pielou, `Faith's Phylogenetic Diversity` = pd) %>%
+  gt_summary(by = "baseline_iron_status"))
+
+htmltools::save_html(gt::as_raw_html(p), file.path(RESULTS, "iron-status-subgroup-analysis/baseline-ferritin-differences-by-arm.tbl"))
+
+```
+
+There is no difference between alpha diversity statistics depending on baseline iron status.
+
+```{r}
+#| eval: true
+#| warning: false
+#| label: tbl-base-alpha-sex-iron
+#| tbl-cap: differences in alpha diversity by sex and iron status
+(p <- baseline_metadata %>%
+  dplyr::select(Sex = sex,`Anemia at Baseline` = anemia_base, baseline_iron_status, fer, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Entropy` = diversity_shannon, Evenness = evenness_pielou, `Faith's Phylogenetic Diversity` = pd) %>%
+  gt_strata(strata = "Sex", by = "baseline_iron_status", vda = FALSE))
+
+htmltools::save_html(gt::as_raw_html(p), file.path(RESULTS, "iron-status-subgroup-analysis/baseline-alpha-div-by-iron-status-sex.tbl"))
+
+```
+
+No difference between the sexes
+
+### Iron Status over Time (Baseline-Endpoint)
+
+As the hemoglobin and ferritin data are not normally distributed non-parametric, statistical tests need to be used. As an initial investigation into whether or not haemoglobin or ferritin levels differ between time points within intervention group, the Wilcoxon rank sum test will be used. 
+
+The results (shown below) do not indicate that there is any difference between iron and/or haemoglobin levels at either baseline nor endpoint, confirming again that randomisation worked. There is a significant difference between intervention arm, endpoint even though these values are a lot lower than what they were at baseline. The difference between intervention arms is obvious indicating that the biofortification on ferritin levels. Serum levels at baseline are much higher than they are in point and this is likely due to one of several factors, either infants were iron replete. Assuming mom is at birth, and when complementary feeding, begins approximately six months infants need to start repeating their iron stores from complementary foods. For this cohort, at 12 months, many are still consuming breast milk. However, breastmilk does not contain very much iron. The difference between ferritin levels at baseline and endpoint maybe due to temporary dropouts during the trial that were allowed back into the trial when they returned to the area. In addition, even those who were eating the high iron intervention were not very good at eating, so an average of 3mg (compared to 1mg in the PM control) may not have been sufficient to maintain iron stores. , and so the average daily consumption of 3 mg of iron (versus 1 mg in the control) may not have been enough to maintain iron stores. Maternal supplementation may have also been peeling a role in the higher levels at baseline. However, this is not confirmed in the data set. 
+
+#### Data preparation
+
+```{r}
+#| eval: true
+#| label: iron status variable
+
+be_meta <- bac_base_end_meta %>%
+  mutate(
+    iron_status = case_when(
+      fer < 12 ~ "deficient",
+      fer >= 12 & fer < 25 ~ "depleted",
+      fer >= 25 ~ "replete",
+      TRUE ~ "Unknown"
+    ),
+    baseline_iron_status = case_when(
+      fer_base < 12 ~ "deficient",
+      fer_base >= 12 & fer_base < 25 ~ "depleted",
+      fer_base >= 25 ~ "replete",
+      TRUE ~ "Unknown"
+    ),
+    sex = case_when(
+      sexf == 1 ~ "Female",
+      sexf == 0 ~ "Male"
+    )
+  )
+```
+
+#### Basic Statistics
+
+```{r}
+#| eval: true
+#| label: alpha diversity with grouping iron status at baseline
+
+## subset for individuals with a baseline and matching end point
+## only 82 sample have matching baseline and endpoint samples
+dfB_E.stats <-
+  be_meta %>%
+  dplyr::select(displayid, timepoint, arm, fer, hb, anemia_base, anyiron_def, observed, chao1, diversity_shannon, evenness_pielou, pd) %>%
+  pivot_longer(cols = !c(displayid, timepoint, arm, fer, hb, anemia_base, anyiron_def), names_to = "diversity_metric") %>%
+  group_by(displayid) %>%
+  dplyr::filter(all(c("Baseline", "Endpoint") %in% timepoint)) %>%
+  ungroup() %>%
+  as.data.frame()
+
+write.csv(dfB_E.stats, file.path(RESULTS, "iron-status-subgroup-analysis/alpha-diveristy-by-iron-status.csv"), row.names = FALSE)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-alpha-sum
+#| tbl-cap: Alpha diversity summary stats by timepoint
+
+dfB_E.stats %>%
+  group_by(timepoint, diversity_metric) %>%
+  get_summary_stats(value, type = "common") %>%
+  kable()
+```
+
+```{r}
+#| eval: true
+#| label: tbl-norm-test
+#| tbl-cap: Shapiro-Wilks normality test results on alpha diversity statistics. 
+#| results: asis
+
+norm <- lapply(colnames(dfB_E.stats), norm_test, df = dfB_E.stats, format = "markdown")
+
+do.call(rbind, norm)
+
+```
+
+```{r}
+#| eval: true
+#| label: tbl-be-hb-fer
+#| tbl-cap: Comparison of serum ferritin and haemoglobin concentrations between intervention arms at baseline and endpoint using the Wilcoxon rank sign test.
+(p <- dfB_E.stats %>%
+  dplyr::select(timepoint, arm, fer, hb) %>%
+  gt_strata(strata = "timepoint", by = "arm"))
+
+htmltools::save_html(gt::as_raw_html(p), file.path(RESULTS, "iron-status-subgroup-analysis/BvsE-ferritin-hemoglobin-between-arms.tbl"))
+```
+
+::: question
+
+Do iron/haemoglobin levels differ significantly between timepoints? 
+
+:::
+
+```{r}
+#| eval: true
+#| label: tbl-hb-fer-wilcox
+#| tbl-cap: hb and fer conc wilcoxon rank sign test
+(p <- be_meta %>%
+  dplyr::select(timepoint, arm, fer, hb,`Anemia at Baseline` = anemia_base, anyiron_def, observed_features = observed, chao1, diversity_shannon, evenness_pielou, pd) %>%
+  gt_strata(strata = "arm", by = "timepoint", vda = FALSE))
+
+htmltools::save_html(gt::as_raw_html(p), file.path(RESULTS, "iron-status-subgroup-analysis/BvsE-ferritin-hemoglobin.tbl"))
+
+```
+
+- ferritin deficiency threshold for infants under five years old is <12 {$\mu$}g/L.
+- haemoglobin levels \leq 110 g/L or 11 g/dL
+
+```{r}
+#| eval: true
+#| label: wilcox tests for graphing
+## is there a significant difference in ferritin/haemoglobin levels between intervention arms at baseline and endpoint?
+## unpaired between group comparisons: arm_base vs. ctrl_base & arm_end vs. ctrl_end
+unpaired_wilcox_endpoint <-
+  dfB_E.stats %>%
+  dplyr::select(timepoint, arm, fer, hb) %>%
+  reshape2::melt(id.vars = c("timepoint", "arm"), variable.name = "biomarker") %>%
+  group_by(timepoint, biomarker) %>%
+  pairwise_wilcox_test(value ~ arm, paired = FALSE, p.adjust.method = "BH") %>%
+  add_xy_position(x = "timepoint", step.increase = 0)
+
+## is there a significant difference between baseline and endpoint within treatment group?
+## paired within group comparisions: arm_base vs. arm_end & ctrl_base vs. ctrl_end
+paired_wilcox_overtime <-
+  dfB_E.stats %>%
+  dplyr::select(timepoint, arm, fer, hb) %>%
+  reshape2::melt(id.vars = c("timepoint", "arm"), variable.name = "biomarker") %>%
+  group_by(arm, biomarker) %>%
+  pairwise_wilcox_test(value ~ timepoint, paired = TRUE, p.adjust.method = "BH") %>%
+  add_xy_position(x = "timepoint", step.increase = 0)
+
+overall_paired_wilcox_overtime <-
+  dfB_E.stats %>%
+  dplyr::select(timepoint, arm, fer, hb) %>%
+  reshape2::melt(id.vars = c("timepoint", "arm"), variable.name = "biomarker") %>%
+  group_by(biomarker) %>%
+  pairwise_wilcox_test(value ~ timepoint, paired = TRUE, p.adjust.method = "BH") %>%
+  add_xy_position(x = "timepoint", step.increase = 0)
+```
+
+```{r}
+#| eval: true
+#| label: fig-be-hb-fer
+#| fig-cap: ferritin and haemoglobin levels at baseline and endpoint
+## visualise as boxplot
+dfB_E.stats %>%
+  dplyr::select(timepoint, arm, fer, hb) %>%
+  reshape2::melt(id.vars = c("timepoint", "arm"), variable.name = "biomarker") %>%
+  ggplot(aes(x = timepoint, y = value)) +
+  geom_boxplot(aes(fill = arm), outlier.shape = NA, position = position_dodge(width = 1)) +
+  geom_point(aes(group = arm, fill = arm), position = position_jitterdodge(dodge.width = 1, jitter.width = 0.5)) +
+  facet_wrap(. ~ biomarker, scales = "free") +
+  # stat_pvalue_manual(unpaired_wilcox_endpoint, label = "p = {p}", step.increase = 0.05, color = "timepoint") +
+  # stat_pvalue_manual(paired_wilcox_overtime, label = "p = {p}", step.increase = 0.08, color = "arm") +
+  # stat_pvalue_manual(overall_paired_wilcox_overtime, label = "p = {p}", step.increase = 0.11, color = "red") +
+  xlab(NULL) +
+  ylab(NULL) +
+  scale_fill_manual(values = armColours) +
+  scale_x_discrete(labels = c("Baseline", "Endpoint")) +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1), strip.text = element_text(size = 14, face = "bold", color = "black"))
+```
+
+#### Bivariate analysis
+
+I am wondering if it is possible to perform Spearman correlation using gtsummary. This package appears to be able to differentiate between continuous and categorical data very efficiently. For continuous variables, correlation, relationships can be assessed using spearman correlation, and then medians and IQR compared between groups using the Hodges-Lehmann-Sen test. For categorical data group comparisons can be done using the squared test. Fisher's exact test is used, when at least 25% of expected counts are less than five. 
+
+Linear regression models can be used to examine associations between iron status, and Alpha diversity metrics.
+
+If the multi-variant model contains money, covariance, stepwise, redundancy analysis (or DA) can be used to estimate the linear cumulative, and independent fact size for each non-redundant covariant on alpha diversity variation. This allows for linear variables to be removed from the model.
+
+::: question
+Q: Is RDA analysis similar to VIF analysis in determining linear relationships between covariates?
+:::
+
+Regression should be used to investigate the interaction between host factors, such as iron status, and the relative of abundance of specific taxa.
+
+Preliminary bivariate analyses (correlations) to identify variables that have a significant relationship with alpha diversity metrics. Variables with strong relationships may be good candidates for inclusion in your model.
+
+```{r}
+#| eval: true
+#| label: define iron deficiency variable
+## remove samples that do not have iron status data and redefine model variables to reflect this
+be_meta <- be_meta %>%
+  dplyr::filter(iron_status != "Unknown" & baseline_iron_status != "Unknown") %>%
+  group_by(displayid) %>%
+  dplyr::filter(all(c("Baseline", "Endpoint") %in% timepoint)) %>%
+  ungroup()
+
+## ensure there are the same number of samples in each timepoint (n = 78)
+be_meta %>%
+  group_by(timepoint) %>%
+  count() %>%
+  kable(caption = "Number of samples in each timepoint", format = "markdown")
+
+diversity_stats <- data.frame(chao = as.numeric(be_meta$chao1), shannon = as.numeric(be_meta$diversity_shannon), evenness = as.numeric(be_meta$evenness_pielou), pd = as.numeric(be_meta$pd))
+
+subject <- be_meta$displayid # categorical
+arm_group <- as.factor(as.character(be_meta$arm)) # categorical factor
+timepoint <- be_meta$timepoint # categorical
+timepoint_group <- as.character(be_meta$visit_typeno) # categorical
+time <- scale_values(as.numeric(be_meta$timesincefeedstart)) # numeric (days)
+time <- ifelse(time < 0, 0, time)
+age <- scale_values(as.numeric(be_meta$agedays_rounded)) # numeric (days)
+age_B_unscaled <- be_meta %>%
+  group_by(displayid) %>%
+  mutate(agedays_rounded = as.numeric(agedays_rounded)) %>%
+  arrange(agedays_rounded, .by_group = TRUE) %>%
+  mutate(ageAtBaseline = case_when(
+    timepoint == "Baseline" ~ agedays_rounded,
+    FALSE ~ NA
+  )) %>%
+  fill(ageAtBaseline) %>%
+  ungroup() %>%
+  dplyr::select(ageAtBaseline) %>%
+  unlist() # turns df into numeric vector
+age_B <- scale_values(age_B_unscaled)
+sex <- be_meta$sex
+
+iron12 <- as.factor(be_meta$fer_def12)
+iron25 <- as.factor(be_meta$fer_def25)
+iron_base12 <- as.factor(be_meta$fer_def12_base)
+iron_base25 <- as.factor(be_meta$fer_def25_base)
+```
+
+```{r}
+#| eval: true
+#| warning: false
+#| out-width: 100%
+#| label: fig-spearman
+#| fig-cap: Iron and anemia Spearman correlation heatmap
+#| fig-height: 15
+#| fig-width: 20
+tmp <- be_meta %>%
+  dplyr::select(`Anemia at Baseline` = anemia_base, fer_def12_base, fer_def25_base, fer_def12, fer_def25, fer, Sex = sex, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Entropy` = diversity_shannon, Evenness = evenness_pielou, `Faith's PD` = pd) %>%
+  mutate_at(vars(everything()), as.numeric)
+
+corr <- tmp %>%
+  cor(method = "spearman", use = "pairwise.complete.obs")
+
+cor_test_mat <- round(ggcorrplot::cor_pmat(tmp), 4)
+cor_test_matFer <- cor_test_mat[, 1:6]
+cor_test_matalpha <- cor_test_mat[, 7:ncol(cor_test_mat)]
+
+#for use with ggplot tile or ggcorrplot
+ggheatmap_palette <- c('#91bfdb','#ffffbf','#fc8d59')
+
+corrPlot <- ggcorrplot::ggcorrplot(corr,
+  p.mat = cor_test_mat,
+  hc.order = FALSE,
+  method = "square",
+  type = "lower",
+  colors = ggheatmap_palette,
+  outline.color = "white",
+  lab = TRUE,
+  tl.cex = 15,
+  tl.col = "black",
+  tl.srt = 45,
+  sig.level = 0.05,
+  pch = 1,
+  pch.cex = 15,
+  insig = "pch",
+  ggtheme = "theme_classic"
+) +
+  theme(legend.key.size = unit(1, "cm"))
+
+ggarrange(
+  annotate_figure(
+    arrangeGrob(
+      tableGrob(cor_test_matFer),
+      tableGrob(cor_test_matalpha),
+      nrow = 2,
+      widths = 1,
+      heights = NULL
+    ),
+    top = text_grob("Correlation Coefficient P-values",
+      color = "black",
+      face = "bold",
+      size = 14,
+      vjust = 3.5
+    ),
+    bottom = text_grob("Circles represent correlations that are NOT significant",
+      color = "black",
+      face = "italic",
+      size = 14,
+      vjust = -3
+    )
+  ),
+  corrPlot,
+  ncol = 2,
+  nrow = 1,
+  widths = c(1.25, 1),
+  heights = 1
+)
+```
+
+Spearman correlation between serum, ferritin levels and anaemia ferritin deficiency/depletion are obviously strongly negatively correlated. As ferritin levels go down deficiency goes up many alpha diversity. Statistics are also correlated with one another (positively). There appears to be some weak correlation between alpha diversity and iron status, but the vast majority of them are not significant correlations (all but iron deficiency (<12ng/mL) and Chao 1 index, $\rho$ = 0.16, p = 0.0392).
+
+Sex and iron deficiency at baseline have a weak negative correlation ($\rho$ = -0.19, p = 0.0167), suggesting that there is that as serum ferritin decreases, the likelihood of the individual being female increases (note the effect size is still very small).
+
+However, it's important to note that correlation does not imply causation, and the observed relationship may be influenced by other variables not accounted for in bivariate analysis. While a random intercept model would allow for variability between individuals (by including a random effect), it does not directly address the question of which sex (male or female) drives the relationship between iron deficiency at baseline. To further explore the role of sex in the relationship between variables, an interaction terms between sex and iron_base12 could be added (see [below](\#fer_def12_base-sex)). 
+
+### LMMs Alpha Diversity and Iron Status
+
+Firstly, I am going to begin building the model by using a simple categorical variable defining whether there is any difference in OGU abundance/alpha diversity statistics between individuals who have no sign of any iron depletion of anaemia, and those that do. The anyiron_def variable is defined as 0 = iron replete (all parameters) and 1 = iron deficiency (any parameter). So, if fer_def = 1 OR tbi_def = 1 THEN anyiron_def = 1 ELSE anyiron_def = 0.
+
+**Overview of Random Intercept Models**
+
+| Variable name | Model formula | Description |
+|:-----|
+| \*\_iron | y ~ arm_group * time + **iron_base12** + **iron_base25** | baseline iron status: deficient (1: < 12 ng/mL), depleted (1: < 25 ng/mL) |
+| \*\_iron2 | y ~ arm_group * time + **iron12** + **iron25** | iron status at time point |
+|   \*\_iron_sex | y ~ arm_group * time + **iron_base12** + **iron_base25** + **sex** | sex (1: female) |
+| \*\_iron_sex2  | y ~ arm_group * time + iron12 + iron25 + sex | 
+| \*\_iron_sex_interaction | y ~ arm_group * time + **iron_base12** * **sex** + **iron_base25** | baseline iron *deficiency* and sex interaction
+| \*\_iron_sex_interaction2 | y ~ arm_group * time + **iron_base12** + **iron_base25** * **sex** | baseline iron *depletion* and sex interaction
+
+The interaction between iron status at baseline and sex allows for the effect of iron status to differ between males and females
+
+```{r}
+#| eval: true
+#| label: alpha diversity LMM grouping by iron deficiency
+alpha_lmms_Fe <- list(
+  chao_lmm_iron = lme(log(chao) ~ arm_group * time + iron_base12 + iron_base25,
+    random = ~ 1 | subject, method = "REML", data = diversity_stats
+  ),
+  shannon_lmm_iron = lme(shannon^2 ~ arm_group * time + iron_base12 + iron_base25, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  evenness_lmm_iron = lme(evenness^2 ~ arm_group * time + iron_base12 + iron_base25, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  pd_lmm_iron = lme(log(pd) ~ arm_group * time + iron_base12 + iron_base25, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+)
+```
+
+One of the assumptions of random intercept/slope models is that the random errors (residuals) are independent and normally distributed
+
+```{r}
+#| eval: true
+#| label: fig-assumptions
+#| fig-cap: Plots of model residuals and normality testing results
+for (i in seq_along(alpha_lmms_Fe)) {
+  residual_plots(model = alpha_lmms_Fe[[i]], model_name = names(alpha_lmms_Fe)[i], render = TRUE)
+}
+```
+
+Note that the following outputs will be reported on the scale of the transformation used on the outcome variable, e.g. log scale. This may make the results a little difficult to interrupt.
+
+#### Model statistics
+
+```{r}
+#| eval: true
+#| label: tbl-summary
+#| results: asis
+
+# view summary table
+stargazer::stargazer(alpha_lmms_Fe, type = "html")
+```
+
+below are some goodness of fit metrics
+
+```{r}
+#| eval: true
+#| label: tbl-model-stats
+#| tbl-cap: Goodness of fit model statistics
+#| results: asis
+lapply(seq_along(alpha_lmms_Fe), function(i) {
+  mstat <- model_stats(alpha_lmms_Fe[[i]])
+})
+```
+
+ANOVA determines if a term play a significant role in explaining the variance of an outcome variable.
+
+```{r}
+#| eval: true
+#| label: tbl-anova
+#| tbl-cap: ANOVA statistics results
+#| results: asis
+for (i in seq_along(alpha_lmms_Fe)) {
+  a <- anova(alpha_lmms_Fe[[i]])
+  kable(a, caption = paste0("ANOVA results for ",names(alpha_lmms_Fe)[i]))
+}
+```
+
+None of the terms except time have are significantly contributing to the model i.e. changes over time drive the changes in alpha diversity statistics and not for example, intervention group or iron status at baseline
+
+Based on goodness of fit estimates (log likelihood, AIC, BIC), all three models perform pretty much the same. The addition of age at baseline or baseline iron status does not negatively effect the model, however these variables do not explain a significant amount of the data's variance. However, I did notice that some of the individuals' iron status changed over time. I want to model this instead of baseline iron status. 
+
+```{r}
+#| eval: true
+#| label: iron status over time
+alpha_lmms_Fe2 <- list(
+  chao_lmm_iron2 = lme(log(chao) ~ arm_group * time + iron12 + iron25, random = ~ 1 | subject, method = "REML", data = diversity_stats
+  ),
+  shannon_lmm_iron2 = lme(shannon^2 ~ arm_group * time + iron12 + iron25, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  evenness_lmm_iron2 = lme(evenness^2 ~ arm_group * time + iron12 + iron25, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  pd_lmm_iron2 = lme(log(pd) ~ arm_group * time + iron12 + iron25, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-model-stargazer
+#| tbl-cap: Comparison of random intercept models with or without baseline age (ageB) included as a fixed effect.
+#| results: asis
+stargazer::stargazer(alpha_lmms_Fe, alpha_lmms_Fe2, type="html")
+```
+
+Using iron status over time rather than just at baseline appears to show that there is a difference in Chao index among the iron depleted group 
+
+```{r}
+#| eval: true
+#| label: alpha diversity LMM grouping by iron deficiency and sex
+alpha_lmms_Fe_sex <- list(
+  chao_lmm_iron_sex = lme(log(chao) ~ arm_group * time + iron_base12 + iron_base25 + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  shannon_lmm_iron_sex = lme(shannon^2 ~ arm_group * time + iron_base12 + iron_base25 + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  evenness_lmm_iron_sex = lme(evenness^2 ~ arm_group * time + iron_base12 + iron_base25 + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  pd_lmm_iron_sex = lme(log(pd) ~ arm_group * time + iron_base12 + iron_base25 + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+)
+
+alpha_lmms_Fe_sex2 <- list(
+  chao_lmm_iron_sex2 = lme(log(chao) ~ arm_group * time + iron12 + iron25 + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  shannon_lmm_iron_sex2 = lme(shannon^2 ~ arm_group * time + iron12 + iron25 + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  evenness_lmm_iron_sex2 = lme(evenness^2 ~ arm_group * time + iron12 + iron25 + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  pd_lmm_iron_sex2 = lme(log(pd) ~ arm_group * time + iron12 + iron25 + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-star-lmm
+#| tbl-cap: Comparison of random intercept models with or without baseline age (ageB) included as a fixed effect.
+#| results: asis
+
+stargazer::stargazer(alpha_lmms_Fe, alpha_lmms_Fe_sex, alpha_lmms_Fe2, alpha_lmms_Fe_sex2, header = FALSE, type = "html", star.cutoffs = c(0.05, 0.001, 0.0001))
+```
+
+```{r}
+#| eval: false
+#| label: tbl-anova-lmm-compare
+#| tbl-cap: anova summary comparison across nested models
+anova_results <- lapply(list(alpha_lmms_Fe, alpha_lmms_Fe_sex, alpha_lmms_Fe2, alpha_lmms_Fe_sex2), function(l) {
+  lapply(l, function(i) {
+    anova(i)
+  })
+})
+
+lapply(anova_results, function(x){
+  df <- anova_pvalue(x) %>%
+  pivot_wider(id_cols = Terms, names_from = Model, values_from = P.value, values_fill = NA) %>%
+  kable(format = "markdown")
+  
+  return(df)
+  })
+```
+
+#### Interaction between Sex and Baseline Iron Deficiency
+
+I decided to run this interaction model because there was a significant (albeit weak) [negative correlation between iron deficiency at baseline and sex](\#correlations) 
+
+```{r}
+#| eval: true
+#| label: Interaction between Sex and Baseline Iron Deficiency
+alpha_lmms_iron_sex_int <- list(
+  chao_lmm_iron_sex_int = lme(log(chao) ~ arm_group * time + iron_base12 * sex + iron_base25, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  shannon_lmm_iron_sex_int = lme(shannon^2 ~ arm_group * time + iron_base12 * sex + iron_base25, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  evenness_lmm_iron_sex_int = lme(evenness^2 ~ arm_group * time + iron_base12 * sex + iron_base25, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  pd_lmm_iron_sex_int = lme(log(pd) ~ arm_group * time + iron_base12 * sex + iron_base25, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+)
+```
+
+```{r}
+#| eval: false
+#| label: tbl-sex-iron-anova
+#| tbl-cap: ANOVA results for model using interaction term between iron status and sex
+
+tmp <- lapply(alpha_lmms_iron_sex_int, anova)
+
+anova_pvalue(tmp) %>%
+  pivot_wider(id_cols = Terms, names_from = Model, values_from = P.value, values_fill = NA) %>%
+  kable(format = "markdown")
+```
+
+#### Interaction between Sex and Baseline Iron Depletion
+
+Iron depletion ($\leq$ 25ng/mL) may be playing a small role in driving the differences in Shannon diversity and Pielou's evenness between individuals who are replete (> 25 ng/mL). I'm basing this on the observation that when comparing the [LMMs and ANOVA results](\#model-stats), the term was close to significance ($\alpha \leq$ 0.05) in the \*\_iron_sex models.
+
+Additionally, this happens when sex is added as a fixed term, suggesting that the effect iron status at baseline on the alpha diversity might be different between the sexes. In other words, there might be a sex-specific effect in the response of individuals with iron deficiency/depletion at baseline.
+
+```{r}
+#| eval: true
+#| label: Interaction between Sex and Baseline Iron Depletion
+alpha_lmms_iron_sex_int2 <- list(
+  chao_lmm_iron_sex_int2 = lme(log(chao) ~ arm_group * time + iron_base12 + iron_base25 * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  shannon_lmm_iron_sex_int2 = lme(shannon^2 ~ arm_group * time + iron_base12 + iron_base25 * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  evenness_lmm_iron_sex_int2 = lme(evenness^2 ~ arm_group * time + iron_base12 + iron_base25 * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  pd_lmm_iron_sex_int2 = lme(log(pd) ~ arm_group * time + iron_base12 + iron_base25 * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-sex-iron-dep-anova
+#| tbl-cap: ANOVA results for model using interaction term between iron status and sex
+
+tmp <- lapply(alpha_lmms_iron_sex_int2, anova)
+
+anova_pvalue(tmp) %>%
+  pivot_wider(id_cols = Terms, names_from = Model, values_from = P.value, values_fill = NA) %>%
+  kable(format = "markdown")
+```
+
+::: question
+
+Q: Are changes in alpha diversity due to PM driven by iron status at baseline and/or sex? Is the relationship between alpha diversity and iron status influenced by sex?
+  
+  - a\) alpha diversity changes due to baseline iron deficiency 
+  - b\) alpha diversity changes due to baseline iron depletion
+
+:::
+
+```{r}
+#| eval: true
+alpha_lmms_iron_sex_int3 <- list(
+  chao_lmm_iron_sex_int3 = lme(log(chao) ~ arm_group * time + iron_base12 * sex + iron_base25 * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  shannon_lmm_iron_sex_int3 = lme(shannon^2 ~ arm_group * time + iron_base12 * sex + iron_base25 * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  evenness_lmm_iron_sex_int3 = lme(evenness^2 ~ arm_group * time + iron_base12 * sex + iron_base25 * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  pd_lmm_iron_sex_int3 = lme(log(pd) ~ arm_group * time + iron_base12 * sex + iron_base25 * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-sex-iron-stargazer
+#| tbl-cap: Model comparisons between several models using interaction term between iron status and sex
+#| results: asis
+
+stargazer::stargazer(alpha_lmms_iron_sex_int, alpha_lmms_iron_sex_int2, alpha_lmms_iron_sex_int3, star.cutoffs = c(0.05, 0.001, 0.0001), header = FALSE, type = "html")
+```
+
+```{r}
+#| eval: true
+#| label: tbl-sex-iron-anova-2
+#| tbl-cap: ANOVA results for model using interaction term between iron status and sex
+
+tmp <- lapply(alpha_lmms_iron_sex_int3, anova)
+
+anova_pvalue(tmp) %>%
+  pivot_wider(id_cols = Terms, names_from = Model, values_from = P.value, values_fill = NA) %>%
+  kable(format = "markdown")
+```
+
+### Using a Single Iron Status Variable
+
+Something is going on with baseline depletion and sex and I think it is more appropriate to combine the iron status variables into a single variable. This method is probably preferable because the overlap between deficient and depleted categories violates the assumption of independence.
+
+```{r}
+#| eval: true
+#| label: change iron status categorical variable to numeric
+## overwrite the categorical variable
+
+be_meta <- be_meta %>%
+  mutate(
+    iron_status = case_when(
+      fer < 12 ~ 1,
+      fer >= 12 & fer < 25 ~ 2,
+      fer >= 25 ~ 3,
+      TRUE ~ 4
+    ),
+    baseline_iron_status = case_when(
+      fer_base < 12 ~ 1,
+      fer_base >= 12 & fer_base < 25 ~ 2,
+      fer_base >= 25 ~ 3,
+      TRUE ~ 4
+    )
+  )
+
+be_meta <- be_meta %>%
+  dplyr::filter(iron_status != 4 & baseline_iron_status != 4) %>%
+  group_by(displayid) %>%
+  dplyr::filter(all(c("Baseline", "Endpoint") %in% timepoint)) %>%
+  ungroup()
+
+## ensure there are the same number of samples in each timepoint (n = 78)
+be_meta %>%
+  group_by(timepoint) %>%
+  count()
+
+diversity_stats <- data.frame(chao = as.numeric(be_meta$chao1), shannon = as.numeric(be_meta$diversity_shannon), evenness = as.numeric(be_meta$evenness_pielou), pd = as.numeric(be_meta$pd))
+
+subject <- be_meta$displayid # categorical
+arm_group <- as.factor(as.character(be_meta$arm)) # categorical factor
+timepoint <- be_meta$timepoint # categorical
+timepoint_group <- as.character(be_meta$visit_typeno) # categorical
+time <- scale_values(as.numeric(be_meta$timesincefeedstart)) # numeric (days)
+time <- ifelse(time < 0, 0, time)
+age <- scale_values(as.numeric(be_meta$agedays_rounded)) # numeric (days)
+age_B_unscaled <- be_meta %>%
+  group_by(displayid) %>%
+  mutate(agedays_rounded = as.numeric(agedays_rounded)) %>%
+  arrange(agedays_rounded, .by_group = TRUE) %>%
+  mutate(ageAtBaseline = case_when(
+    timepoint == "Baseline" ~ agedays_rounded,
+    FALSE ~ NA
+  )) %>%
+  fill(ageAtBaseline) %>%
+  ungroup() %>%
+  dplyr::select(ageAtBaseline) %>%
+  unlist() # turns df into numeric vector
+age_B <- scale_values(age_B_unscaled)
+sex <- be_meta$sex
+
+iron_status <- as.factor(be_meta$iron_status)
+baseline_iron_status <- as.factor(be_meta$baseline_iron_status)
+```
+
+```{r}
+#| eval: true
+#| warning: false
+#| out.width: 100%
+#| label: spearman correlation 2
+#| fig.show: hide
+#| fig.height: 10
+#| fig.width: 20
+tmp <- be_meta %>%
+  dplyr::select(`Anemia at Baseline` = anemia_base, fer_def12_base, fer_def25_base, fer_def12, fer_def25, fer, iron_status, baseline_iron_status, Sex = sex, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Entropy` = diversity_shannon, Evenness = evenness_pielou, `Faith's PD` = pd) %>%
+  mutate_at(vars(everything()), as.numeric)
+
+
+corr <- tmp %>%
+  cor(method = "spearman", use = "pairwise.complete.obs")
+
+cor_test_mat <- round(ggcorrplot::cor_pmat(tmp), 4)
+cor_test_matFer <- cor_test_mat[, 1:6]
+cor_test_matalpha <- cor_test_mat[, 7:ncol(cor_test_mat)]
+
+corrPlot <- ggcorrplot::ggcorrplot(corr,
+  p.mat = cor_test_mat,
+  hc.order = FALSE,
+  method = "square",
+  type = "lower",
+  colors = ggheatmap_palette,
+  outline.color = "white",
+  lab = TRUE,
+  tl.cex = 15,
+  tl.col = "black",
+  tl.srt = 45,
+  sig.level = 0.05,
+  pch = 1,
+  pch.cex = 15,
+  insig = "pch",
+  ggtheme = "theme_classic"
+) +
+  theme(legend.key.size = unit(1, "cm"))
+
+ggarrange(
+  annotate_figure(
+    arrangeGrob(
+      tableGrob(cor_test_matFer),
+      tableGrob(cor_test_matalpha),
+      nrow = 2,
+      widths = 1,
+      heights = NULL
+    ),
+    top = text_grob("Correlation Coefficient P-values",
+      color = "black",
+      face = "bold",
+      size = 14,
+      vjust = 3.5
+    ),
+    bottom = text_grob("Circles represent correlations that are NOT significant",
+      color = "black",
+      face = "italic",
+      size = 14,
+      vjust = -3
+    )
+  ),
+  corrPlot,
+  ncol = 2,
+  nrow = 1,
+  widths = c(1.25, 1),
+  heights = 1
+)
+```
+
+```{r}
+#| eval: true
+#| label: LMMs with combined iron status
+alpha_lmms_iron_status <- list(
+
+  # baseline iron status alone as fixed effect
+  chao_lmm_iron = lme(log(chao) ~ arm_group * time + baseline_iron_status, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  shannon_lmm_iron = lme(shannon^2 ~ arm_group * time + baseline_iron_status, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  evenness_lmm_iron = lme(evenness^2 ~ arm_group * time + baseline_iron_status, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  pd_lmm_iron = lme(log(pd) ~ arm_group * time + baseline_iron_status, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+
+  # iron status at timepoint alone as fixed effect
+  chao_lmm_iron2 = lme(log(chao) ~ arm_group * time + iron_status, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  shannon_lmm_iron2 = lme(shannon^2 ~ arm_group * time + iron_status, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  evenness_lmm_iron2 = lme(evenness^2 ~ arm_group * time + iron_status, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  pd_lmm_iron2 = lme(log(pd) ~ arm_group * time + iron_status, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  chao_lmm_iron_sex = lme(log(chao) ~ arm_group * time + baseline_iron_status + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+
+  # baseline iron status and sex as fixed effect
+  shannon_lmm_iron_sex = lme(shannon^2 ~ arm_group * time + baseline_iron_status + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  evenness_lmm_iron_sex = lme(evenness^2 ~ arm_group * time + baseline_iron_status + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  pd_lmm_iron_sex = lme(log(pd) ~ arm_group * time + baseline_iron_status + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+
+  # iron status at timepoint and sex as fixed effect
+  chao_lmm_iron_sex2 = lme(log(chao) ~ arm_group * time + iron_status + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  shannon_lmm_iron_sex2 = lme(shannon^2 ~ arm_group * time + iron_status + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  evenness_lmm_iron_sex2 = lme(evenness^2 ~ arm_group * time + iron_status + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  pd_lmm_iron_sex2 = lme(log(pd) ~ arm_group * time + iron_status + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+
+  # interaction between baseline iron status and sex as fixed effect
+  chao_lmm_iron_sex_inter = lme(log(chao) ~ arm_group * time + baseline_iron_status * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  shannon_lmm_iron_sex_inter = lme(shannon^2 ~ arm_group * time + baseline_iron_status * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  evenness_lmm_iron_sex_inter = lme(evenness^2 ~ arm_group * time + baseline_iron_status * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  pd_lmm_iron_sex_inter = lme(log(pd) ~ arm_group * time + baseline_iron_status * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+
+  # interaction between iron status at timepoint and sex as fixed effect
+  chao_lmm_iron_sex_inter2 = lme(log(chao) ~ arm_group * time + iron_status * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  shannon_lmm_iron_sex_inter2 = lme(shannon^2 ~ arm_group * time + iron_status * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  evenness_lmm_iron_sex_inter2 = lme(evenness^2 ~ arm_group * time + iron_status * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  pd_lmm_iron_sex_inter2 = lme(log(pd) ~ arm_group * time + iron_status * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+)
+```
+
+```{r}
+#| eval: false
+#| results: asis
+stargazer::stargazer(alpha_lmms_iron_status[4:6], type = "html", star.cutoffs = c(0.05, 0.001, 0.0001), header = FALSE)
+```
+
+The two models that look at iron status and its interaction with sex are the final models I think I will build on. In terms of goodness of fit, they perform well.
+
+Residuals are normally distributed
+
+```{r}
+#| eval: true
+#| label: tbl-residuals-2
+#| tbl-cap: Shapiro-Wilks test for normality on model residuals
+
+kable(residual_norm_test(alpha_lmms_iron_status), format = "markdown")
+```
+
+
+```{r}
+#| eval: true
+#| label: model terms anova 2
+anova_results <- lapply(alpha_lmms_iron_status, anova)
+
+anova_pvalue(anova_results) %>%
+  pivot_wider(id_cols = Terms, names_from = Model, values_from = P.value, values_fill = NA) %>%
+  kable(format = "markdown")
+```
+
+### Hemoglobin Model
+
+As of 2024, the WHO has released new haemoglobin cut offs to diagnose anaemia. Keep this work in line with previously published results. The old haemoglobin cut offs will be used in the model, but we will also look at if there are any differences when the newer cut offs are used.
+
+#### Variable Creation
+
+```{r}
+#| eval: true
+#| label: defining the haemoglobin variable
+
+be_meta <- be_meta %>%
+  mutate(
+    anemia_status_old =
+      case_when(
+        hb < 7.0 ~ 4, # severe
+        hb >= 7.0 & hb <= 9.9 ~ 3, # moderate
+        hb >= 10.0 & hb <= 10.9 ~ 2, # mild
+        hb >= 11.0 ~ 1, # no anemia
+        TRUE ~ 8
+      )
+  ) %>%
+  mutate(
+    anemia_status_new =
+      case_when(
+        agemonths < 24 & hb < 7.0 ~ 4, # severe
+        agemonths < 24 & hb >= 7.0 & hb <= 9.4 ~ 3, # moderate
+        agemonths < 24 & hb >= 9.5 & hb <= 10.4 ~ 2, # mild
+        agemonths < 24 & hb >= 10.5 ~ 1, # no anemia
+        agemonths >= 24 & hb < 7.0 ~ 4, # severe
+        agemonths >= 24 & hb >= 7.0 & hb <= 9.9 ~ 3, # moderate
+        agemonths >= 24 & hb >= 10.0 & hb <= 10.9 ~ 2, # mild
+        agemonths >= 24 & hb >= 11.0 ~ 1, # no anemia
+        TRUE ~ 8 # cutoffs for >=24 mths of age is the same as previous cutoffs
+      )
+  )
+  
+be_meta <- be_meta %>%
+  dplyr::filter(anemia_status_old != 8, anemia_status_new != 8, iron_status != 4, baseline_iron_status != 4) %>%
+  group_by(displayid) %>%
+  dplyr::filter(all(c("Baseline", "Endpoint") %in% timepoint)) %>%
+  ungroup()
+
+## ensure there are the same number of samples in each timepoint (n = 76)
+be_meta %>%
+  group_by(timepoint) %>%
+  count()
+
+## other variables need to be redefined to match the length of the heme variable
+diversity_stats <- data.frame(chao = as.numeric(be_meta$chao1), shannon = as.numeric(be_meta$diversity_shannon), evenness = as.numeric(be_meta$evenness_pielou), pd = as.numeric(be_meta$pd))
+
+subject <- be_meta$displayid # categorical
+arm_group <- as.factor(as.character(be_meta$arm)) # categorical factor
+timepoint <- be_meta$timepoint # categorical
+timepoint_group <- as.character(be_meta$visit_typeno) # categorical
+time <- scale_values(as.numeric(be_meta$timesincefeedstart)) # numeric (days)
+time <- ifelse(time < 0, 0, time)
+sex <- as.factor(be_meta$sex)
+
+anemia_status_old <- as.factor(be_meta$anemia_status_old)
+anemia_status_new <- as.factor(be_meta$anemia_status_new)
+iron_status <- as.factor(be_meta$iron_status)
+baseline_iron_status <- as.factor(be_meta$baseline_iron_status)
+```
+
+#### Bivariate Correlation {#correlations2}
+
+```{r}
+#| eval: true
+#| label: spearman correlation iron and hb", warning- false
+#| out.width: 100%
+#| fig.show: hide
+#| fig.height: 10
+#| fig.width: 20
+tmp <- be_meta %>%
+  dplyr::select(`Anemia at Baseline` = anemia_base, anemia_status_old, anemia_status_new, iron_status, baseline_iron_status, Sex = sex, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Entropy` = diversity_shannon, Evenness = evenness_pielou, `Faith's PD` = pd) %>%
+  mutate_at(vars(everything()), as.numeric)
+
+corr <- tmp %>%
+  cor(method = "spearman", use = "pairwise.complete.obs")
+
+cor_test_mat <- round(ggcorrplot::cor_pmat(tmp), 4)
+cor_test_matFer <- cor_test_mat[, 1:6]
+cor_test_matalpha <- cor_test_mat[, 7:ncol(cor_test_mat)]
+
+corrPlot <- ggcorrplot::ggcorrplot(corr,
+  p.mat = cor_test_mat,
+  hc.order = FALSE,
+  method = "square",
+  type = "lower",
+  colors = ggheatmap_palette,
+  outline.color = "white",
+  lab = TRUE,
+  tl.cex = 15,
+  tl.col = "black",
+  tl.srt = 45,
+  sig.level = 0.05,
+  pch = 1,
+  pch.cex = 15,
+  insig = "pch",
+  ggtheme = "theme_classic"
+) +
+  theme(legend.key.size = unit(1, "cm"))
+
+ggarrange(
+  annotate_figure(
+    arrangeGrob(
+      tableGrob(cor_test_matFer),
+      tableGrob(cor_test_matalpha),
+      nrow = 2,
+      widths = 1,
+      heights = NULL
+    ),
+    top = text_grob("Correlation Coefficient P-values",
+      color = "black",
+      face = "bold",
+      size = 14,
+      vjust = 3.5
+    ),
+    bottom = text_grob("Circles represent correlations that are NOT significant",
+      color = "black",
+      face = "italic",
+      size = 14,
+      vjust = -3
+    )
+  ),
+  corrPlot,
+  ncol = 2,
+  nrow = 1,
+  widths = c(1.25, 1),
+  heights = 1
+)
+```
+
+#### Iron and Anemia Model
+
+::: question
+
+Q: Are there sex specific alpha diversity changes modulated by iron status and/or anemia status?
+
+**Expression 1:** `(iron_status + anemia_status) * sex`
+- tests whether the combined effect of `iron_status` and `anemia_status` are different for each `sex`
+- does not consider separate interactions between sex and each of `iron_status` and `anemia_status`
+
+**Expression 2:** `(iron_status * sex + anemia_status * sex)`
+- separate effects of `iron_status` and `anemia_status` on `sex`
+- effects are additive
+- tests whether the singular effects of `iron_status` and `anemia_status` are different for each `sex`
+
+**Expression 3:** `sex * iron_status * anemia_status`
+- test whether the effects of `iron_status` and/or `anemia_status` on alpha diversity are different for each `sex`
+
+:::
+
+```{r}
+#| eval: true
+#| label: iron and anemia model Exp3
+#| error: true
+alpha_lmms_FeHb <- list(
+  chao_lmm_FeHb = lme(log(chao) ~ arm_group * time + iron_status * anemia_status_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  shannon_lmm_FeHb = lme(shannon^2 ~ arm_group * time + iron_status * anemia_status_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  evenness_lmm_FeHb = lme(evenness^2 ~ arm_group * time + iron_status * anemia_status_new * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  pd_lmm_FeHb = lme(log(pd) ~ arm_group * time + iron_status * anemia_status_new * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+)
+```
+
+The following produces this error:
+
+```
+Error in MEEM(object, conLin, control$niterEM) : 
+  Singularity in backsolve at level 0, block 1
+```
+
+It is related to the `MEEM` (Multivariate Expectation-Maximization algorithm).
+"singularity in backsolve at level 0, block 1," typically means that there are issues estimating the variance-covariance matrix of the random effects. This can happen for a variety of reasons, including:
+
+- Insufficient data: There might not be enough data to estimate the variance-covariance matrix accurately.
+- Correlated random effects: The random effects specified in your model might be highly correlated, leading to numerical instability.
+- Overfitting: Your model might be too complex, resulting in overfitting or a lack of identifiability.
+
+##### Troubleshooting Iron and Anemia Model
+
+- *Increase the number of EM iterations:* In some cases, increasing the number of EM iterations might help the algorithm converge:
+`ctrl <- lmeControl(niterEM = 1000, msMaxIter = 1000, msMaxEval = 1000, maxIter = 1000)`
+  - \color{red} Increasing iterations up to 10,000 did not solve the issue
+
+```{r}
+#| eval: true
+#| label: increasing number of iterations
+#| error: true
+ctrl <- lmeControl(niterEM = 10000, msMaxIter = 10000, msMaxEval = 10000, maxIter = 10000)
+
+alpha_lmms_FeHb <- list(
+  # interaction between iron status at timepoint and sex as fixed effect
+  chao_lmm_FeHb = lme(log(chao) ~ arm_group * time + iron_status * heme_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats, control = ctrl),
+  shannon_lmm_FeHb = lme(shannon^2 ~ arm_group * time + iron_status * heme_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats, control = ctrl),
+  evenness_lmm_FeHb = lme(evenness^2 ~ arm_group * time + iron_status * heme_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats, control = ctrl),
+  pd_lmm_FeHb = lme(log(pd) ~ arm_group * time + iron_status * heme_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats, control = ctrl)
+)
+```
+
+- *Check your data and model specification:* Ensure that the data and variables used in your model are correct and that the model is specified appropriately for your research question.
+  - \color{red} There appears to be no issues with the variables 
+  `lapply(list(sex, heme_old, iron_status, time, arm_group), length)` All variables are the same length
+  `lapply(list(sex, heme_old, iron_status, time, arm_group), class)`
+- *Remove or re-specify correlated random effects:* If you have multiple random effects in your model, try removing some of them or re-specifying them to reduce the correlations between the random effects.
+  - \color{red} Doing this would defeat the purpose of the random intercept model
+- *Check for multicolinearity:* Are any of the covariates correlated that could be causing issues?
+
+```{r}
+#| eval: true
+#| warning: false
+#| out.width: 100
+#| label: iron and hemoglobin correlation
+#| fig.show: hide
+#| fig.height: 10
+#| fig.width: 20
+#| error: true
+
+tmp <- be_meta %>%
+  dplyr::select(hb, fer) %>%
+  mutate_at(vars(everything()), as.numeric)
+      
+print("Correlation coefficients")
+ kable(tmp %>%
+   cor(method = "spearman", use = "pairwise.complete.obs"))
+
+print("Correlation coefficients p-values")
+kable(round(cor_test(tmp), 4))
+```
+  
+Positive correlation between serum iron and haemoglobin concentrations ($\rho$ = 0.5879, p < 0.0001), may indicate multicolinearity. If you look at the Spearman correlation plot you can also see that a number of Iron and anaemia variables have correlation coefficients greater than |0.4|.
+
+If there are any colinearity concerns:
+  - consider combining them into one variable
+
+```{r}
+#| eval: true
+#| results: hide
+#| label: Combining iron and anemia status variables
+be_meta <- be_meta %>%
+  mutate(iron_anemia_def_old = case_when(
+        hb >= 11.0 & fer >= 25 ~ 1, # no anemia, iron replete
+        hb >= 11.0 & fer >= 12 & fer < 25 ~ 2, # no anemia, iron depleted
+        hb >= 11.0 & fer < 12 ~ 3, # no anemia, iron deficient
+        
+        hb >= 10.0 & hb <= 10.9 & fer >= 25 ~ 4, # mild anemia, iron replete
+        hb >= 10.0 & hb <= 10.9 & fer >= 12 & fer < 25 ~ 5, # mild anemia, iron depleted
+        hb >= 10.0 & hb <= 10.9 & fer < 12 ~ 6, # mild anemia, iron deficient
+        
+        hb >= 7.0 & hb <= 9.9 & fer >= 25 ~ 7, # moderate anemia, iron replete
+        hb >= 7.0 & hb <= 9.9 & fer >= 12 & fer < 25 ~ 8, # moderate anemia, iron depleted
+        hb >= 7.0 & hb <= 9.9 & fer < 12 ~ 9, # moderate anemia, iron deficient
+        
+        hb < 7.0 & fer >= 25 ~ 10, # severe anemia, iron replete
+        hb < 7.0 & fer >= 12 & fer < 25 ~ 11, # severe anemia, iron depleted
+        hb < 7.0 & fer < 12 ~ 12 # severe anemia, iron deficient
+  )) %>%
+  mutate(iron_anemia_def_new = case_when(
+        agemonths < 24 & hb >= 11.0 & fer >= 25 ~ 1, # no anemia, iron replete
+        agemonths < 24 & hb >= 11.0 & fer >= 12 & fer < 25 ~ 2, # no anemia, iron depleted
+        agemonths < 24 & hb >= 11.0 & fer < 12 ~ 3, # no anemia, iron deficient
+        
+        agemonths < 24 & hb >= 10.0 & hb <= 10.9 & fer >= 25 ~ 4, # mild anemia, iron replete
+        agemonths < 24 & hb >= 10.0 & hb <= 10.9 & fer >= 12 & fer < 25 ~ 5, # mild anemia, iron depleted
+        agemonths < 24 & hb >= 10.0 & hb <= 10.9 & fer < 12 ~ 6, # mild anemia, iron deficient
+        
+        agemonths < 24 & hb >= 7.0 & hb <= 9.9 & fer >= 25 ~ 7, # moderate anemia, iron replete
+        agemonths < 24 & hb >= 7.0 & hb <= 9.9 & fer >= 12 & fer < 25 ~ 8, # moderate anemia, iron depleted
+        agemonths < 24 & hb >= 7.0 & hb <= 9.9 & fer < 12 ~ 9, # moderate anemia, iron deficient
+        
+        agemonths < 24 & hb < 7.0 & fer >= 25 ~ 10, # severe anemia, iron replete
+        agemonths < 24 & hb < 7.0 & fer >= 12 & fer < 25 ~ 11, # severe anemia, iron depleted
+        agemonths < 24 & hb < 7.0 & fer < 12 ~ 12, # severe anemia, iron deficient
+
+        agemonths >= 24 & hb >= 11.0 & fer >= 25 ~ 1, # no anemia, iron replete
+        agemonths >= 24 & hb >= 11.0 & fer >= 12 & fer < 25 ~ 2, # no anemia, iron depleted
+        agemonths >= 24 & hb >= 11.0 & fer < 12 ~ 3, # no anemia, iron deficient
+        
+        agemonths >= 24 & hb >= 10.0 & hb <= 10.9 & fer >= 25 ~ 4, # mild anemia, iron replete
+        agemonths >= 24 & hb >= 10.0 & hb <= 10.9 & fer >= 12 & fer < 25 ~ 5, # mild anemia, iron depleted
+        agemonths >= 24 & hb >= 10.0 & hb <= 10.9 & fer < 12 ~ 6, # mild anemia, iron deficient
+        
+        agemonths >= 24 & hb >= 7.0 & hb <= 9.9 & fer >= 25 ~ 7, # moderate anemia, iron replete
+        agemonths >= 24 & hb >= 7.0 & hb <= 9.9 & fer >= 12 & fer < 25 ~ 8, # moderate anemia, iron depleted
+        agemonths >= 24 & hb >= 7.0 & hb <= 9.9 & fer < 12 ~ 9, # moderate anemia, iron deficient
+        
+        agemonths >= 24 & hb < 7.0 & fer >= 25 ~ 10, # severe anemia, iron replete
+        agemonths >= 24 & hb < 7.0 & fer >= 12 & fer < 25 ~ 11, # severe anemia, iron depleted
+        agemonths >= 24 & hb < 7.0 & fer < 12 ~ 12 # severe anemia, iron deficient
+  ))
+
+iron_anemia_def_old <- as.factor(be_meta$iron_anemia_def_old)
+iron_anemia_def_new <- as.factor(be_meta$iron_anemia_def_new)
+
+alpha_lmms_FeHb <- list(
+    # interaction between iron status at timepoint and sex as fixed effect
+ chao_lmm_FeHb = lme(log(chao) ~ arm_group * time + iron_anemia_def_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+ shannon_lmm_FeHb = lme(shannon^2 ~ arm_group * time + iron_anemia_def_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+ evenness_lmm_FeHb = lme(evenness^2 ~ arm_group * time + iron_anemia_def_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+ pd_lmm_FeHb = lme(log(pd) ~ arm_group * time + iron_anemia_def_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+    )
+```
+
+```{r}
+#| eval: true
+#| label: tbl-star-iron-hemo
+#| tbl-cap: Iron and hemoglobin as categorical variables model summary statistics
+
+stargazer::stargazer(alpha_lmms_FeHb, type = "html", star.cutoffs = c(0.05, 0.001, 0.0001), header = FALSE)
+```
+
+  - scale variables
+- *Simplify your model:* Try reducing the complexity of your model, for example, by removing some of the interactions or random effects, or by using a simpler model structure.
+  - Run haemoglobin model without iron variables
+
+*Recall:* there is a positive correlation (`cor(be_meta$fe, be_meta$hb, use = "pairwise.complete.obs")`) between ferritin and haemoglobin concentrations ($\rho$ = 0.44), which may cause some colinearity issues (though the rule of thumb is > 0.7).
+
+#### Iron and Haemoglobin Status (continuous variables)
+
+```{r}
+#| eval: true
+#| label: using continuous Fe and Hb variables
+fe_conc <- be_meta$fer
+hb_conc <- be_meta$hb
+
+alpha_lmms_FeHb_conc <- list(
+  # interaction between iron status at timepoint and sex as fixed effect
+  chao_lmm_FeHb = lme(log(chao) ~ arm_group * time + fe_conc * hb_conc * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  shannon_lmm_FeHb = lme(shannon^2 ~ arm_group * time + fe_conc * hb_conc * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  evenness_lmm_FeHb = lme(evenness^2 ~ arm_group * time + fe_conc * hb_conc * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  pd_lmm_FeHb = lme(log(pd) ~ arm_group * time + fe_conc * hb_conc * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-star-iron-hemo-2
+#| tbl-cap: Iron and hemoglobin as continuous variables model summary statistics
+
+stargazer::stargazer(alpha_lmms_FeHb_conc, type = "html", star.cutoffs = c(0.05, 0.001, 0.0001), header = FALSE)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-residuals-fehb-lmm
+#| tbl-cap: residual diagnostics continuous FeHb LMM
+#check residuals for normal distribution
+kable(residual_norm_test(alpha_lmms_FeHb_conc), format = "markdown")
+```
+
+The precision of the correlation parameter estimation by the `alpha_lmms_FeHb_conc` model can be assessed with the `intervals()` function. This function provideds a basic summary of confidence intervals on the parameters, $\beta$, $\sigma$ and $\sigma_b$. *Should be used in conjuntion with `anova()` to access term significance.*
+
+```{r}
+#| eval: true
+#| label: investigate precisiion of model
+#| error: true
+lapply(alpha_lmms_FeHb_conc, intervals, which = "fixed")
+
+lapply(alpha_lmms_FeHb_conc, function(x){
+  print(x$apVar)
+})
+```
+
+```{r}
+#| eval: true
+#| label: tbl-fehb-anova
+#| tbl-cap: anova-term significance for continuous FeHb LMM
+tmp <- lapply(alpha_lmms_FeHb_conc, anova)
+
+kable(anova_pvalue(tmp), format = "markdown")
+```
+
+```{r}
+#| eval: true
+#| label: fig-res-diagnostics
+#| fig-cap: Residual diagnostic plots for continuous FeHb LMMs
+mapply(residual_plots, model = alpha_lmms_FeHb_conc, model_name = names(alpha_lmms_FeHb_conc), render = TRUE, chol =T)
+```
+
+
+```{r}
+#| eval: true
+#| label: variance correlation
+lapply(alpha_lmms_FeHb_conc, function(x){
+  kable(VarCorr(x))
+})
+```
+
+A p-value < 0.05 indicates non-constant variance (heteroskedasticity)
+
+```{r}
+#| eval: true
+#| label: tbl-heteroske-test
+#| tbl-cap: Breusch-Pagan test for Heteroskedasticity
+lapply(alpha_lmms_FeHb_conc, function(x){
+  kable(performance::check_heteroskedasticity(x), format = "markdown")
+})
+```
+
+The RMSE is the square root of the variance of the residuals and indicates the absolute fit of the model to the data (difference between observed data to model’s predicted values). It can be interpreted as the standard deviation of the unexplained variance, and is in the same units as the response variable. Lower values indicate better model fit.
+
+The normalized RMSE is the proportion of the RMSE related to the range of the response variable. Hence, lower values indicate less residual variance. 
+
+```{r}
+#| eval: true
+#| label: tbl-rmse
+#| tbl-cap: Alpha diversity FeHb model raw and normalized RMSE results.
+roc <- lapply(alpha_lmms_FeHb_conc, function(x){
+  performance::performance_rmse(x, normalized = FALSE)
+})
+
+roc_norm <- lapply(alpha_lmms_FeHb_conc, function(x){
+  performance::performance_rmse(x, normalized = TRUE)
+})
+
+kable(data.frame(RMSE=do.call(rbind, roc), RMSE_normalized=do.call(rbind, roc_norm)))
+
+```
+
+
+##### Choosing a correlation structure
+
+The default correlation structure is assumed to be unstructured, that is, there are no within group correlations. The following procedure is recommended by @OhidUllah2021:
+
+**Step 1:** outcome correlation matrix by timepoint
+
+```{r}
+#| eval: true
+#| label: Step1
+tmp <- be_meta %>%
+  dplyr::select(timepoint, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Entropy` = diversity_shannon, Evenness = evenness_pielou, `Faith's PD` = pd) %>%
+  mutate_at(vars(!timepoint), as.numeric) %>% 
+  group_by(timepoint) %>%
+  mutate(row_id = row_number()) %>%
+  ungroup() %>%
+  pivot_longer(cols = !c(timepoint, row_id)) %>%
+  group_by(row_id) %>%
+  pivot_wider(names_from = timepoint, values_from =  value)
+
+tmp %>%
+  ggplot(aes(x = `Baseline`, y = `Endpoint`)) + 
+    geom_point() +
+    geom_smooth(method = "lm") +
+    stat_cor(position = "dodge") +
+    facet_wrap(~name, scale = "free")
+
+```
+
+**Step 2:** Running different covaraince structures and determining their information criteria (ICs) values (AIC, BIC etc). dplyr::select the smallest value.
+
+```{r}
+#| eval: true
+#| label: changing covariance structure
+#| error: true
+fm2 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corCompSymm()) #compound symmetry
+fm3 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corAR1())
+#fm4 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corARMA()) #depreceated
+fm5 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corExp()) 
+fm6 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corCAR1())
+fm7 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corGaus())
+fm8 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corLin())
+fm9 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corRatio())
+fm10 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corSpher())
+fm11 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corSymm())
+
+fm <- c(alpha_lmms_FeHb_conc, fm2, fm3, fm5,fm6,fm7,fm8,fm9,fm10,fm11)
+fm_split <- split(fm, names(fm))
+```
+
+Each updated models are nested within the original model. Therefore they can be compared using a likelihood ratio test.
+
+**`aov()` is used to fit an ANOVA model, while `anova()` is used to compare models or perform ANOVA on a model that has already been fitted using another function like `lm()` or `aov()`.**
+
+```{r}
+#| eval: true
+#| label: model performance check
+#| error: true
+## Compare each model with the others using anova()
+## Iterate over each list of models
+for (i in 1:length(fm_split)) {
+  models <- fm_split[[i]]
+  
+  # Compare each model with the others using anova()
+for (j in 1:length(models)) {
+  if (j > 1) {
+    anova_result <- anova(models[[1]], models[[j]])
+    cat("Comparison between model 1 and model", j, "in list", names(fm_split)[i], ":\n")
+    print(anova_result)
+    cat("\n")
+    }
+  }
+}
+```
+
+*Summary of results*
+Changes to the covariance model structure did not significantly improve the fit for the following alpha diversity statistics:
+- Chao1 Index
+- Pielou's evenness
+- Shannon Entropy
+
+There was a moderate improvement for Faith's phylogenetic diversity index, based on the log likelihood ratio test. However, this improvement was not statistically significant (p $\approx$ 0.1), but may warrant changing the covariance model structure. Potential structures include:
+
+- Model 2 (fm2): compound symmetry (`corCompSymm()`)
+- Model 3 (fm3): autoregressive (`corAR1()`)
+- Model 10 (fm11): general correlation structure (`corSymm()`)
+
+```{r}
+#| eval: true
+#| label: evaluating the effect of covaraince stucture change on PD
+#| error: true
+tmp <- c(fm_split$pd_lmm_FeHb[1], fm_split$pd_lmm_FeHb[2], fm_split$pd_lmm_FeHb[3], fm_split$pd_lmm_FeHb[10])
+```
+
+```{r}
+#| eval: true
+#| label: tbl-star-pd-covariance
+#| tbl-cap: evaluating the effect of covaraince stucture change on PD
+#| error: true
+stargazer::stargazer(tmp, type = "html", star.cutoffs = c(0.05, 0.001, 0.0001), header = FALSE)
+```
+
+```{r}
+#| eval: true
+#| label: fig-pd-res
+#| fig-cap: PD residual plots 
+#| error: true
+mapply(residual_plots, model = tmp, model_name = paste0(names(tmp), seq_along(1:4)), render = TRUE, chol = TRUE)
+```
+
+The improvement to the PD models by changing the covaraiance structure results negatively effects the distribution of residuals. While still normally distributed, they have become a little bit more skewed. I think sticking with an unstructured covariance structure is the best case for all alpha diversity statistics.
+
+#### Including an interaction with time
+
+```{r}
+#| eval: true
+#| label: tbl-res-febh-int
+#| tbl-cap: Residual normality test results using continuous Fe and Hb variables with time interaction
+alpha_lmms_FeHb_conc_time <- lapply(alpha_lmms_FeHb_conc, update, fixed = varFixed(~ arm_group * time * fe_conc * hb_conc * sex))
+
+residual_norm_test(alpha_lmms_FeHb_conc_time)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-res-febh-star
+#| tbl-cap: Model summary results using continuous Fe and Hb variables with time interaction
+
+stargazer::stargazer(alpha_lmms_FeHb_conc_time, type = "html", star.cutoffs = c(0.05, 0.001, 0.0001), header = FALSE)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-res-febh-anova
+#| tbl-cap: ANOVA term importance test results using continuous Fe and Hb variables with time interaction
+
+tmp <- lapply(alpha_lmms_FeHb_conc_time, anova)
+
+kable(anova_pvalue(tmp), format = "markdown")
+
+print("Terms with p <0.05")
+anova_pvalue(tmp) %>%
+  dplyr::filter(P.value <=0.05) %>%
+  kable(format = "markdown")
+```
+
+```{r}
+#| eval: true
+#| label: tbl-res-febh-int-heteroske
+#| tbl-cap: Breusch-Pagan test for Heteroskedasticity using continuous Fe and Hb variables with time interaction
+
+lapply(alpha_lmms_FeHb_conc_time, function(x){
+  kable(VarCorr(x))
+})
+
+```
+
+```{r}
+#| eval: true
+#| label: compare time interaction to alpha_lmms_FeHb_conc
+tmp <- c(alpha_lmms_FeHb_conc, alpha_lmms_FeHb_conc_time)
+tmp <- split (tmp, names(tmp))
+
+for (i in 1:length(tmp)) {
+  models <- tmp[[i]]
+  
+  # Compare each model with the others using anova()
+  for (j in 1:length(models)) {
+      if (j > 1) {
+        anova_result <- anova(models[[1]], models[[j]])
+        cat("Comparison between model 1 and model", j, "in list", names(tmp)[i], ":\n")
+        print(anova_result)
+        cat("\n")
+    }
+  }
+}
+```
+
+There is a significant improvement of the model when time is included as an interaction term with all other fixed variables. Check precision and term significance:
+
+```{r}
+#| eval: true
+#| label: investigate precisiion of the time interaction model
+#| error: true
+lapply(alpha_lmms_FeHb_conc, intervals, which = "fixed")
+
+lapply(alpha_lmms_FeHb_conc, function(x){
+  print(x$apVar)
+})
+
+lapply(alpha_lmms_FeHb_conc_time, intervals, which = "fixed") #generates error
+lapply(alpha_lmms_FeHb_conc_time, function(x){
+  print(x$apVar)
+})
+rm(alpha_lmms_FeHb_conc_time)
+```
+
+Chao1 index and PD index both have a non-positive definite variance-covariance matrix when time is added as an interaction term (`alpha_lmms_FeHb_conc_time`), meaning that there is an issue with the model fit. Likely too complex of a model. Parameter estimates are unreliable due to this. The previous model (`alpha_lmms_FeHb_conc`) did not have this issue. Will proceed with this version.
+
+::: {.callout-note}
+
+#### Summary of final model
+
+::: {.callout-tip}
+
+- Variable name: `alpha_lmms_FeHb_conc`
+- Formula: `y ~ arm_group * time + fe_conc * hb_conc * sex, random = ~ 1 | subject`
+- Method: REML
+- Within-group correlation structure: NULL (none)
+- Residuals: normal, homoskedastic
+- Significant terms: Time
+
+The formula `fe_conc * hb_conc * sex ~ time` specifies that you want to examine the effect of the interaction between `fe_conc * hb_conc * sex` on the outcome variable (alpha diversity statistic) across different levels of time. 
+
+:::
+
+### Estimated Marginal Means
+
+Back transformation is possible by including the transformation on the response variable in the model formula, and using `type = "response"` to return results on the original scale.
+
+The `time` variable is on a continuous scale between 0 and 1. As we are interested in the difference between baseline and endpoint, the estimated marginal means can be calculated at T0 and T1 (`at = list(time = c(0, 1))`). Weights are sent to as `proportional` (weight in proportion to the frequencies (in the original data) of the factor combinations that are averaged over) to adjust for any imbalances in the data. Our data is unbalanced and therefore each categorical predictor variable should not be weighted equally. For example, the iron status at baseline is unbalanced towards being deficient:
+
+```{r}
+#| eval: true
+#| label: tbl-data-balance
+#| tbl-cap: accessing the balance of the data
+
+be_meta %>%
+  dplyr::select(baseline_iron_status, sex) %>%
+  gt_summary(by = "sex")
+
+```
+
+```{r}
+#| eval: true
+#| label: tbl-fer-hb-emm
+#| tbl-cap: Alpha diversity marginal mean estimates for continuous fer/hb model
+#| results: asis
+
+emm <- lapply(alpha_lmms_FeHb_conc, function(x){
+  emmeans(x, ~ arm_group * time + fe_conc * hb_conc * sex, at = list(time = c(0, 1)), type = "response", adjust = "sidak", weights = "proportional")
+})
+
+lapply(emm, kable)
+```
+
+The value in the iron and haemoglobin concentration columns are the estimated marginal mean concentrations of these parameters. The response/emmean column is the estimated marginal mean of the alpha diversity statistic. Confidence intervals are included to help assess estimate precision. 
+
+#### Contrast testing using estimated marginal means (EMMs)
+
+##### 1. *Iron Effect Within Groups*
+
+::: question
+
+Does alpha diversity differ within each treatment group independently due to vitamin iron status?
+Given discrete values, are there differences in alpha diveristy due to vitamin iron status within each intervention arm?
+
+:::
+
+::: h0
+
+$$ H_{0a}: \mu_{Fe\_high\_CPM} - \mu_{Fe\_low\_CPM} = 0 $$
+$$ H_{0b}: \mu_{Fe\_high\_FeZnPM} - \mu_{Fe\_low\_FeZnPM} = 0 $$
+
+:::
+
+```{r}
+#| eval: true
+#| label: tbl-vitFe-arm
+#| tbl-cap: Marginal mean estimates (EMMs) for alpha diversity indicies within intervention arm at baseline and endpoint among individuals who had vitamin iron and haemoglobin measurements available (n = 76 paired samples)
+#| results: asis
+
+emm2 <- lapply(alpha_lmms_FeHb_conc, function(x){
+  emmeans(x, ~ arm_group | time, at = list(time = c(0, 1)), type = "response", adjust = "sidak", weights = "proportional")
+})
+
+lapply(emm2, kable)
+```
+
+<placeholder contrast test>
+
+##### 2. *Average Iron Effect Across Intervention Arms:* 
+
+::: question
+
+What is the overall effect of iron status across both treatment groups?
+
+:::
+
+- Tests main effect of iron status
+- Averages across treatment groups
+- Provides population-level Fe effect estimate
+
+::: h0
+
+$$ H_{0c}: \frac{(\mu_{Fe\_high\_CPM} + \mu_{Fe\_high\_FeZnPM})}{2} - \frac{(\mu_{Fe\_low\_CPM} + \mu_{Fe\_low\_FeZnPM})}{2} = 0 $$
+
+:::
+
+<placeholder>
+
+##### 3. *Iron Status by Treatment Interaction* 
+
+::: question
+
+Does the effect of iron status differ between treatment groups?
+
+:::
+
+- Tests if intervention modifies Fe effects
+
+::: h0
+
+$$ H_{0d}: (\mu_{Fe\_high\_CPM} - \mu_{Fe\_low\_CPM}) - (\mu_{Fe\_high\_FeZnPM} - \mu_{Fe\_low\_FeZnPM}) = 0 $$
+:::
+
+```{r}
+#| eval: true
+#| label: tbl-arm-emm
+#| tbl-cap: treatment vs control comparsion
+#| results: asis
+
+lapply(lapply(emm2, function(x) {
+  contrast(x, method = "trt.vs.ctrl")
+}), kable)
+```
+
+##### 4. *Iron Effect Within Intervention Arm Over Time*
+
+```{r}
+#| eval: true
+#| label: tbl-emm-arm-trend
+#| tbl-cap: Changes in alpha diversity marginal mean estimates over time within intervention arm
+#| results: asis
+
+trend <- lapply(alpha_lmms_FeHb_conc, function(x){
+  emtrends(x, ~ arm_group | time, var ="time")
+})
+
+lapply(trend, kable)
+
+```
+
+```{r}
+#| eval: true
+#| label: tbl-emm-arm-trend-compare
+#| tbl-cap: Comparison of alpha diversity marginal mean estimates over time between intervention arm. Trends in how alpha diversity statistics change from baseline to endpoint within each intervention arm are not statistically different.
+#| results: asis
+
+slopes <- lapply(trend, function(x){
+  pairs(x)
+})
+
+lapply(slopes, kable)
+```
+
+##### 5. *Time Effect Within Iron Status Groups*
+
+::: question
+
+How does the microbiome change over time within each iron status group?
+
+:::
+
+Will help to understand:
+
+- Whether high/low-Fe subjects show different temporal patterns
+- If microbiome changes are iron status dependent
+	- Would require further analysis of confounding variables
+
+::: h0
+
+$$
+H_{0e}: \mu_{Fe\_high\_end} - \mu_{Fe\_high\_base} = 0
+$$
+$$
+H_{0f}: \mu_{Fe\_low\_end} - \mu_{Fe\_low\_base} = 0
+$$
+:::
+
+##### 6. *Cross-sectional Fe Effects*
+
+::: question
+
+Are there microbiome differences between iron status groups at specific timepoints?
+
+:::
+
+Will help to understand:
+
+- Initial differences at baseline
+- Final differences at endpoint
+- Whether iron status effects are consistent across time
+
+::: h0
+
+$$
+H_{0g}: \mu_{Fe\_high\_base} - \mu_{Fe\_low\_base} = 0
+$$
+$$
+H_{0h}: \mu_{Fe\_high\_end} - \mu_{Fe\_low\_end} = 0
+$$
+:::
+
+##### 7. *Time by Fe Interaction*
+
+::: question
+
+Does the effect of time depend on iron status?
+
+:::
+
+Will help to understand:
+
+- Whether temporal changes differ by iron status
+- If iron status modifies the trajectory of microbiome changes
+- Whether intervention effects vary by iron status
+
+::: h0
+
+$$
+H_{0i}: (\mu_{Fe\_high\_end} - \mu_{Fe\_high\_base}) - (\mu_{Fe\_low\_end} - \mu_{Fe\_low\_base}) = 0
+$$
+
+:::
+
+##### 8. *Three-way Interaction (Time × Fe × Treatment)*
+
+::: question
+
+Does the interaction between iron status and time differ between treatment groups?
+
+:::
+
+Will help to understand:
+
+- Whether treatment modifies the Fe-time relationship
+- If iron status affects treatment response
+
+::: h0
+
+$$
+\begin{align}
+H_{0j}: & [(\mu_{Fe\_high\_Control\_end} - \mu_{Fe\_high\_Control\_base}) - (\mu_{Fe\_low\_Control\_end} - \mu_{Fe\_low\_Control\_base})] - \\
+& [(\mu_{Fe\_high\_FeZnPM\_end} - \mu_{Fe\_high\_FeZnPM\_base}) - (\mu_{Fe\_low\_FeZnPM\_end} - \mu_{Fe\_low\_FeZnPM\_base})] = 0
+\end{align}
+$$
+
+:::
+
+
+##### TODO REVIEW
+
+##### 9. *Sex differences in Alpha Diversity*
+
+::: question
+
+Does alpha diversity differ between males and females within each intervention arm?
+
+:::
+
+::: h0
+
+$$ H_{0a}: \mu_{female\_CPM} - \mu_{male\_CPM} = 0 $$
+$$ H_{0b}: \mu_{female_FeZnPM} - \mu_{male_FeZnPM} = 0 $$
+
+:::
+
+<placeholder>
+
+##### 10. *Sex Effect Over Time*
+
+::: question
+
+Are alpha diveristy rates of changes different between males and females i.e does `time` has a different effect depending on `sex`?
+
+:::
+
+```{r}
+#| eval: true
+#| label: fig-emm-trends-sex
+#| fig-cap: emmeans trends- sex differences
+#| results: asis
+
+lapply(alpha_lmms_FeHb_conc, function(x){
+  trend <- emtrends(x, ~ sex, var = "time")
+  print(kable(trend, format = "markdown"))
+  print(kable(pairs(trend), format = "markdown"))
+})
+```
+
+```{r}
+#| eval: true
+#| label: fig-emm-sex
+#| fig-cap: emmeans plots- sex differences
+## Create an empty list to store plots
+plot_list <- list()
+
+## Loop through each item in the list
+for (i in names(emm)) {
+  # Create a plot for each item (replace with your actual plot creation code)
+  plot <- emmip(emm[[i]], fe_conc * hb_conc * sex ~ time, CIs = TRUE) + ggtitle(paste(str_extract(i, "^[^_]*"))) + theme(legend.position = "bottom", plot.title = element_text(size = 10, face = "bold"))
+
+  # Add the plot to the list
+  plot_list[[i]] <- plot
+}
+
+## Arrange and display the plots using ggarrange
+ggpubr::annotate_figure(ggpubr::ggarrange(plotlist = plot_list, ncol = 2, nrow = 2, common.legend = TRUE), top = "Change in diversity statistics")
+```
+
+From the resulting graph, we can conclude that there is no/little difference between alpha diversity changes in males and females.
+
+##### 11. *Effect of Sex and Iron Status*
+
+::: question
+
+Are there differences between alpha diversity statistics at baseline or endpoint when iron status and sex are taken into account?
+:::
+
+```{r}
+#| eval: true
+#| label: tbl-emm-iron-sex
+#| tbl-cap: emmeans for iron and sex
+#| results: asis
+lapply(lapply(emm, function(x) {
+  contrast(x, method = "pairwise")
+}), kable)
+```
+
+
+::: question
+
+Is mean alpha diversity different between male and female subjects (irrespective of intervention group or iron status)?
+
+:::
+
+::: h0
+$$
+\begin{aligned}
+&\frac{EF}{2} - \frac{BF}{2} = \frac{EM}{2} - \frac{BM}{2} \small{(x2)}\\
+\Rightarrow& EF - BF = EM - BM\\
+\Rightarrow& EF - BF - EM + BM = 0
+\end{aligned}
+$$
+
+:::
+
+```{r}
+#| eval: false
+#| label: tbl-emm-iron-sex-contrasts
+#| tbl-cap: emmeans for iron and sex contrasts
+#| results: asis
+
+emmeans <- lapply(alpha_lmms_FeHb_conc, function(x) {
+  emmeans(x, ~ arm_group * time + fe_conc * hb_conc * sex, at = list(time = c(0, 1), fe_conc = c(12, 25, max(fe_conc))), type = "response", adjust = "sidak", weights = "proportional")
+})
+
+lapply(emmeans, kable, format = "markdown")
+```
+
+```{r}
+#| eval: true
+#| label: tbl-sex-pairwise
+#| tbl-cap: Pairwise comparisons
+#| results: asis
+
+#pairwise comparision
+lapply(lapply(emmeans, function(x) {
+  contrast(x, interaction = "pairwise", by = c("time", "arm_group"))
+}), kable, format = "markdown")
+```
+
+```{r}
+#| eval: true
+#| label: tbl-sex-fe-diff
+#| tbl-cap: Sex group differences
+#| results: asis
+
+BF <- c(0.5, rep(0, 3))
+EF <- c(0, 0.5, rep(0, 2))
+BM <- c(0, 0, 0.5, 0)
+EM <- c(rep(0, 3), 0.5)
+
+lapply(lapply(emmeans, function(x) {
+  contrast(x, method = list(EF - BF - EM + BM))
+}), kable, format = "markdown")
+
+```
+
+```{r}
+#| eval: true
+#| label: fig-emm-iron
+#| fig-cap: emmeans plots- iron level differences
+
+# Create an empty list to store plots
+plot_list <- list()
+
+## Loop through each item in the list
+for (i in names(emmeans)) {
+  # Create a plot for each item (replace with your actual plot creation code)
+  plot <- emmip(emmeans[[i]], fe_conc * hb_conc * sex ~ time, CIs = TRUE) + ggtitle(paste(str_extract(i, "^[^_]*"))) + theme(legend.position = "bottom", plot.title = element_text(size = 10, face = "bold"))
+
+  # Add the plot to the list
+  plot_list[[i]] <- plot
+}
+
+## Arrange and display the plots using ggarrange
+ggpubr::annotate_figure(ggpubr::ggarrange(plotlist = plot_list, ncol = 2, nrow = 2, common.legend = TRUE), top = "Change in diversity statistics")
+```
+
+::: question
+**Q2: Same as Q1, but taking intervention arm into account**
+:::
+
+$$
+\begin{aligned}
+&\frac{Arm0EF + Arm1EF}{2} - \frac{Arm0BF + Arm1BF}{2} = \frac{Arm0EM + Arm1EM}{2} - \frac{Arm0BM + Arm1BM}{2} \small{(x2)}\\
+\Rightarrow& Arm0EF + Arm1EF - Arm0BF - Arm1BF = Arm0EM + Arm1EM - Arm0BM - Arm1BM\\
+\Rightarrow& Arm0EF + Arm1EF - Arm0BF - Arm1BF - Arm0EM - Arm1EM + Arm0BM + Arm1BM = 0
+\end{aligned}
+$$ 
+
+### Prevalence of Anemia and Poor Iron Status
+
+::: question
+How does negative iron status and anemia change in the population over time?
+:::
+
+```{r}
+#| eval: true
+#| label: prevalence of iron deficiency/depletion at endpoint compared to baseline
+#| fig-cap: prevalence of iron deficiency/depletion at endpoint compared to baseline
+be_meta %>%
+  dplyr::select(timepoint, arm, anemia, iron_status) %>%
+  pivot_longer(cols = !c(timepoint, arm)) %>%
+  group_by(timepoint, arm, name, value) %>%
+  summarize(count = n()) %>%
+  mutate(proportion = count / sum(count)) %>%
+  ggplot(aes(x = name, fill = timepoint)) +
+  geom_bar(aes(y = count), stat = "identity", position = "fill")
+```
+
+```{r}
+#| eval: true
+#| label: prevalence of anemia at endpoint compared to baseline
+#| fig-cap: prevalence of anemia at endpoint compared to baseline
+be_meta %>%
+  dplyr::select(timepoint, arm, anemia, iron_status) %>%
+  pivot_longer(cols = !c(timepoint, arm)) %>%
+  group_by(timepoint, arm, name, value) %>%
+  summarize(count = n()) %>%
+  mutate(proportion = count / sum(count)) %>%
+  ggplot(aes(x = name, fill = timepoint)) +
+  geom_bar(aes(y = count), stat = "identity", position = "fill")
+```

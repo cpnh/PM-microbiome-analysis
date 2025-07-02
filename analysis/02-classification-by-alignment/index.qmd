@@ -1,0 +1,5 @@
+# Sequence Classification
+
+The next step is to classify the microorganisms present in samples. Current methods of determining microbiome composition rely on taxonomic classification (e.g. using operational taxonomic units) which limits the resolution of classification, often to genus level. The operational genomic unit (OGU) method attempts to enhance compositional resolution in a phylogenetically aware manor [@Zhu2022].
+
+Sequences are first aligned to a reference phylogeny using Bowtie2, a short read aligner. In this study, the Web of Life (WoL) reference database is used [@Zhu2019]. WoL2 provides a comprehensive bacterial and archaeal phylogeny based on > 15,000 genomes, and is available for download at this FTP site, with prebuilt indexes for a number of tools, including Bowtie2. Aligned sequences are then assigned to OGUs using Woltka [@Zhu2022].

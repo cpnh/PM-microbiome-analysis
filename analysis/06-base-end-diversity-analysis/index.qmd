@@ -1,0 +1,45 @@
+# Baseline to Endpoint Analysis
+
+This analysis compares microbiome samples between two timepoints:
+
+- Baseline (start of study)
+- Endpoint (after 9 months)
+
+Key Components:
+
+1. **Alpha Diversity Analysis**
+
+Multiple diversity statistics calculated for each sample:
+
+- Shannon Index (species evenness and richness)
+- Chao1 Index (species richness estimate)
+- Pielou's Evenness (species distribution evenness)
+- Faith's Phylogenetic Diversity (evolutionary relationships)
+
+2. **Linear Mixed Models (LMMs)**
+
+LMMs were chosen in order to account for repeated measures from same individuals.
+
+| Fixed Effects | Random Effects |
+|---------------|----------------|
+| Treatment group (CPM vs FeZnPM)| Individual subject variation |
+| Time ||
+| Age at baseline||
+
+
+3. **Statistical Transformations**
+
+Data transformations applied to meet model assumption of normally distributed residuals:
+
+- Shannon & Evenness: squared
+- Chao1 & Phylogenetic Diversity: natural log
+
+4. **Model Comparisons**
+
+Models run with and without baseline age
+
+EMMEANS used for comparing:
+
+- Changes over time
+- Differences between treatment groups
+- Age effects

@@ -1,0 +1,148 @@
+# Introduction
+
+Malnourished children living in urban slums are characterized by a high burden of inflammation (elevated CRP) and infection (e.g. elevated gastrointestinal infections).
+
+## Topography
+
+This is **bold** text and this is *italic*.
+
+A long paragraph justified using css: 
+
+Lorem ipsum odor amet, consectetuer adipiscing elit. Nostra rhoncus nostra felis mi tempus rutrum posuere. Justo turpis quisque amet quam massa parturient eu. Sagittis ultricies potenti nunc ridiculus taciti consequat curae rutrum. Magnis taciti sapien ipsum senectus sollicitudin gravida ullamcorper suspendisse nullam. Feugiat facilisis quis gravida vestibulum donec fringilla hac. Habitant mus integer fringilla iaculis auctor aptent. Hendrerit justo rhoncus arcu; scelerisque suscipit efficitur metus.
+
+Varius himenaeos dictumst arcu ipsum natoque justo potenti primis. Finibus semper fusce interdum mollis finibus taciti. Suscipit proin lobortis vulputate taciti potenti proin erat convallis. Litora netus aptent congue interdum habitasse, et nullam. Commodo eget facilisi pretium donec facilisis. Conubia elit condimentum cubilia augue primis dictum nec. Blandit parturient habitant; auctor nostra finibus elit. Pellentesque arcu blandit fames proin semper odio et tempus.
+
+## Syntax highlighting in external files
+
+```{sh}
+#| code-summary: View script contents
+{{< include ./scripts/run_fastp.sh >}}
+```
+
+## Code chunk syntax highlighting
+
+Using `{bash}`
+
+```{bash}
+# validate if correct number of arguments is provided
+if [ "$#" -ne 4 ]; then
+    echo "Error: Incorrect number of arguments." >&2
+    usage
+    exit 1
+fi
+
+r1_file="$1"
+r2_file="$2"
+outdir="$3"
+base_name="$4"
+```
+
+is the same as using `#| engine: bash` but sometimes with better `knitr` support
+
+```{r}
+#| engine: bash
+# validate if correct number of arguments is provided
+if [ "$#" -ne 4 ]; then
+    echo "Error: Incorrect number of arguments." >&2
+    usage
+    exit 1
+fi
+
+r1_file="$1"
+r2_file="$2"
+outdir="$3"
+base_name="$4"
+```
+
+```{r}
+bray.ord.nmds <- phyloseq::ordinate(bac_base_end, method = "NMDS", distance = bray, trymax = 100)
+jac.ord.nmds <- phyloseq::ordinate(bac_base_end, method = "NMDS", distance = jac, trymax = 100)
+uunifrac.ord.nmds <- phyloseq::ordinate(bac_base_end, method = "NMDS", distance = uunifrac, trymax = 100)
+wunifrac.ord.nmds <- phyloseq::ordinate(bac_base_end, method = "NMDS", distance = wunifrac, trymax = 100)
+```
+
+## Cross referencing
+
+In order to be includied in the automatic numbering system, it appears that tables and figure labels to be prefixed with either `tbl-` or `fig-` to be recoginsed as such. They must be all lowercase as well ([source](https://quarto.org/docs/authoring/cross-references.html#figures)).
+
+### External Images
+
+![Elephant](https://quarto.org/docs/authoring/images/crossref-figure.png){#fig-ele}
+
+![Elephant](https://quarto.org/docs/authoring/images/crossref-figure.png){#ele}
+
+Make sure you use the `fig` prefix like with `@fig-ele` and not `@ele`
+
+Callouts can be used to create multi column figures
+too:
+
+::: {#fig-elephants layout-ncol=2}
+
+![Surus](https://quarto.org/docs/authoring/images/crossref-subfigures.png){#fig-surus}
+
+![Hanno](https://quarto.org/docs/authoring/images/crossref-subfigures.png){#fig-hanno}
+
+Famous Elephants
+:::
+
+See @fig-elephants for examples. In particular, @fig-hanno.
+
+### Computationally generated figures
+
+```{r}
+#| eval: true
+#| label: fig-plot
+#| fig-cap: Sample plot
+
+plot(cars)
+
+```
+
+
+This should reference figure 3: @fig-plot
+
+::: {#fig-box}
+
+```{r}
+#| eval: true
+#| label: fig-boxplot
+
+x <- c(1, 2, 3, 4, 5, 10)
+boxplot(x)
+```
+
+Example boxplot showing the use of dynamic captioning. This dataset has `r length(x)` observations.
+
+:::
+
+@fig-boxplot is an example of a using a figure box callout for dynamic captioning.
+
+### Table cross-referencing
+
+```{r}
+#| eval: true
+#| label: tbl-df
+#| tbl-cap: This is a table
+
+df <- data.frame(x=c(1, 2, 3, 4, 5, 10), y = c(2, 4, 6, 8, 10, 12))
+
+knitr::kable(df)
+```
+
+See my nice @tbl-df for some good numbers.
+
+## Inline code
+
+Inline bash does not work but there is a workaround ([source](https://github.com/rstudio/rstudio/issues/7398)).
+
+`bash echo "Today's date is: "` `r date()`
+
+```{bash}
+#| chunk_output_type: inline
+#| eval: true
+#| echo: false
+echo "Today's date is: " $(date)
+``` 
+
+
+

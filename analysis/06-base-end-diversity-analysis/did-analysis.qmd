@@ -1,0 +1,496 @@
+## Alpha Diversity Difference in Differences Analysis
+
+```{r}
+#| echo: false
+#| eval: true
+#| label: setup
+
+# This initial code block loads custom utility functions and environment variables
+# These are stored in separate files to keep the main analysis clean and organized
+source("utils/r-utils.r")
+source("_environment.required")
+bac_base_end_meta <- readRDS("data/metadata/base-end-metadata.rds")
+
+suppressPackageStartupMessages(library(emmeans))
+suppressPackageStartupMessages(library(nlme))
+suppressPackageStartupMessages(library(expss))
+suppressPackageStartupMessages(library(lmtest))
+```
+
+If necessary, convert timepoints and intervention groups into dummy variables
+
+```{r}
+#| eval: true
+#| label: preparing the data for DID analysis
+df <- bac_base_end_meta 
+
+df <- df %>%
+    select(displayid, timepoint, arm, observed,  chao1, diversity_shannon,  evenness_pielou, pd) %>%
+    mutate(timepoint = case_when(
+        timepoint == "Baseline" ~ 0,
+        timepoint == "Endpoint" ~ 1,
+    ))
+
+alpha_did <- list(
+  shannon_did = lm(diversity_shannon ~ arm * timepoint, data =df),
+  chao_did = lm(chao1 ~ arm * timepoint, data =df),
+  even_did = lm(evenness_pielou ~ arm * timepoint, data =df),
+  pd_did = lm(pd ~ arm * timepoint, data =df)
+)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-lm-sum
+#| tbl-cap: Summary of simple alpha diveristy linear models with formula y ~ arm * timepoint
+
+stargazer::stargazer(alpha_did, type="text")
+```
+
+The interaction coefficient is the differences-in-differences estimator. The effect is significant at 10% with the treatment having a negative effect. 
+
+This code has been modified from [@Rothbard2023] and is available on [GitHub](github.com/eleanormurray/DiD_Tutorial)
+  
+### Code Section 0: Data set up & formating
+
+```{r}
+#| eval: true
+#| label: did data prep
+#Read in data
+did <- bac_base_end_meta %>%
+        mutate(
+          time = scale_values(as.numeric(timesincefeedstart)), # numeric (days)
+          timepoint = factor(timepoint),
+          arm = factor(arm),          
+          agedays_rounded = as.numeric(agedays_rounded)
+        ) %>%
+        group_by(displayid) %>%
+        arrange(agedays_rounded, .by_group = TRUE) %>%
+        mutate(ageAtBaseline = case_when(
+            str_detect(timepoint, "Baseline") ~ agedays_rounded,
+            FALSE ~ NA)) %>%
+        fill(ageAtBaseline) %>%
+        ungroup() %>%
+        mutate(ageAtBaseline = scale_values(ageAtBaseline)) %>%
+        select(displayid, ageAtBaseline, time, timepoint, arm, observed, chao1, diversity_shannon, evenness_pielou, pd, fer_def12_base, sexf) 
+
+did_df <- did %>% select(displayid, ageAtBaseline, time, timepoint, arm, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Diversity Index` = diversity_shannon, Evenness = evenness_pielou,`Faiths Phylogenetic Diversity` = pd, fer_def12_base, sexf) 
+
+```
+
+```{r}
+#| eval: true
+#| label: tbl-did-1
+#| tbl-cap: Number of participants in each timepoint (paired samples)
+did_df %>%
+  tab_cells(timepoint)%>%
+  tab_stat_cases()%>%
+  tab_pivot()
+```
+
+```{r}
+#| eval: true
+#| label: tbl-did-2
+#| tbl-cap: Number of participants in each arm
+did_df %>%
+  tab_cells(arm)%>%
+  tab_stat_cases()%>%
+  tab_pivot()
+```
+
+```{r}
+#| eval: true
+#| label: tbl-did-3
+#| tbl-cap: "Number of participants in each arm: 0 = Iron replete, 1 = Iron deficient"
+did_df %>%
+  tab_cells(fer_def12_base)%>%
+  tab_stat_cases()%>%
+  tab_pivot()
+```
+
+### Code Section 1: Checking Assumptions
+
+|**Assumption**| **Definition**| **Application** |
+|----------|-----------------------------------------|---------------------------------------------|
+|*Consistency* | Well-defined causal question, such that the intervention in our counterfactual is the same as the intervention in our data. | The intervention of interest is the consumption on iron and zinc biofortified pearl millet, and variation in the effect pearl millet has on the composition of the microbiota is not expected to have adverse affects (e.g. increased pro-inflammatory taxa) | 
+|*Positivity*| Each study subgroup has a positive chance of being assigned to the treatment group. | Stubjects were computationally randomised into groups, CPM or FeZnM, before the trial began |
+|*Parallel trends* |The difference in outcomes from before to after exposure in the control group is a counterfactual ideal representation of the difference in outcomes in the exposed group had they been unexposed. | Factors effecting changes in the infant microbiota are assumed to be the same before and after intervention for the control group |
+
+This section estimates the change in alpha diversity between the control and intervention *at baseline* and calculates the  difference-in-differences for this contrast. Essentially asking if basline groups are equal and the parallell trends assumption is supported.
+
+```{r}
+#| eval: true
+#| label: tbl-did-5
+#| tbl-cap: Average outcome value in control and intervention arms at baseline
+did_df %>%
+  tab_cells(`Observed features`, `Chao 1 Index`, `Shannon Diversity Index`, Evenness,`Faiths Phylogenetic Diversity`)%>%
+  tab_rows(arm)%>%
+  tab_stat_mean()%>%
+  tab_pivot()
+
+```
+
+```{r}
+#| eval: true
+#| label: tbl-did-6
+#| tbl-cap: Average outcome value in control and intervention arms at baseline stratified by sex
+did_df %>%
+  tab_cells(`Observed features`, `Chao 1 Index`, `Shannon Diversity Index`, Evenness,`Faiths Phylogenetic Diversity`)%>%
+  tab_rows(fer_def12_base) %>% #or fer_def12_base
+  tab_cols(arm)%>%
+  tab_stat_mean()%>%
+  tab_pivot()
+```
+
+```{r}
+#| eval: true
+#| label: tbl-did-7
+#| tbl-cap: Model summary investigating the average change between intervention groups at baseline
+
+#Calculate the change in average value between intervention groups at baseline
+did_baseline <- did[did$timepoint == "Baseline",]
+
+#first lets try without random effects
+alpha_did_lm <- list(
+  chao_lmm_transformed = lm(chao1 ~ arm * time, data =did_baseline),
+  shannon_lmm_transformed = lm(diversity_shannon^2 ~ arm * time, data =did_baseline),  
+  evenness_lmm_transformed = lm(evenness_pielou^2 ~ arm * time, data =did_baseline),
+  pd_lmm_transformed = lm(log(pd) ~ arm * time, data =did_baseline)
+)
+
+lapply(alpha_did_lm, summary)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-did-8
+#| tbl-cap: ANOVA results of model investigating the average change between intervention groups at baseline
+
+lapply(alpha_did_lm, anova)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-did-9
+#| tbl-cap: Model summary investigating the average change between intervention groups at baseline, controlling for age at baseline
+
+alpha_did_lm <- lapply(alpha_did_lm, update, ~ . + ageAtBaseline)
+
+lapply(alpha_did_lm, summary)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-did-10
+#| tbl-cap: ANOVA results of model investigating the average change between intervention groups at baseline, controlling for age at baseline
+
+lapply(alpha_did_lm, anova)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-did-11
+#| tbl-cap: Model summary investigating the average change between intervention groups over time with random effects
+
+alpha_did_lmm <- list(
+  chao_lmm_transformed = lme(chao1 ~ arm * time, random = ~1 | displayid, method ="REML", data = did_baseline),
+  shannon_lmm_transformed = lme(diversity_shannon^2 ~ arm * time, random = ~1 | displayid, method ="REML", data = did_baseline),  
+  evenness_lmm_transformed = lme(evenness_pielou^2 ~ arm * time, random = ~1 | displayid, method ="REML", data = did_baseline),
+  pd_lmm_transformed = lme(log(pd) ~ arm * time, random = ~1 | displayid, method ="REML", data = did_baseline)
+)
+
+lapply(alpha_did_lmm, summary)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-did-12
+#| tbl-cap: ANOVA resutls of model investigating the average change between intervention groups over time with random effects
+
+lapply(alpha_did_lmm, anova)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-did-13
+#| tbl-cap: Model summary investigating the average change between intervention groups over time with random effects, accounting for age at baseline
+
+alpha_did_lmm <- lapply(alpha_did_lmm, update, ~ . + ageAtBaseline)
+
+lapply(alpha_did_lmm, summary)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-did-14
+#| tbl-cap: ANOVA results of model investigating the average change between intervention groups over time with random effects, accounting for age at baseline
+
+lapply(alpha_did_lmm, anova)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-did-15
+#| tbl-cap: Comparison of simple linear model and model with random effects
+#| results: asis
+
+stargazer::stargazer(alpha_did_lm, alpha_did_lmm, header = FALSE)
+```
+
+::: {.callout-important}
+before proceeding make sure you double check the index number of your interaction term (depends on the order and number of covariates in the model)
+:::
+
+```{r}
+#| label:  simple model coefs and CIs
+## extract the interaction coefficient and calculate confidance intervals
+## this can be added if there are clusters in the data: vcov.=vcovCL(x, cluster=~cluster_variable)
+lapply(alpha_did_lm, function(x){
+  paste("Interaction coefficient:", stats::coef(x)[5])
+})
+lapply(alpha_did_lm, function(x){
+coefci(x)[5,]
+})
+
+did_baseline <- cbind(did_baseline, do.call(data.frame, lapply(alpha_did_lm, function(lm_model) {
+  stats::coef(lm_model)[5]
+})))
+colnames(did_baseline) <- str_replace(colnames(did_baseline), "lmm_transformed", "interaction_coef")
+```
+
+```{r}
+#| label:  LMM coefs and CIs
+## extract the interaction coefficient and calculate confidance intervals
+## this can be added if there are clusters in the data: vcov.=vcovCL(x, cluster=~cluster_variable)
+lapply(alpha_did_lmm, function(x){
+  paste("Interaction coefficient:", stats::coef(x)[5])
+})
+
+# lapply(alpha_did_lmm, function(x){
+# intervals(x)
+# })
+
+did_baseline <- cbind(did_baseline, do.call(data.frame, lapply(alpha_did_lmm, function(lmm_model) {
+  stats::coef(lmm_model)[5]
+})))
+colnames(did_baseline) <- str_replace(colnames(did_baseline), "lmm_transformed", "interaction_coef")
+```
+
+```{r}
+#| eval: true
+#| label: tbl-did-16
+#| tbl-cap: Mean alpha diversity between baseline sample groups
+did_baseline%>%
+  tab_cells(chao1, diversity_shannon, evenness_pielou, pd)%>%
+  tab_cols(timepoint)%>%
+  tab_rows(arm)%>%
+  tab_stat_mean()%>%
+  tab_pivot() %>% 
+  tab_sort_desc()
+```
+
+The above table shows that the baseline mean alpha diversity is very similar between groups, providing support for (but not proof of) the parallel trends assumption. Therefore the overall baseline mean can be used as summary:
+
+```{r}
+#| eval: false
+#| label: did simple lm coef summary
+did_baseline%>%
+  tab_cells(chao_interaction_coef,  shannon_interaction_coef, evenness_interaction_coef, pd_interaction_coef)%>%
+  tab_stat_mean()%>%
+  tab_pivot()
+```
+
+### Code Section 2: Unadjusted Models
+
+The expected value of the outcome varaible (mean alpha diversity), at each level of the grouping variable (intervention) is determined by 
+
+$$
+E(Y\vert group,T, T\geq0)= \beta_0 + \beta_1I(T=1) + \beta_2(group=1)+ \beta_3I(T=1)
+$$
+
+$I(T = 1)$ represents an indicator variable for pre- versus post-intervention (binary dummy variable encoding basline and endpoint). When the data are restricted to T ≥ 0, the regression model estimates four groups: 
+
+- control group pre-intervention 
+- control group post-intervention
+- intervention group pre-intervention
+- intervention group post-intervention
+
+in this case, the estimator is simply the regression coefficient for the interaction between intervention status (time) and group.
+
+If $T = 0$, then
+
+$$
+E(Y \mid group, T, T \geq 0) = \beta_0 + \beta_2 Z
+$$
+
+If $T = 1$, then
+
+$$
+E(Y \mid group, T, T \geq 0) = \beta_0 + \beta_1 + \beta_2 Z + \beta_3 
+$$
+
+As we have no pre-intervention data, this is our use case
+
+```{r}
+#| eval: true
+#| label: did estimate lm regression BvsE
+#Code 2.1: Unadjusted linear regression, excluding pre-COVID data
+did_be <- did
+
+alpha_did_lm_be <- list(
+  chao_lmm_transformed = lm(chao1 ~ arm * time + ageAtBaseline, data =did_be),
+  shannon_lmm_transformed = lm(diversity_shannon ~ arm * time + ageAtBaseline, data =did_be),  
+  evenness_lmm_transformed = lm(evenness_pielou~ arm * time + ageAtBaseline, data =did_be),
+  pd_lmm_transformed = lm(log(pd) ~ arm * time + ageAtBaseline, data =did_be)
+)
+
+lapply(alpha_did_lm_be, summary)
+
+## extract the interaction coefficient and calculate confidance intervals
+## this can be added if there are clusters in the data e.g. by slum level: vcov.=vcovCL(x, cluster=~cluster_variable)
+lapply(alpha_did_lm_be, function(x){
+  paste("Interaction coefficient:", stats::coef(x)[4])
+})
+lapply(alpha_did_lm_be, function(x){
+coefci(x)[4,]
+})
+
+#pvalues for coefficients
+lapply(alpha_did_lm_be, function(x){
+coeftest(x)
+})
+```
+
+```{r}
+#| eval: true
+#| label: did estimate LMM regression BvsE
+alpha_did_lmm_be <- list(
+  chao_lmm_transformed = lme(chao1 ~ arm * time + ageAtBaseline, random = ~1 | displayid, method ="REML", data = did_be),
+  shannon_lmm_transformed = lme(diversity_shannon^2 ~ arm * time + ageAtBaseline, random = ~1 | displayid, method ="REML", data = did_be),  
+  evenness_lmm_transformed = lme(evenness_pielou^2 ~ arm * time + ageAtBaseline, random = ~1 | displayid, method ="REML", data = did_be),
+  pd_lmm_transformed = lme(log(pd) ~ arm * time + ageAtBaseline, random = ~1 | displayid, method ="REML", data = did_be)
+)
+
+lapply(alpha_did_lmm_be, summary)
+#different functions from the `nlme` package need to be used here to be able to handle a model with random effects
+lapply(alpha_did_lmm_be, intervals, which = "fixed")
+lapply(alpha_did_lmm_be,function(x){
+  fixef(x)[5]
+})
+```
+
+#### Optional Code 2.1.2: Create table of predicted outcome values & DiD
+
+`emmeans` in R = `LSMeans` in SAS = `margins` in Stata
+	- the [`margins` R package](https://cran.r-project.org/web/packages/margins/index.html) is an R port of the `margins` command from 'Stata'
+
+The below is a replication of contrast analysis on p93 as of Aug 08 2024 testing the hypothesis that changes caused by interventions are similar. Except here I have chenged the contrasts to be more intuitaive by calcualitng the difference at endpoint (E-B) rather than baseline (B-E). Results are the same just with the sign changed.
+
+$$
+\begin{array}{cc}
+(CPM\ Endpoint - CPM\ Baseline) = (FeZnPM\ Endpoint - FeZnPM\ Baseline) \\
+\Rightarrow CPM\ Endpoint - CPM\ Baseline - FeZnPM\ Endpoint + FeZnPM\ Baseline = 0
+\end{array}
+$$
+
+Calculation of $\delta_{DiD}$
+
+$\Delta Y_T = Y_T^{post} - Y_T^{pre}$
+
+\begin{table}[h]
+    \centering
+    \begin{tabular}{|l|c|c|c|}
+        \hline
+        \textbf{Group} & \textbf{Pre-Treatment} & \textbf{Post-Treatment} & \textbf{Change (\(\Delta Y\)} \\ \hline
+        Treatment & \(Y_T^{pre}\) & \(Y_T^{post}\) & \(\Delta Y_T = Y_T^{post} - Y_T^{pre}\) \\ \hline
+        Control & \(Y_C^{pre}\) & \(Y_C^{post}\) & \(\Delta Y_C = Y_C^{post} - Y_C^{pre}\) \\ \hline
+        \textbf{Difference-in-Differences} & & & \(\delta_{DiD} = \Delta Y_T - \Delta Y_C\) \\ \hline
+    \end{tabular}
+    \caption{Difference-in-Differences Results}
+    \label{tab:did_results}
+\end{table}
+
+```{r}
+#| eval: true
+#| label: alpha diversity LMM DiD analysis using estimated marginal means
+emm <- lapply(alpha_did_lmm_be, function(x){
+  emmeans(
+          x,
+          ~ arm+time,
+          at=list(
+            time=c(0,1)),
+          type = "response")
+})
+
+#0.95 CIs
+did_est <- lapply(emm, function(x) { 
+  confint(contrast(x, method = list(c(-1, 1, 1, -1)), adjust = "none", ratios = FALSE)) 
+  #note: this is the same as `contrast(x, adjust = "none", ratios = FALSE, interaction = "consec")` -> I have just specified it mannually because it makes more sense to me that way
+})
+
+#lapply(seq_along(emm), function(x) { 
+## eff_size(emm[[x]], sigma = sigma(alpha_did_lmm_be[[x]]), edf = 79, method = list(c(1, -1, -1, 1)))
+#})
+
+est.df <- bind_rows(lapply(did_est, as.data.frame))
+est.df$contrast <- NULL
+est.df$`Diversity metric` <- c("Chao 1 Index", "Shannon Entropy", "Evenness","Faith's Phylogenetic Diversity")
+
+names(est.df)[names(est.df) == "estimate"] <- paste0("$\\delta_{DiD}$", footnote_marker_number(1, format = "latex", double_escape = F))
+
+est.df %>%
+  select(`Diversity metric`, !c(`Diversity metric`)) %>%
+  kable(escape = FALSE) %>%  
+  footnote(number = c("The difference-in-differences estimator calculated as $\\\\delta_{DiD} = \\\\Delta Y_T - \\\\Delta Y_C$"), footnote_as_chunk = TRUE, escape = FALSE)
+```
+
+```{r}
+#| eval: true
+#| label: DiD p-values
+
+did_est <- lapply(emm, function(x) { 
+  contrast(x, method = list(c(-1, 1, 1, -1)), adjust = "none", ratios = FALSE) 
+  #note: this is the same as `contrast(x, adjust = "none", ratios = FALSE, interaction = "consec")` -> I have just specified it mannually because it makes more sense to me that way
+})
+
+est.df <- bind_rows(lapply(did_est, as.data.frame))
+est.df$contrast <- NULL
+est.df$`Diversity metric` <- c("Chao 1 Index", "Shannon Entropy", "Evenness","Faith's Phylogenetic Diversity")
+
+names(est.df)[names(est.df) == "estimate"] <- paste0("$\\delta_{DiD}$", footnote_marker_number(1, format = "latex", double_escape = F))
+
+est.df %>%
+  select(`Diversity metric`, !c(`Diversity metric`)) %>%
+  kable(escape = FALSE) %>%  
+  footnote(number = c("The difference-in-differences estimator calculated as $\\\\delta_{DiD} = \\\\Delta Y_T - \\\\Delta Y_C$"), footnote_as_chunk = TRUE, escape = FALSE)
+
+```
+
+
+The above code is the same as:
+
+```{r}
+#| eval: false
+#| label: tutorial code
+m <- lapply(alpha_did_lmm_be, function(x){
+  margins::margins(
+      x,
+      at=list(
+        time=c(0,1),
+        arm=c(0,1)), 
+      variables = c("time", "arm"), #the output will have columns time and arm1, these are relative to the reference level time = overall average, and arm = 0
+      level = 0.95
+)})
+
+lapply(m, function(x){
+  x %>%  
+    tab_cells(fitted)%>%
+    tab_rows(arm)%>%
+    tab_cols(time)%>%
+    tab_stat_mean()%>%
+    tab_pivot() %>% 
+    tab_sort_desc()%>%
+    mutate(difference = `time|1`-`time|0`)%>%
+    mutate(DiD = `difference`[1]-`difference`[2])
+})
+```

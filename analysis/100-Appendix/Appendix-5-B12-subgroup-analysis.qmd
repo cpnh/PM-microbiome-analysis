@@ -1,0 +1,81 @@
+Extra code to generate a complea heatmap instead of using ampvis
+
+```{r}
+#| eval: true
+#| label: fig-b12-phyla-complex-heatmap
+#| fig-cap: Relative abundance of bacterial phyla at baseline among those with B12 deficiency (<200 pg/mL), insufficiency (200-300 pg/mL), and sufficiency (>300 pg/mL).
+df <- heatmap$data %>% 
+  dplyr::select(phyla = Display, Sample , relAbund = Abundance) %>% 
+  mutate(timepoint = bac_b12_meta$timepoint[match(Sample,bac_b12_meta$sample_names)]) %>%
+  mutate(b12_status = bac_b12_meta$b12_status[match(Sample,bac_b12_meta$sample_names)])
+
+df_long <- df %>%
+  pivot_wider(names_from = c(Sample, timepoint, b12_status), values_from = relAbund) %>%
+  as.data.frame()
+
+rows <- df_long[,1]
+mat <- df_long[,2:ncol(df_long)]
+rownames(mat) <- rows
+mat <- data.matrix(mat)
+
+b12_status_label <- unlist(lapply(colnames(mat),function(x){
+  if(grepl("_insufficiency",x)) "Insufficiency (200-300 pg/mL)"
+  else if(grepl("_sufficiency",x)) "Sufficiency (>300 pg/mL)"
+  else if(grepl("_deficiency",x)) "Deficiency (<200 pg/mL)"
+
+}))
+
+b12_status_colour <- assign_unique_colors(b12_status_label)
+
+timepointDf <- unlist(lapply(colnames(mat),function(x){
+  if(grepl("Baseline",x)) "Baseline"
+  else if(grepl("Endpoint",x)) "Endpoint"
+}))
+
+timepoint_colour <- unlist(lapply(colnames(mat),function(x){
+  if(grepl("Baseline",x)) "#66C2A5"
+  else if(grepl("Endpoint",x)) "#E78AC3"
+}))
+
+library(ComplexHeatmap)
+
+col_annotation <- HeatmapAnnotation(`Vitamin B12 Status` = b12_status_label, col = list(`Vitamin B12 Status` = b12_status_colour), which = "column")
+
+get_group_means <- function(mat, b12_status_label) {
+  # Convert to data frame for easier manipulation
+  df <- as.data.frame(mat)
+  df$row_names <- rownames(mat)
+  
+  # Add group information
+  df_long <- tidyr::pivot_longer(df, 
+                                -row_names, 
+                                names_to = "column", 
+                                values_to = "value")
+  df_long$b12_status <- b12_status_label[match(df_long$column, colnames(mat))]
+  
+  # Calculate means per group and taxa
+  group_means <- df_long %>%
+    group_by(row_names, b12_status) %>%
+    summarise(mean_value = mean(value, na.rm = TRUE), .groups = 'drop')
+  
+  return(group_means)
+}
+
+# Calculate group means
+group_means <- get_group_means(mat, b12_status_label)
+
+Heatmap(mat,
+        cluster_columns=T,
+        width = unit(0.5, "npc"),
+        cluster_rows = F,
+        column_gap= unit(5, "mm"),
+        col = circlize::colorRamp2(c(0,0.3,0.6),ggheatmap_palette),
+        column_dend_height = unit(30, "mm"),
+        row_names_side = "left",
+        row_names_gp=gpar(cex=1, fontface = "bold"),
+        show_column_names = F,
+        show_heatmap_legend = T,
+        top_annotation = col_annotation,
+        heatmap_legend_param = list(title = "Relative Abundance"))
+
+```
