@@ -17,6 +17,9 @@ load("data/seqdata.RData")
 suppressPackageStartupMessages({
   library(ZIBR)
   library(glmmTMB)
+  library(DHARMa)
+  library(performance)
+  library(patchwork)
   })
 
 dir.create(file.path(RESULTS, "EvsB-OGU-ZIBR"), showWarnings = FALSE, recursive = TRUE)
@@ -27,29 +30,9 @@ dir.create(file.path(RESULTS, "EvsB-OGU-ZIBR"), showWarnings = FALSE, recursive 
 #| eval: true
 #| label: data prep
 
-data <- prepare_ogu_data(absAbund) # converted to relative abundance data after filtering
+data <- prepare_ogu_data(absAbund, filter_prevalence = TRUE, prevalence_cutoff = 0.4, filter_abundance = FALSE)
+
 outcome <- data$ogu_data
-
-# checks prevalence
-# Removes rare species
-# counts how many non-zero values are in each column
-# Returns TRUE if more than 40% of values are non-zero
-filter_index1 <- apply(outcome, 2, function(X) {
-  sum(X > 0) > 0.4 * length(X)
-})
-
-# checks abundance
-# Removes low abundance species
-# finds the 90th percentile value and returns TRUE if greater than 1
-
-# filter_index2 <- apply(outcome, 2, function(X) {
-#   quantile(X, 0.9) > 1
-# })
-
-# outcome <- outcome[, filter_index1 & filter_index2]
-outcome <- outcome[, filter_index1]
-
-outcome <- as.matrix(outcome)
 
 predictors <- prepare_predictors(data$meta_data)
 predictors <- predictors %>%
@@ -68,85 +51,7 @@ rownames(outcome) <- str_replace(
   "_E"
 )
 
-names <- colnames(outcome)
-
-tmp <- glmmTMB(outcome[,1] ~ arm*time+age_B + (1|subject), zi = ~arm*time, data=predictors, family = poisson)
-
-compareZI(outcome[,1] ~ arm*time+age_B + (1|subject), zi = ~arm*time, data=predictors)
-
-if (diagnose(tmp) == FALSE) {
-  diagnose(tmp)
-
-}
-summary(tmp)
-
-ff <- fixef(tmp)$zi
-round(plogis(c(CPM=unname(ff[1]),ff[-1]+ff[1])),3)
-
-plot(simulateResiduals(tmp))
-
-```
-
-```{r}
-models <- list()
-p_taxa_list_zibr <- list()
-
-for (j in names) {
-  if (any(is.na(predictors) | is.null(predictors))) {
-    stop("Predictor variables cannot contain NA values")
-  }
-
-  df <- data.frame(
-    Baseline = outcome[predictors$baseline_sample, j],
-    predictors[, c("time", "arm")]
-  )
-
-  rownames(df) <- predictors$sample
-
-  if (any(is.na(df) | is.null(df))) {
-    stop("Predictor variables cannot contain NA values")
-    view(df)
-  }
-
-  # df <- data.frame(y = y, predictors) %>%
-  #   arrange(subject, time) %>% select(y, arm, time)
-  subject_ind <- predictors$subject
-  time_ind <- predictors$time
-  if (length(subject_ind) != length(time_ind) && nrow(predictors)) {
-    stop("Input variables are not the same length")
-  }
-
-  y <- outcome[predictors$sample, j]
-
-  if (!all(data$y > 0 & data$y < 1)) {
-    stop("Response must be between 0 and 1")
-  }
-
-  if (any(is.na(y) | is.null(y))) {
-    stop("Outcome variable contains NA values")
-  } else {
-    est <- tryCatch(
-      {
-        ZIBR::zibr(
-          logistic_cov = df,
-          beta_cov = df,
-          Y = y,
-          subject_ind = subject_ind,
-          time_ind = time_ind,
-          quad_n = 30,
-          verbose = TRUE
-        )
-      },
-      error = function(e) {
-        # Print dimensions of problematic matrices
-        print(paste("Error:", e))
-        return(NULL)
-      }
-    )
-    # models[j] <- est
-    # p_taxa_list_zibr[j, ] <- est$joint.p
-  }
-}
+suppressWarnings(suppressMessages(tmp <- genZI(outcome, predictors)))
 ```
 
 ```{r}
@@ -185,3 +90,4 @@ if (require(openxlsx)) {
     file = file.path(output_dir, "ZIBR_Results.xlsx")
   )
 }
+```

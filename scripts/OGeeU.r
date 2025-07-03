@@ -10,31 +10,130 @@ validate_phyloseq_input <- function(phyloseq_obj) {
   return(TRUE)
 }
 
-#' Prepare OGU data from phyloseq object for GEE analysis
+#' Prepare OGU data from phyloseq object with optional filtering
 #' @param phyloseq_obj A phyloseq object containing OTU table, taxonomy, and sample data
+#' @param filter_prevalence Logical, whether to apply prevalence filter (default: FALSE)
+#' @param prevalence_cutoff Numeric, minimum proportion of non-zero values (default: 0.4)
+#' @param filter_abundance Logical, whether to apply abundance filter (default: FALSE)
+#' @param abundance_quantile Numeric, quantile to use for abundance filter (default: 0.9)
+#' @param abundance_cutoff Numeric, minimum value at specified quantile (default: 1)
 #' @return A list containing prepared OGU data, taxa data, and metadata
-prepare_ogu_data <- function(phyloseq_obj) {
+prepare_ogu_data <- function(
+  phyloseq_obj,
+  filter_prevalence = FALSE,
+  prevalence_cutoff = 0.4,
+  filter_abundance = FALSE,
+  abundance_quantile = 0.9,
+  abundance_cutoff = 1
+) {
   validate_phyloseq_input(phyloseq_obj)
 
   tryCatch(
     {
-      # Transform and filter OGU data
+      # Transform OGU data
       ogu_data <- as.data.frame(t(otu_table(phyloseq_obj)))
-      ogu_filtered <- ogu_data[, colSums(ogu_data) != 0]
+
+      # Store original dimensions
+      original_dims <- dim(ogu_data)
+
+      # Initialize filtering summary
+      filter_summary <- list(
+        original_features = ncol(ogu_data),
+        filtered_features = ncol(ogu_data),
+        filters_applied = character()
+      )
+
+      # Apply prevalence filter if requested
+      if (filter_prevalence) {
+        prevalence_index <- apply(ogu_data, 2, function(X) {
+          sum(X > 0) > prevalence_cutoff * length(X)
+        })
+
+        ogu_data <- ogu_data[, prevalence_index]
+
+        filter_summary$filters_applied <- c(
+          filter_summary$filters_applied,
+          sprintf("Prevalence (cutoff: %s)", prevalence_cutoff)
+        )
+        filter_summary$features_after_prevalence <- ncol(ogu_data)
+      }
+
+      # Apply abundance filter if requested
+      if (filter_abundance) {
+        abundance_index <- apply(ogu_data, 2, function(X) {
+          quantile(X, abundance_quantile) > abundance_cutoff
+        })
+
+        ogu_data <- ogu_data[, abundance_index]
+
+        filter_summary$filters_applied <- c(
+          filter_summary$filters_applied,
+          sprintf(
+            "Abundance (quantile: %s, cutoff: %s)",
+            abundance_quantile,
+            abundance_cutoff
+          )
+        )
+        filter_summary$features_after_abundance <- ncol(ogu_data)
+      }
+
+      # Update final number of filtered features
+      filter_summary$filtered_features <- ncol(ogu_data)
+      filter_summary$features_removed <- original_dims[2] - ncol(ogu_data)
+      filter_summary$proportion_retained <- ncol(ogu_data) / original_dims[2]
 
       # Extract taxonomy and metadata
       taxa_data <- as.data.frame(tax_table(phyloseq_obj))
       meta_data <- as.data.frame(as.matrix(sample_data(phyloseq_obj)))
 
+      # Subset taxonomy data to match filtered OGUs
+      taxa_data <- taxa_data[colnames(ogu_data), ]
+
       # Verify data alignment
-      if (!all(rownames(ogu_filtered) == rownames(meta_data))) {
+      if (!all(rownames(ogu_data) == rownames(meta_data))) {
         stop("Row names of OGU data and metadata do not match")
       }
 
+      # Print filtering summary
+      cat("\nOGU Filtering Summary:\n")
+      cat("=====================\n")
+      cat(
+        "Original number of features:",
+        filter_summary$original_features,
+        "\n"
+      )
+      cat(
+        "Filters applied:",
+        paste(filter_summary$filters_applied, collapse = ", "),
+        "\n"
+      )
+      if (filter_prevalence) {
+        cat(
+          "Features after prevalence filter:",
+          filter_summary$features_after_prevalence,
+          "\n"
+        )
+      }
+      if (filter_abundance) {
+        cat(
+          "Features after abundance filter:",
+          filter_summary$features_after_abundance,
+          "\n"
+        )
+      }
+      cat("Final number of features:", filter_summary$filtered_features, "\n")
+      cat("Features removed:", filter_summary$features_removed, "\n")
+      cat(
+        "Proportion of features retained:",
+        round(filter_summary$proportion_retained * 100, 2),
+        "%\n\n"
+      )
+
       return(list(
-        ogu_data = ogu_filtered,
+        ogu_data = ogu_data,
         taxa_data = taxa_data,
-        meta_data = meta_data
+        meta_data = meta_data,
+        filter_summary = filter_summary
       ))
     },
     error = function(e) {
