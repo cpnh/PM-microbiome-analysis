@@ -1328,7 +1328,7 @@ process_dharma_diagnostics <- function(model, model_id) {
 process_dharma_results <- function(results) {
   # Process all models
   all_diagnostics <- lapply(seq_along(results), function(i) {
-    process_model_diagnostics(
+    process_dharma_diagnostics(
       results[[i]],
       names(results)[i]
     )
