@@ -254,7 +254,8 @@ genZI <- function(
     return(list(
       adj_results = adj_results,
       model_summary = model_summary,
-      all_models = all_models
+      all_models = all_models,
+      diagnostics = diagnostics
     ))
   } else {
     return(list(
@@ -263,7 +264,6 @@ genZI <- function(
     ))
   }
 }
-
 
 fit_zinb_model <- function(data, family, formula, zi = "~ 1") {
   tryCatch(
