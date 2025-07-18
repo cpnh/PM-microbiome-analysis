@@ -1627,7 +1627,7 @@ diagnoseZI <- function(modelList) {
 
     # Convert to data frame
     df <- data.frame(
-      model_id = names(modelList),
+      outcome_id = names(modelList),
       message = sapply(d, function(x) x$message),
       pass = sapply(d, function(x) x$status),
       stringsAsFactors = FALSE
