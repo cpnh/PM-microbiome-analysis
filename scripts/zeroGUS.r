@@ -164,6 +164,14 @@ genZI <- function(
     BIC = numeric(n_outcomes),
     dispersion = numeric(n_outcomes),
     zero_prop = numeric(n_outcomes),
+    ratioObsSim = numeric(n_outcomes),
+    ratioObsSim_Pvalue = numeric(n_outcomes),
+    dharmaDisp = numeric(n_outcomes),
+    dharmaDisp_Pvalue = numeric(n_outcomes),
+    dharmaKS = numeric(n_outcomes),
+    dharmaKS_Pvalue = numeric(n_outcomes),
+    dharmaOutliers = numeric(n_outcomes),
+    dharmaOutliers_Pvalue = numeric(n_outcomes),
     error_message = character(n_outcomes),
     stringsAsFactors = FALSE
   )
@@ -212,6 +220,22 @@ genZI <- function(
     model_summary$AIC[i] <- diagnostics$fit_stats$AIC
     model_summary$BIC[i] <- diagnostics$fit_stats$BIC
     model_summary$dispersion[i] <- diagnostics$fit_stats$dispersion
+    # fmt: skip
+    model_summary$ratioObsSim[i] <- diagnostics$dharma_residuals$tests$zero_inflation$statistic
+    # fmt: skip
+    model_summary$ratioObsSim_Pvalue[i] <- diagnostics$dharma_residuals$tests$zero_inflation$p.value
+    # fmt: skip
+    model_summary$dharmaDisp[i] <- diagnostics$dharma_residuals$tests$dispersion$statistic
+    # fmt: skip
+    model_summary$dharmaDisp_Pvalue[i] <- diagnostics$dharma_residuals$tests$dispersion$p.value
+    # fmt: skip
+    model_summary$dharmaKS[i] <- diagnostics$dharma_residuals$tests$ks_test$statistic
+    # fmt: skip
+    model_summary$dharmaKS_Pvalue[i] <- diagnostics$dharma_residuals$tests$ks_test$p.value
+    # fmt: skip
+    model_summary$dharmaOutliers[i] <- diagnostics$dharma_residuals$tests$outliers$statistic
+    # fmt: skip
+    model_summary$dharmaOutliers_Pvalue[i] <- diagnostics$dharma_residuals$tests$outliers$p.value
 
     # Initialize results matrix after first successful model fit
     if (
@@ -1816,4 +1840,242 @@ print_roc_summary <- function(roc_results) {
 
   cat("Top 5 Models by Zero-Inflation AUC:\n")
   print(knitr::kable(top_models))
+}
+
+#' Compare Multiple Zero-Inflated Model Fits
+#' @param diag_list Named list of genZI model fit diagnostic results
+#' @param model_name Name of the model being compared
+#' @return List containing comparison dataframes and plots
+#' @import tidyr
+#' @import dplyr
+#' @import ggplot2
+# Create comprehensive comparison dataframe from model diagnostics
+create_model_summary <- function(diag_list, model_name) {
+  n_outcomes <- length(diag_list)
+  outcome_ids <- names(diag_list)
+
+  # Initialize summary dataframe
+  summary_df <- data.frame(
+    outcome_id = outcome_ids,
+    model = model_name,
+    converged = logical(n_outcomes),
+    AIC = numeric(n_outcomes),
+    BIC = numeric(n_outcomes),
+    dispersion = numeric(n_outcomes),
+    zero_prop = numeric(n_outcomes),
+    ratioObsSim = numeric(n_outcomes),
+    ratioObsSim_Pvalue = numeric(n_outcomes),
+    dharmaDisp = numeric(n_outcomes),
+    dharmaDisp_Pvalue = numeric(n_outcomes),
+    dharmaKS = numeric(n_outcomes),
+    dharmaKS_Pvalue = numeric(n_outcomes),
+    dharmaOutliers = numeric(n_outcomes),
+    dharmaOutliers_Pvalue = numeric(n_outcomes),
+    error_message = character(n_outcomes),
+    stringsAsFactors = FALSE
+  )
+
+  # Fill in values
+  for (i in seq_along(diag_list)) {
+    current <- diag_list[[i]]
+    if (!is.null(current)) {
+      summary_df$AIC[i] <- current$fit_stats$AIC
+      summary_df$BIC[i] <- current$fit_stats$BIC
+      summary_df$dispersion[i] <- current$fit_stats$dispersion
+
+      if (!is.null(current$dharma_residuals)) {
+        # DHARMa test results
+        summary_df$ratioObsSim[
+          i
+        ] <- current$dharma_residuals$tests$zero_inflation$statistic
+        summary_df$ratioObsSim_Pvalue[
+          i
+        ] <- current$dharma_residuals$tests$zero_inflation$p.value
+        summary_df$dharmaDisp[
+          i
+        ] <- current$dharma_residuals$tests$dispersion$statistic
+        summary_df$dharmaDisp_Pvalue[
+          i
+        ] <- current$dharma_residuals$tests$dispersion$p.value
+        summary_df$dharmaKS[
+          i
+        ] <- current$dharma_residuals$tests$ks_test$statistic
+        summary_df$dharmaKS_Pvalue[
+          i
+        ] <- current$dharma_residuals$tests$ks_test$p.value
+        summary_df$dharmaOutliers[
+          i
+        ] <- current$dharma_residuals$tests$outliers$statistic
+        summary_df$dharmaOutliers_Pvalue[
+          i
+        ] <- current$dharma_residuals$tests$outliers$p.value
+      }
+    }
+  }
+
+  return(summary_df)
+}
+
+#FIX parallel processing not working
+compare_nested_models <- function(model_lists, parallel = FALSE, n_cores = 1) {
+  require(car)
+  require(dplyr)
+  require(tidyr)
+
+  # Extract all_models from each list element
+  models_by_family <- lapply(model_lists, function(x) x$all_models)
+
+  # Get all outcome IDs from the first model family
+  outcome_ids <- names(models_by_family[[1]])
+
+  # Setup parallel processing if requested
+  if (parallel && n_cores > 1) {
+    require(future)
+    require(future.apply)
+    plan(multicore, workers = n_cores)
+    on.exit(plan(sequential))
+  }
+
+  # Function to compare two models
+  compare_pair <- function(model1, model2, test_type = "LRT") {
+    if (is.null(model1) || is.null(model2)) {
+      return(list(
+        test_stat = NA_real_,
+        df = NA_real_,
+        p_value = NA_real_,
+        AIC_diff = NA_real_,
+        BIC_diff = NA_real_,
+        preferred = NA_character_
+      ))
+    }
+
+    tryCatch(
+      {
+        # Likelihood ratio test
+        lrt <- anova(model1, model2)
+
+        # AIC/BIC comparison
+        aic1 <- AIC(model1)
+        aic2 <- AIC(model2)
+        bic1 <- BIC(model1)
+        bic2 <- BIC(model2)
+
+        # Determine preferred model
+        preferred <- if (aic1 < aic2) {
+          "model1"
+        } else if (aic2 < aic1) {
+          "model2"
+        } else {
+          "equal"
+        }
+
+        list(
+          test_stat = lrt$Chisq[2],
+          df = lrt$Df[2],
+          p_value = lrt$`Pr(>Chisq)`[2],
+          AIC_diff = aic1 - aic2,
+          BIC_diff = bic1 - bic2,
+          preferred = preferred
+        )
+      },
+      error = function(e) {
+        list(
+          test_stat = NA_real_,
+          df = NA_real_,
+          p_value = NA_real_,
+          AIC_diff = NA_real_,
+          BIC_diff = NA_real_,
+          preferred = paste("Error:", conditionMessage(e))
+        )
+      }
+    )
+  }
+
+  # Function to process one outcome
+  process_outcome <- function(outcome_id) {
+    # Extract models for this outcome from each family
+    models <- lapply(models_by_family, function(x) x[[outcome_id]])
+    names(models) <- names(models_by_family)
+
+    # Create all pairwise combinations
+    model_names <- names(models)
+    pairs <- expand.grid(
+      model1 = model_names,
+      model2 = model_names,
+      stringsAsFactors = FALSE
+    ) %>%
+      filter(model1 < model2) # Only compare each pair once
+
+    # Compare all pairs
+    results <- list()
+    for (i in 1:nrow(pairs)) {
+      model1 <- models[[pairs$model1[i]]]
+      model2 <- models[[pairs$model2[i]]]
+
+      result <- compare_pair(model1, model2)
+
+      results[[i]] <- data.frame(
+        outcome_id = outcome_id,
+        model1 = pairs$model1[i],
+        model2 = pairs$model2[i],
+        test_stat = result$test_stat,
+        df = result$df,
+        p_value = result$p_value,
+        AIC_diff = result$AIC_diff,
+        BIC_diff = result$BIC_diff,
+        preferred = result$preferred,
+        stringsAsFactors = FALSE
+      )
+    }
+
+    # Combine results for this outcome
+    bind_rows(results)
+  }
+
+  # Process all outcomes
+  if (parallel && n_cores > 1) {
+    results <- future_lapply(outcome_ids, process_outcome)
+  } else {
+    results <- lapply(outcome_ids, process_outcome)
+  }
+
+  # Combine all results
+  all_comparisons <- bind_rows(results)
+
+  # Convert numeric columns
+  numeric_cols <- c("test_stat", "df", "p_value", "AIC_diff", "BIC_diff")
+  all_comparisons[numeric_cols] <- lapply(
+    all_comparisons[numeric_cols],
+    as.numeric
+  )
+
+  # Add multiple testing correction
+  all_comparisons <- all_comparisons %>%
+    group_by(model1, model2) %>%
+    mutate(
+      p_adj = p.adjust(p_value, method = "BH"),
+      significant = p_adj < 0.05
+    ) %>%
+    ungroup()
+
+  # Create summary
+  summary <- all_comparisons %>%
+    group_by(model1, model2) %>%
+    summarise(
+      n_comparisons = n(),
+      n_significant = sum(significant, na.rm = TRUE),
+      mean_AIC_diff = mean(AIC_diff, na.rm = TRUE),
+      mean_BIC_diff = mean(BIC_diff, na.rm = TRUE),
+      n_preferred_model1 = sum(preferred == "model1", na.rm = TRUE),
+      n_preferred_model2 = sum(preferred == "model2", na.rm = TRUE),
+      n_equal = sum(preferred == "equal", na.rm = TRUE),
+      n_errors = sum(grepl("Error:", preferred), na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  # Return both detailed results and summary
+  list(
+    comparisons = all_comparisons,
+    summary = summary
+  )
 }
