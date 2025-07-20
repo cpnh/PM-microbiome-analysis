@@ -8,8 +8,8 @@
 #######################################
 
 ##############################################################################
-# Author: [Your Name]                                                        #
-# Date: [Current Date]                                                       #
+# Author: Nathaniel Cole                                                    #
+# Date: 27-06-25                                               #
 # License: MIT                                                               #
 # Version: 1.0.0                                                             #
 #                                                                            #
@@ -26,6 +26,7 @@
 #   - knitr: For formatted output                                            #
 #     https://github.com/yihui/knitr                                         #
 #                                                                            #
+# Last modified: 20-07-25                                                    #
 ##############################################################################
 
 #' Fit Zero-Inflated Negative Binomial Models for Multiple Outcomes
