@@ -8,23 +8,23 @@
 #######################################
 
 ##############################################################################
-# Author: [Your Name]                                                         #
-# Date: [Current Date]                                                        #
-# License: MIT                                                                #
+# Author: [Your Name]                                                        #
+# Date: [Current Date]                                                       #
+# License: MIT                                                               #
 # Version: 1.0.0                                                             #
 #                                                                            #
-# Description: This script provides functionality to compare different        #
-# zero-inflated models across multiple distribution families. It performs     #
-# model fitting, diagnostics, and comparison using various statistical        #
-# criteria.                                                                   #
+# Description: This script provides functionality to compare different       #
+# zero-inflated models across multiple distribution families. It performs    #
+# model fitting, diagnostics, and comparison using various statistical       #
+# criteria.                                                                  #
 #                                                                            #
 # Dependencies:                                                              #
-#   - glmmTMB: For fitting zero-inflated models                             #
-#     https://github.com/glmmTMB/glmmTMB                                    #
-#   - DHARMa: For residual diagnostics                                      #
-#     https://github.com/florianhartig/DHARMa                              #
-#   - knitr: For formatted output                                           #
-#     https://github.com/yihui/knitr                                        #
+#   - glmmTMB: For fitting zero-inflated models                              #
+#     https://github.com/glmmTMB/glmmTMB                                     #
+#   - DHARMa: For residual diagnostics                                       #
+#     https://github.com/florianhartig/DHARMa                                #
+#   - knitr: For formatted output                                            #
+#     https://github.com/yihui/knitr                                         #
 #                                                                            #
 ##############################################################################
 
@@ -1056,7 +1056,7 @@ create_summary_plots <- function(results) {
   # 1. P-value distributions for different effects
   plots$p_values <- results$adj_results %>%
     tidyr::pivot_longer(
-      cols = c(time, arm, age_B, interaction),
+      cols = !c("X.Intercept.", "outcome_id"),
       names_to = "effect",
       values_to = "p_value"
     ) %>%
@@ -1131,86 +1131,13 @@ create_summary_plots <- function(results) {
       y = "Count"
     )
 
-  # 5. Error message summary if present
-  if (any(!is.na(results$model_summary$error_message))) {
-    error_summary <- results$model_summary %>%
-      filter(!is.na(error_message)) %>%
-      count(error_message) %>%
-      # Ensure n is finite
-      filter(is.finite(n))
-
-    if (nrow(error_summary) > 0) {
-      plots$error_summary <- error_summary %>%
-        ggplot(aes(x = reorder(error_message, n), y = n)) +
-        geom_col() +
-        coord_flip() +
-        # Adjust text size based on number of error messages
-        theme(
-          axis.text.y = element_text(
-            size = min(max(8, 12 - nrow(error_summary) / 10), 12)
-          )
-        ) +
-        labs(
-          title = "Summary of Error Messages",
-          x = "Error Message",
-          y = "Count"
-        )
-    }
-  }
-
-  # 6. Significant results summary
-  if (!is.null(results$adj_results)) {
-    sig_threshold <- 0.05
-    sig_counts <- results$adj_results %>%
-      summarise(across(
-        c(time, arm, age_B, interaction),
-        ~ sum(. < sig_threshold & is.finite(.)) # Only count finite values
-      )) %>%
-      tidyr::pivot_longer(
-        everything(),
-        names_to = "effect",
-        values_to = "count"
-      )
-
-    plots$significant <- ggplot(sig_counts, aes(x = effect, y = count)) +
-      geom_col(fill = "steelblue") +
-      # Rotate x-axis labels for better readability
-      theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-      labs(
-        title = "Number of Significant Results by Effect",
-        x = "Effect",
-        y = "Count of Significant Results"
-      )
-  }
-
   # Combine plots using patchwork with explicit layout
   # Create base layout with 2 rows, 2 columns for main plots
   combined_plot <- (plots$p_values +
     plots$convergence +
     plots$zero_prop +
     plots$fit_criteria) +
-    plot_layout(ncol = 2, nrow = 2)
-
-  # If we have additional plots, add them in new rows
-  if (!is.null(plots$error_summary) && !is.null(plots$significant)) {
-    # Add both additional plots in a new row
-    combined_plot <- combined_plot /
-      (plots$error_summary + plots$significant) +
-      plot_layout(heights = c(2, 1))
-  } else if (!is.null(plots$error_summary)) {
-    # Add just error summary
-    combined_plot <- combined_plot /
-      plots$error_summary +
-      plot_layout(heights = c(2, 1))
-  } else if (!is.null(plots$significant)) {
-    # Add just significant results
-    combined_plot <- combined_plot /
-      plots$significant +
-      plot_layout(heights = c(2, 1))
-  }
-
-  # Add overall theme adjustments
-  combined_plot <- combined_plot &
+    plot_layout(ncol = 2, nrow = 2) +
     theme(
       plot.title = element_text(size = 12),
       axis.title = element_text(size = 10)
@@ -1484,7 +1411,7 @@ process_dharma_results <- function(results) {
   wide_diagnostics <- complete_diagnostics %>%
     select(-warning) %>%
     tidyr::pivot_wider(
-      id_cols = c(model_id, n_obs, n_zeros),
+      id_cols = c(outcome_id, n_obs, n_zeros),
       names_from = test,
       values_from = c(p.value, test_status)
     )
