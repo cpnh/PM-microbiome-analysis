@@ -37,7 +37,12 @@ suppressWarnings(suppressMessages({
   )
 }))
 
-options(max.print = 50, scipen = 999, max.width = 100, digits = 3)
+options(max.print = 50, scipen = 999, max.width = 100, digits = 3, prType='html')
+
+str <- function(object, ...) {
+  str(object, give.attr = FALSE, max.level = 3, ...)
+}
+
 
 ##############################################################################
 #  #start GGplot Settings for theming                                             #
@@ -2427,7 +2432,8 @@ emm_bind <- function(
   digits = 2,
   format = "markdown",
   caption = NULL,
-  col.names = NULL
+  col.names = NULL,
+  kable = TRUE
 ) {
   # Input validation
   if (!is.list(emm)) {
@@ -2483,13 +2489,17 @@ emm_bind <- function(
   }
 
   # Create kable with appropriate format
-  table <- knitr::kable(
-    results,
-    format = format,
-    digits = digits,
-    caption = caption,
-    booktabs = TRUE
-  )
+  if(kable){
+    table <- knitr::kable(
+      results,
+      format = format,
+      digits = digits,
+      caption = caption,
+      booktabs = TRUE
+    )
+  } else {
+    table <- results
+  }
 
   # Add class for potential method dispatch
   class(table) <- c("emm_table", class(table))
