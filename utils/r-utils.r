@@ -76,7 +76,7 @@ theme_set(
         face = 'bold',
         color = 'black'
       ),
-      plot.title = element_text(hjust = 0.5, face = "bold", size = 26),
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 20),
       legend.title = element_blank(),
       legend.position = 'bottom',
       legend.location = "plot",
@@ -85,7 +85,8 @@ theme_set(
         face = 'bold',
         color = 'black'
       ),
-      legend.justification = "right",
+      legend.justification = "center",
+      
       strip.text = element_text(
         size = fontsize,
         face = 'bold',
@@ -93,8 +94,12 @@ theme_set(
       ),
       strip.background.x = element_rect(fill = "white"),
       strip.background.y = element_rect(fill = "lightgrey"),
-      plot.margin = margin(2, 2, 2, 2, "cm"),
-      plot.caption = element_text(size = (fontsize - 3))
+      
+      plot.margin = margin(1, 1, 1, 1, "cm"),
+      plot.caption = element_text(size = (fontsize - 3)),
+
+      panel.spacing = unit(3, "mm")
+
     )
 )
 
@@ -2466,7 +2471,7 @@ emm_bind <- function(
   # Check for consistent columns
   col_names <- lapply(df_list, colnames)
   if (length(unique(lapply(col_names, length))) > 1) {
-    stop("Inconsistent number of columns in emmeans objects")
+    warning("Inconsistent number of columns in emmeans objects")
   }
 
   # Create results data frame
@@ -2505,6 +2510,183 @@ emm_bind <- function(
   class(table) <- c("emm_table", class(table))
 
   return(table)
+}
+
+plot.emm_table = function(x, 
+                         title = "EMM Contrasts", 
+                         subtitle = NULL,
+                         sig_levels = c("***" = 0.001, "**" = 0.01, "*" = 0.05),
+                         colors = NULL,
+                         base_size = 11,comparisons = TRUE,
+                         alpha = 0.05,
+                         ...) {
+    
+  # Input validation
+      if (!inherits(x, "emm_table")) {
+          stop("Input must be of class 'emm_table'")
+      }
+      
+      # Required columns check
+      required_cols <- c("Model", "estimate", "SE", "p.value", "Model", "Species")
+      if (!all(required_cols %in% colnames(x))) {
+          stop("Missing required columns: ", 
+              paste(setdiff(required_cols, colnames(x)), collapse = ", "))
+      }
+
+      # Create significance levels
+  # Create combined labels and add to data
+    x <- x %>%
+        mutate(
+            combined_label = paste0(Model, "; ", Species),
+            sig_level = case_when(
+                p.value < sig_levels["***"] ~ "***",
+                p.value < sig_levels["**"] ~ "**",
+                p.value < sig_levels["*"] ~ "*",
+                TRUE ~ "ns"
+            ),
+            # Add y-position for each point
+            y_position = match(combined_label, unique(combined_label))
+        )
+
+    # Calculate plot dimensions
+    max_est <- max(abs(x$estimate))
+    x_padding <- max_est * 0.15  # 15% padding
+ # Add comparison arrows if requested
+    if(comparisons) {
+        # Create comparison data
+        comp_data <- x %>%
+            filter(p.value < alpha) %>%
+            mutate(
+                # Calculate arrow positions
+                arrow_start = estimate - SE,
+                arrow_end = estimate + SE,
+                # Y positions for arrows
+                y_pos = y_position,
+                # Arrow aesthetic parameters based on significance
+                arrow_alpha = case_when(
+                    p.value < sig_levels["***"] ~ 1,
+                    p.value < sig_levels["**"] ~ 0.7,
+                    p.value < sig_levels["*"] ~ 0.4,
+                    TRUE ~ 0.2
+                )
+            )
+        
+        # Add arrows
+        p <- p + 
+            geom_segment(data = comp_data,
+                        aes(x = 0, 
+                            xend = estimate,
+                            y = y_pos,
+                            yend = y_pos,
+                            alpha = arrow_alpha),
+                        arrow = arrow(length = unit(0.2, "cm"), 
+                                    type = "closed"),
+                        color = "gray30") +
+            scale_alpha_identity()
+    }
+    
+    # Add point ranges
+    p <- p + geom_pointrange(
+        aes(xmin = estimate - SE, 
+            xmax = estimate + SE),
+        size = 1,
+        position = position_dodge(width = 0.5)
+    )
+    
+    # Add significance indicators
+    if (max(nchar(x$sig_level)) > 0) {
+        p <- p + geom_text(
+            aes(x = max(estimate) + x_padding/2,
+                label = sig_level),
+            hjust = 0,
+            size = 3
+        )
+    }
+    
+    # Theming and labels
+    p <- p + 
+        labs(
+            title = title,
+            subtitle = subtitle,
+            x = "EMM Contrast Estimate",
+            y = NULL
+        ) +
+        theme(
+            axis.text.y = element_text(size = base_size * 0.8),
+            panel.grid.minor = element_blank(),
+            plot.title = element_text(size = base_size * 1.2),
+            plot.subtitle = element_text(size = base_size * 0.9)
+        ) +
+        scale_x_continuous(
+            limits = c(-max_est - x_padding, max_est + x_padding),
+            expand = expansion(mult = 0.1)
+        )
+    
+    # Add custom colors if provided
+    if (!is.null(colors)) {
+      p <- p + scale_color_manual(values = colors)
+    } else {
+      p <- p + scale_color_brewer("Set2")
+    }
+
+    
+    # Add significance legend
+    p <- p + 
+        annotate(
+            "text",
+            x = max_est + x_padding/2,
+            y = 1,
+            label = "Significance:\n*** p<0.001\n** p<0.01\n* p<0.05",
+            hjust = 0,
+            vjust = 0,
+            size = 3
+        )
+    
+    return(p)
+}
+
+
+plotPhylaEMMs <- function(df, comparisons = TRUE) {
+  contrast <- unique(df$contrast)
+
+  df %>%
+    mutate(
+      Species = paste0(Model, "; ", ifelse(Species != "", Species, Genus)),
+      # Significance indicator
+      sig_level = case_when(
+        p.value < 0.001 ~ "***",
+        p.value < 0.01 ~ "**",
+        p.value <= 0.05 ~ "*",
+        TRUE ~ "ns"
+      ),
+      estimate = ifelse(is.na(estimate), ratio,estimate)
+    ) %>%
+    ggplot(aes(x = estimate, y = Species, estimate)) +
+    # Add reference line at 0
+    geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
+    # Add horizontal bars for EMM contrasts
+    geom_pointrange(
+      aes(xmin = estimate - SE, xmax = estimate + SE, color = Phylum),
+      size = 1
+    ) +
+    # Add significance indicators
+    geom_text(aes(x = max(estimate) + 0.5, label = sig_level), hjust = 0) +
+    scale_color_brewer(palette = "Paired") +
+    labs(
+      caption = paste("Contrast:", contrast),
+      x = "Estimated Marginal Mean Contrast Estimate",
+      y = "",
+      color = "Phylum"
+    ) +
+    # Add annotation for significance levels
+    annotate(
+      "text",
+      x = max(sigArms$estimate) + 0.5,
+      y = 0,
+      label = "* p<0.05\n** p<0.01\n*** p<0.001",
+      hjust = 0,
+      vjust = 1
+    )
 }
 
 #end
@@ -5369,80 +5551,80 @@ knit_print.bound_table <- function(x, ...) {
 #' @export
 #' @importFrom knitr kable
 #' @importFrom emmeans emmeans
-emm_bind <- function(
-  emm,
-  digits = 2,
-  format = "markdown",
-  caption = NULL,
-  col.names = NULL
-) {
-  # Input validation
-  if (!is.list(emm)) {
-    stop("'emm' must be a list of emmeans objects")
-  }
+# emm_bind <- function(
+#   emm,
+#   digits = 2,
+#   format = "markdown",
+#   caption = NULL,
+#   col.names = NULL
+# ) {
+#   # Input validation
+#   if (!is.list(emm)) {
+#     stop("'emm' must be a list of emmeans objects")
+#   }
 
-  if (length(emm) == 0) {
-    stop("Empty list provided")
-  }
+#   if (length(emm) == 0) {
+#     stop("Empty list provided")
+#   }
 
-  if (!all(sapply(emm, inherits, "emmGrid"))) {
-    stop("All elements must be emmeans objects (class 'emmGrid')")
-  }
+#   if (!all(sapply(emm, inherits, "emmGrid"))) {
+#     stop("All elements must be emmeans objects (class 'emmGrid')")
+#   }
 
-  # Match format argument
-  format <- match.arg(format)
+#   # Match format argument
+#   format <- match.arg(format)
 
-  # Convert each emmeans object to data frame
-  df_list <- lapply(emm, function(x) {
-    tryCatch(
-      {
-        as.data.frame(x)
-      },
-      error = function(e) {
-        stop("Error converting emmeans to data frame: ", e$message)
-      }
-    )
-  })
+#   # Convert each emmeans object to data frame
+#   df_list <- lapply(emm, function(x) {
+#     tryCatch(
+#       {
+#         as.data.frame(x)
+#       },
+#       error = function(e) {
+#         stop("Error converting emmeans to data frame: ", e$message)
+#       }
+#     )
+#   })
 
-  # Check for consistent columns
-  col_names <- lapply(df_list, colnames)
-  if (length(unique(lapply(col_names, length))) > 1) {
-    stop("Inconsistent number of columns in emmeans objects")
-  }
+#   # Check for consistent columns
+#   col_names <- lapply(df_list, colnames)
+#   if (length(unique(lapply(col_names, length))) > 1) {
+#     stop("Inconsistent number of columns in emmeans objects")
+#   }
 
-  # Create results data frame
-  results <- data.frame(
-    Model = rep(names(df_list), sapply(df_list, nrow)),
-    do.call(rbind, df_list),
-    check.names = FALSE
-  )
+#   # Create results data frame
+#   results <- data.frame(
+#     Model = rep(names(df_list), sapply(df_list, nrow)),
+#     do.call(rbind, df_list),
+#     check.names = FALSE
+#   )
 
-  # Round numeric columns to specified digits
-  numeric_cols <- sapply(results, is.numeric)
-  results[numeric_cols] <- round(results[numeric_cols], digits)
+#   # Round numeric columns to specified digits
+#   numeric_cols <- sapply(results, is.numeric)
+#   results[numeric_cols] <- round(results[numeric_cols], digits)
 
-  # Use custom column names if provided
-  if (!is.null(col.names)) {
-    if (length(col.names) != ncol(results)) {
-      stop("Length of col.names must match number of columns")
-    }
-    colnames(results) <- col.names
-  }
+#   # Use custom column names if provided
+#   if (!is.null(col.names)) {
+#     if (length(col.names) != ncol(results)) {
+#       stop("Length of col.names must match number of columns")
+#     }
+#     colnames(results) <- col.names
+#   }
 
-  # Create kable with appropriate format
-  table <- knitr::kable(
-    results,
-    format = format,
-    digits = digits,
-    caption = caption,
-    booktabs = TRUE
-  )
+#   # Create kable with appropriate format
+#   table <- knitr::kable(
+#     results,
+#     format = format,
+#     digits = digits,
+#     caption = caption,
+#     booktabs = TRUE
+#   )
 
-  # Add class for potential method dispatch
-  class(table) <- c("emm_table", class(table))
+#   # Add class for potential method dispatch
+#   class(table) <- c("emm_table", class(table))
 
-  return(table)
-}
+#   return(table)
+# }
 
 #end
 

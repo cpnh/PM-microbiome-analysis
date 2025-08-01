@@ -1,5 +1,3 @@
-#!/usr/bin/env Rscript
-
 #######################################
 #                                     #
 #      Zero-Inflated Model           #
@@ -26,7 +24,7 @@
 #   - knitr: For formatted output                                            #
 #     https://github.com/yihui/knitr                                         #
 #                                                                            #
-# Last modified: 20-07-25                                                    #
+# Last modified: 28-07-25                                                    #
 ##############################################################################
 
 #' Fit Zero-Inflated Negative Binomial Models for Multiple Outcomes
@@ -255,6 +253,8 @@ genZI <- function(
     }
 
     # Store coefficients if model converged and matrix is initialized
+    #ADD zero inflated p-values
+    #ADD coefficient value
     if (
       model_fit$converged &&
         !is.null(results_matrix) &&
@@ -275,7 +275,7 @@ genZI <- function(
         coef_names
       )
     )
-
+#ADD genZI class to list object
     return(list(
       adj_results = adj_results,
       model_summary = model_summary,
@@ -415,7 +415,7 @@ zinb_diagnostics <- function(model, data) {
   fit_stats <- list(
     AIC = AIC(model),
     BIC = BIC(model),
-    dispersion = sigma(model), #dispersion paramter
+    dispersion = sigma(model), #dispersion paramter see glmmTMB::sigma.glmmTMB
     logLik = logLik(model),
     df.residual = df.residual(model)
   )
@@ -1149,6 +1149,7 @@ create_summary_plots <- function(results) {
   return(plots)
 }
 
+#TODO create differnet methods for genZI object plot or just a matrix
 #' Create Zero Proportion Plot
 #'
 #' @description
@@ -1207,6 +1208,95 @@ zero_plot <- function(results) {
     )
 }
 
+#' Analyze Zero Proportions in Variables
+#'
+#' @param df A data frame or matrix where each column represents a variable to analyze
+#' @param plot_type Character string specifying plot type: "density", "histogram", or "bar"
+#' @param bins Integer specifying number of bins for histogram (default = 20)
+#' @param return_data Logical; if TRUE, returns the data frame of zero proportions
+#'
+#' @return Either a ggplot object or a list containing both plot and data
+#' @export
+analyze_zeros <- function(df, plot_type = c("density", "histogram", "bar"), bins = 20, return_data = FALSE, fill = "#8CAAEE", alpha = 1) {
+  
+  # Input validation
+  plot_type <- match.arg(plot_type)
+  
+  # Calculate zero proportions
+  zprop <- data.frame(
+    outcome_id = names(df),
+    zprop = sapply(df, function(x) mean(x == 0, na.rm = TRUE))
+  )
+  
+  # Create bins for histogram/bar plot
+  zprop$bin <- cut(zprop$zprop, 
+                   breaks = seq(0, 1, length.out = bins + 1),
+                   include.lowest = TRUE)
+  
+  # Create summary
+  summary_data <- data.frame(
+    bin = levels(zprop$bin),
+    n_variables = as.numeric(table(zprop$bin)),
+    variables = tapply(zprop$outcome_id, zprop$bin, paste, collapse = ", "),
+    mid_point = seq(1/(2*bins), 1-1/(2*bins), length.out = bins)
+  )
+  
+  # Create plot based on type
+  if (plot_type == "density") {
+    p <- ggplot(zprop, aes(x = zprop)) +
+      geom_density(fill = fill, alpha = alpha)
+  } else if (plot_type == "histogram") {
+    p <- ggplot(zprop, aes(x = zprop)) +
+      geom_histogram(bins = bins, fill = fill, 
+                    color = "black", alpha = alpha)
+  } else {
+    p <- ggplot(summary_data, aes(x = mid_point, y = n_variables)) +
+      geom_col(fill = fill, alpha = alpha)
+  }
+  
+  # Add common elements
+  p <- p + 
+    theme_minimal() +
+    scale_x_continuous(
+      limits = c(0, 1),
+      breaks = seq(0, 1, 0.1),
+      labels = scales::percent_format()
+    ) +
+    labs(
+      title = "Distribution of Zero Proportions",
+      x = "Proportion of Zeros",
+      y = if(plot_type == "density") "Density" else "Number of Variables"
+    ) +
+    theme(
+      panel.grid.minor = element_blank(),
+      plot.title = element_text(hjust = 0.5)
+    )
+  
+  if (return_data) {
+    return(list(
+      plot = p,
+      summary = summary_data,
+      raw_data = zprop
+    ))
+  } else {
+    return(p)
+  }
+}
+
+#' Print summary of zero proportions
+#'
+#' @param zprop_data Output from analyze_zeros with return_data = TRUE
+#' @export
+print_zero_summary <- function(zprop_data) {
+  cat("Summary of Zero Proportions:\n\n")
+  print(knitr::kable(
+    zprop_data$summary,
+    col.names = c("Proportion Range", "Number of Variables", "Variable Names", "Bin Midpoint"),
+    format = "pipe"
+  ))
+}
+
+
 #' Process DHARMa Diagnostics for a Single Model
 #'
 #' @description
@@ -1214,11 +1304,11 @@ zero_plot <- function(results) {
 #' dispersion, outliers, and zero-inflation tests.
 #'
 #' @param model A fitted model object
-#' @param model_id Character string identifying the model
+#' @param outcome_id Character string identifying the model
 #'
 #' @return A data frame containing:
 #'   \itemize{
-#'     \item model_id: Model identifier
+#'     \item outcome_id: Model identifier
 #'     \item test: Name of diagnostic test
 #'     \item p.value: P-value from test
 #'     \item warning: Any warnings generated during testing
@@ -1234,10 +1324,10 @@ zero_plot <- function(results) {
 #' }
 #'
 #' @export
-process_dharma_diagnostics <- function(model, model_id) {
+process_dharma_diagnostics <- function(model, outcome_id) {
   if (is.null(model)) {
     return(data.frame(
-      model_id = model_id,
+      outcome_id = outcome_id,
       test = NA,
       p.value = NA,
       test_status = "Model NULL", # New status column
@@ -1313,7 +1403,7 @@ process_dharma_diagnostics <- function(model, model_id) {
 
         # Create result dataframe
         data.frame(
-          model_id = model_id,
+          outcome_id = outcome_id,
           test = test_name,
           p.value = test_result$p.value,
           test_status = test_result$status, # New column
@@ -1333,7 +1423,7 @@ process_dharma_diagnostics <- function(model, model_id) {
     },
     error = function(e) {
       data.frame(
-        model_id = model_id,
+        outcome_id = outcome_id,
         test = NA,
         p.value = NA,
         test_status = "Error in model processing", # New status
@@ -1606,7 +1696,7 @@ create_zi_roc <- function(model_results, threshold = 0.5) {
 
           # Store results
           roc_results[[i]] <- list(
-            model_id = names(model_results$all_models)[i],
+            outcome_id = names(model_results$all_models)[i],
             zero_component = list(
               auc = auc(roc_zero),
               sensitivity = roc_zero$sensitivities,
@@ -1672,7 +1762,7 @@ create_zi_roc <- function(model_results, threshold = 0.5) {
     rbind,
     lapply(roc_results, function(x) {
       data.frame(
-        model_id = x$model_id,
+        outcome_id = x$outcome_id,
         zero_auc = x$zero_component$auc,
         conditional_auc = x$conditional_component$auc
       )
@@ -1852,13 +1942,22 @@ create_model_summary <- function(diag_list, model_name) {
 }
 
 #FIX parallel processing not working
+#ADD ability to use genZI or model objects
+# test <- list(
+#   nb1_results = nb1_results,
+#   nb2_results = nb2_results,
+#   poi_results = poi_results
+# )
+
+# nested_anova <- compare_nested_models(test)
 compare_nested_models <- function(model_lists, parallel = FALSE, n_cores = 1) {
   require(car)
   require(dplyr)
   require(tidyr)
 
   # Extract all_models from each list element
-  models_by_family <- lapply(model_lists, function(x) x$all_models)
+  # models_by_family <- lapply(model_lists, function(x) x$all_models)
+  models_by_family <- model_lists
 
   # Get all outcome IDs from the first model family
   outcome_ids <- names(models_by_family[[1]])
@@ -2013,4 +2112,224 @@ compare_nested_models <- function(model_lists, parallel = FALSE, n_cores = 1) {
     comparisons = all_comparisons,
     summary = summary
   )
+}
+
+#!/usr/bin/env Rscript
+
+#######################################
+#                                     #
+#    Nested Model Comparison         #
+#                                     #
+#######################################
+
+#' Compare Nested Statistical Models
+#'
+#' @description
+#' Performs pairwise comparisons between nested models across multiple outcomes,
+#' returning the original model list names instead of generic "model1"/"model2" labels.
+#'
+#' @param model_lists Named list of model families
+#' @param parallel Logical, whether to use parallel processing
+#' @param n_cores Integer, number of cores for parallel processing
+#'
+#' @return List containing detailed comparisons and summary statistics
+#'
+#' @examples
+#' test <- list(
+#'   noInflation = noZi_models[1:3],
+#'   randInt = noZi_rand_models[1:3]
+#' )
+#' results <- compare_nested_models(test)
+#'
+compare_nested_models <- function(model_lists, parallel = FALSE, n_cores = 1) {
+  require(car)
+  require(dplyr)
+  require(tidyr)
+
+  # Extract all_models from each list element
+  models_by_family <- lapply(model_lists, function(x) x$all_models)
+
+  # Get all outcome IDs from the first model family
+  outcome_ids <- names(models_by_family[[1]])
+
+  # Setup parallel processing if requested
+  if (parallel && n_cores > 1) {
+    require(future)
+    require(future.apply)
+    plan(multicore, workers = n_cores)
+    on.exit(plan(sequential))
+  }
+
+  # Function to compare two models
+  compare_pair <- function(model1, model2, model1_name, model2_name) {
+    if (is.null(model1) || is.null(model2)) {
+      return(list(
+        test_stat = NA_real_,
+        df = NA_real_,
+        p_value = NA_real_,
+        AIC_diff = NA_real_,
+        BIC_diff = NA_real_,
+        preferred = NA_character_
+      ))
+    }
+
+    tryCatch(
+      {
+        # Likelihood ratio test
+        lrt <- anova(model1, model2)
+
+        # AIC/BIC comparison
+        aic1 <- AIC(model1)
+        aic2 <- AIC(model2)
+        bic1 <- BIC(model1)
+        bic2 <- BIC(model2)
+
+        # Determine preferred model using original names
+        preferred <- if (aic1 < aic2) {
+          model1_name
+        } else if (aic2 < aic1) {
+          model2_name
+        } else {
+          "equal"
+        }
+
+        list(
+          test_stat = lrt$Chisq[2],
+          df = lrt$Df[2],
+          p_value = lrt$`Pr(>Chisq)`[2],
+          AIC_diff = aic1 - aic2,
+          BIC_diff = bic1 - bic2,
+          preferred = preferred
+        )
+      },
+      error = function(e) {
+        list(
+          test_stat = NA_real_,
+          df = NA_real_,
+          p_value = NA_real_,
+          AIC_diff = NA_real_,
+          BIC_diff = NA_real_,
+          preferred = paste("Error:", conditionMessage(e))
+        )
+      }
+    )
+  }
+
+  # Function to process one outcome
+  process_outcome <- function(outcome_id) {
+    # Extract models for this outcome from each family
+    models <- lapply(models_by_family, function(x) x[[outcome_id]])
+    names(models) <- names(model_lists)  # Use original list names
+
+    # Create all pairwise combinations
+    model_names <- names(models)
+    pairs <- expand.grid(
+      model1 = model_names,
+      model2 = model_names,
+      stringsAsFactors = FALSE
+    ) %>%
+      filter(model1 < model2) # Only compare each pair once
+
+    # Compare all pairs
+    results <- list()
+    for (i in 1:nrow(pairs)) {
+      model1 <- models[[pairs$model1[i]]]
+      model2 <- models[[pairs$model2[i]]]
+
+      result <- compare_pair(
+        model1, model2,
+        model1_name = pairs$model1[i],
+        model2_name = pairs$model2[i]
+      )
+
+      results[[i]] <- data.frame(
+        outcome_id = outcome_id,
+        model1 = pairs$model1[i],
+        model2 = pairs$model2[i],
+        test_stat = result$test_stat,
+        df = result$df,
+        p_value = result$p_value,
+        AIC_diff = result$AIC_diff,
+        BIC_diff = result$BIC_diff,
+        preferred = result$preferred,
+        stringsAsFactors = FALSE
+      )
+    }
+
+    # Combine results for this outcome
+    bind_rows(results)
+  }
+
+  # Process all outcomes
+  if (parallel && n_cores > 1) {
+    results <- future_lapply(outcome_ids, process_outcome)
+  } else {
+    results <- lapply(outcome_ids, process_outcome)
+  }
+
+  # Combine all results
+  all_comparisons <- bind_rows(results)
+
+  # Convert numeric columns
+  numeric_cols <- c("test_stat", "df", "p_value", "AIC_diff", "BIC_diff")
+  all_comparisons[numeric_cols] <- lapply(
+    all_comparisons[numeric_cols],
+    as.numeric
+  )
+
+  # Add multiple testing correction
+  all_comparisons <- all_comparisons %>%
+    group_by(model1, model2) %>%
+    mutate(
+      p_adj = p.adjust(p_value, method = "BH"),
+      significant = p_adj < 0.05
+    ) %>%
+    ungroup()
+
+  # Create summary using original model names
+  summary <- all_comparisons %>%
+    group_by(model1, model2) %>%
+    summarise(
+      n_comparisons = n(),
+      n_significant = sum(significant, na.rm = TRUE),
+      mean_AIC_diff = mean(AIC_diff, na.rm = TRUE),
+      mean_BIC_diff = mean(BIC_diff, na.rm = TRUE),
+      n_preferred_model1 = sum(preferred == model1[1], na.rm = TRUE),
+      n_preferred_model2 = sum(preferred == model2[1], na.rm = TRUE),
+      n_equal = sum(preferred == "equal", na.rm = TRUE),
+      n_errors = sum(grepl("Error:", preferred), na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  # Return both detailed results and summary
+  list(
+    comparisons = all_comparisons,
+    summary = summary
+  )
+}
+
+check_convergence <- function(model) {
+  # Check for glmmTMB models
+  if (inherits(model, "glmmTMB")) {
+    converged <- model$sdr$pdHess
+    gradient <- model$sdr$gradient
+    
+    status <- list(
+      converged = converged,
+      gradient_max = max(abs(gradient)),
+      gradient_ok = all(abs(gradient) < 0.001),
+      hessian = !is.null(model$sdr$pdHess)
+    )
+  
+  # Check for lme4 models
+  } else if (inherits(model, "merMod")) {
+    status <- list(
+      converged = model@optinfo$conv$opt == 0,
+      gradient_max = max(abs(model@optinfo$derivs$gradient)),
+      gradient_ok = model@optinfo$conv$lme4$code == 0,
+      singular = isSingular(model)
+    )
+  }
+  
+  return(status)
 }
