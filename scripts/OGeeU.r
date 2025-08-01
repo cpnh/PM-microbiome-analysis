@@ -175,7 +175,8 @@ prepare_predictors <- function(meta_data) {
           arm,
           timepoint,
           time,
-          age_B
+          age_B,
+          zlen
         )
 
       return(predictors)
@@ -652,10 +653,10 @@ identify_significant_ogus <- function(
   significant_ogus <- left_join(
     rownames_to_column(taxa_data, var = "rowname"),
     gee_results,
-    by = c("rowname" = "ogu_id")
+    by = c("rowname" = "outcome_id")
   ) %>%
     filter(if_any(
-      c("time", "arm", "interaction", "age_B"),
+      !`(Intercept)`,
       ~ . <= significance_threshold
     ))
 
