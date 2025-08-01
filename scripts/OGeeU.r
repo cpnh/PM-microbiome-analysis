@@ -648,17 +648,29 @@ print_gee_diagnostics <- function(diagnostic_results) {
 identify_significant_ogus <- function(
   gee_results,
   taxa_data,
-  significance_threshold = 0.05
+  significance_threshold = 0.05,
+  include_intercept = FALSE
 ) {
-  significant_ogus <- left_join(
-    rownames_to_column(taxa_data, var = "rowname"),
-    gee_results,
-    by = c("rowname" = "outcome_id")
-  ) %>%
-    filter(if_any(
-      !`(Intercept)`,
-      ~ . <= significance_threshold
-    ))
+  if(include_intercept == FALSE){
+    significant_ogus <- left_join(
+      rownames_to_column(taxa_data, var = "rowname"),
+      gee_results,
+      by = c("rowname" = "outcome_id")
+    ) %>%
+      filter(if_any(
+        !`(Intercept)`,
+        ~ . <= significance_threshold
+      ))
+  } else {
+        significant_ogus <- left_join(
+      rownames_to_column(taxa_data, var = "rowname"),
+      gee_results,
+      by = c("rowname" = "outcome_id")
+    ) %>%
+      filter(if_any(
+        everything(), ~ . <= significance_threshold
+      ))
+  }
 
   return(significant_ogus)
 }
