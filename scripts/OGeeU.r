@@ -175,15 +175,7 @@ prepare_predictors <- function(meta_data) {
           subject = str_remove(displayid, "-G|-B"),
           timepoint = timepoint
         ) %>%
-        column_to_rownames(var = "sample_names") %>%
-        select(
-          subject,
-          arm,
-          timepoint,
-          time,
-          age_B,
-          zlen
-        )
+        column_to_rownames(var = "sample_names")
 
       return(predictors)
     },
