@@ -20,6 +20,7 @@ suppressMessages({
   library(broom)
   library(patchwork)
   library(emmeans)
+  library(ggtext)
 
   library(promicrobialTools)
 
@@ -36,7 +37,6 @@ suppressMessages({
 ```{r data-prep}
 #| eval: true
 #| label: data prep
-#| results: asis
 
 data <- prepare_ogu_data(
   absAbund,
@@ -128,14 +128,6 @@ Hmisc::describe(predictors)
 ```
 
 ### OGU Outcome Variables
-
-```{r describe}
-#| eval: true
-#| label: outcome-describe
-
-Hmisc::describe(outcome, condense = TRUE)
-
-```
 
 ```{r zero-hist}
 #| eval: true
@@ -627,6 +619,30 @@ lognorm_models <- keep_at(
 
 There were no models that could be fit with a log normal distribution
 
+```{r}
+#| eval: false
+#| label: save
+#| echo: false
+
+save(
+  nb1_models,
+  nb2_models,
+  poi_models,
+  gau_models,
+  lognorm_models,
+  file = file.path(RESULTS, "EvsB-OGU-ZIBR", "finalised-fits.RData")
+)
+```
+
+```{r}
+#| eval: true
+#| label: load
+#| echo: false
+
+load(file.path(RESULTS, "EvsB-OGU-ZIBR", "finalised-fits.RData"))
+
+```
+
 ## Significant OGUs
 
 ```{r}
@@ -867,8 +883,7 @@ The below estimates the mean for each `arm` at each `timepoint`, controlling for
 
 ```{r}
 #| eval: true
-#| label: tbl-emms
-#| tbl-cap: Estimated marginal means for OGU abundances within each intervention arm
+#| label: Estimated marginal means for OGU abundances within each intervention arm
 
 emm <- lapply(fits, function(x) {
   # Get EMMs for arm at each time point
@@ -889,9 +904,9 @@ emm <- lapply(fits, function(x) {
 ```{r}
 #| eval: true
 #| label: tbl-emm-pairs
-#| tbl-cap: Comparison of abundance marginal mean estimates (EMMs) betweeen intervention arm at baseline and endpoint
+#| tbl-cap: Comparison of abundance marginal mean estimates (EMMs) betweeen intervention arm at baseline and endpoint. Only those with p $\leq$ 0.05 are show for brevity.
 
-emm_bind(emm_pairs <- lapply(emm, pairs, reverse = TRUE))
+emm_pairs <- lapply(emm, pairs, reverse = TRUE)
 
 emm_pairs_df <- emm_bind(emm_pairs, kable = F)
 
@@ -900,7 +915,7 @@ sigArms <- emm_pairs_df %>%
   left_join(rownames_to_column(data$taxa_data, "Model"), by = "Model") %>%
   mutate(
     change = ifelse(estimate < 0, "Decrease", "Increase"),
-    time = ifelse(time == 1, "Endpoint", "Basepoint")
+    timepoint = ifelse(time == 1, "Endpoint", "Basepoint")
   )
 ```
 
@@ -910,8 +925,7 @@ sigArms <- emm_pairs_df %>%
 #| fig-cap: Estimated marginal mean differences between intervention arms at baseline and endpoint
 
 plotPhylaEMMs(sigArms) +
-  facet_wrap(~time, scales = "free") +
-  theme(axis.text.y = element_text(size = 10))
+  facet_wrap(~timepoint, scales = "free")
 ```
 
 ##### Effect Size
@@ -927,12 +941,43 @@ The default value used to standardise the effect size is the model's residual st
 emmEff <- lapply(1:length(emm_pairs), function(i) {
   eff_size(
     emm_pairs[[i]],
-    sigma = attr(VarCorr(fits[[i]])$cond$subject, "stddev"),
+    sigma = attr(VarCorr(fits[[i]])$cond$subject, "stddev") * sqrt(2),
     edf = df.residual(fits[[i]]),
     method = "identity"
   )
 })
 
+names(emmEff) <- names(emm_pairs)
+
+emmEff_df <- emm_bind(emmEff, kable = F)
+
+emmEff_df <- emmEff_df %>%
+  filter(Model %in% sigArms$Model) %>%
+  mutate(
+    magnitude = case_when(
+      abs(effect.size) < 0.2 ~ "negligible",
+      abs(effect.size) >= 0.2 & abs(effect.size) < 0.5 ~ "small",
+      abs(effect.size) >= 0.5 & abs(effect.size) < 0.8 ~ "medium",
+      abs(effect.size) >= 0.8 ~ "large",
+    ),
+    lower.CL = ifelse(is.na(lower.CL), asymp.LCL, lower.CL),
+    upper.CL = ifelse(is.na(upper.CL), asymp.UCL, upper.CL)
+  ) %>%
+  arrange(abs(effect.size)) %>%
+  select(Model, time, effect.size, magnitude) %>%
+  mutate_at(vars(everything()), type.convert, as.is = T)
+
+sigArmsEff <- left_join(sigArms, emmEff_df, by = c("Model", "time"))
+
+```
+
+```{r}
+#| eval: true
+#| label: fig-phyla-emms-effsize
+#| fig-cap: Estimated marginal mean differences between intervention arms at baseline and endpoint. Significant differences with an effect size > 0.5 (medium effect size) are shown in the plot.
+
+plotPhylaEMMs(sigArmsEff) +
+  facet_wrap(~timepoint, scales = "free")
 ```
 
 #### OGU EMM changes over time within each intervention arm
@@ -954,14 +999,14 @@ emm_bind(
 #| label: tbl-emm-arm-trend-compare
 #| tbl-cap: Comparison of the rates of change from baseline to endpoint in abundance EMMs between intervention arms.
 
-emm_bind(slopes <- lapply(trend, pairs, reverse = TRUE, type = "response"))
+emm_bind(slopes <- lapply(trend, pairs, reverse = TRUE))
 
 slopes_df <- emm_bind(slopes, kable = F)
 
 sigArmsTime <- slopes_df %>%
   filter(p.value <= 0.05) %>%
   left_join(rownames_to_column(data$taxa_data, "Model"), by = "Model") %>%
-  mutate(time = ifelse(time == 1, "Endpoint", "Basepoint"))
+  mutate(timepoint = ifelse(time == 1, "Endpoint", "Basepoint"))
 ```
 
 ```{r}
@@ -969,11 +1014,59 @@ sigArmsTime <- slopes_df %>%
 #| label: fig-phyla-emms
 #| fig-cap: Estimated marginal mean differences between intervention arms at baseline and endpoint
 
-plotPhylaEMMs(sigArmsTime) +
-  theme(axis.text.y = element_text(size = 10))
+plotPhylaEMMs(sigArmsTime, text_size = 8)
 ```
 
 ##### Effect Size
+
+The default value used to standardise the effect size is the model's residual standard deviation (sigma; within-group variation). However, this may underestimate effect sizes in mixed models where combined variance may be more accurate. Here, the random effect variance is used to standardise effect sizes.
+
+```{r}
+#| eval: true
+#| label: sigArm-eff
+#| fig-cap: NA
+#| tbl-cap: Effect sizes calculated as a standardized mean difference similar to Cohen's d.
+
+emmEff <- lapply(1:length(slopes), function(i) {
+  eff_size(
+    slopes[[i]],
+    sigma = attr(VarCorr(fits[[i]])$cond$subject, "stddev") * sqrt(2),
+    edf = df.residual(fits[[i]]),
+    method = "identity"
+  )
+})
+
+names(emmEff) <- names(slopes)
+
+emmEff_df <- emm_bind(emmEff, kable = F)
+
+emmEff_df <- emmEff_df %>%
+  filter(Model %in% sigArmsTime$Model) %>%
+  mutate(
+    magnitude = case_when(
+      abs(effect.size) < 0.2 ~ "negligible",
+      abs(effect.size) >= 0.2 & abs(effect.size) < 0.5 ~ "small",
+      abs(effect.size) >= 0.5 & abs(effect.size) < 0.8 ~ "medium",
+      abs(effect.size) >= 0.8 ~ "large",
+    ),
+    lower.CL = ifelse(is.na(lower.CL), asymp.LCL, lower.CL),
+    upper.CL = ifelse(is.na(upper.CL), asymp.UCL, upper.CL)
+  ) %>%
+  arrange(abs(effect.size)) %>%
+  select(Model, time, effect.size, magnitude) %>%
+  mutate_at(vars(everything()), type.convert, as.is = T)
+
+sigArmsTimeEff <- left_join(sigArmsTime, emmEff_df, by = c("Model", "time"))
+
+```
+
+```{r}
+#| eval: true
+#| label: fig-phyla-emms-effsize
+#| fig-cap: Estimated marginal mean differences between intervention arms at baseline and endpoint. Significant differences with an effect size > 0.5 (medium effect size) are shown in the plot.
+
+plotPhylaEMMs(filter(sigArmsTimeEff, effect.size >= 0.5))
+```
 
 ### Zero-inflated Componet EMMs
 
@@ -999,17 +1092,6 @@ emm_zi <- lapply(fits, function(x) {
 zi_probs <- lapply(emm_zi, regrid, transform = "logit")
 ```
 
-```{r}
-#| eval: true
-#| label: odds-ratio
-#| tbl-cap: Odds-ratio for zero-inflation
-
-ZIodds <- lapply(fits, function(model) {
-  exp(fixef(model)$zi)
-})
-```
-
-
 ##### OGU EMM differences between intervention arm at baseline and endpoint
 
 ```{r}
@@ -1017,7 +1099,7 @@ ZIodds <- lapply(fits, function(model) {
 #| label: tbl-emm-pairs
 #| tbl-cap: Comparison of abundance marginal mean estimates (EMMs) betweeen intervention arm at baseline and endpoint
 
-emm_bind(emm_zi_pairs <- lapply(emm_zi, pairs, reverse = TRUE))
+emm_zi_pairs <- lapply(emm_zi, pairs, reverse = TRUE)
 
 emm_zi_pairs_df <- emm_bind(emm_zi_pairs, kable = F)
 
@@ -1026,7 +1108,7 @@ ZIsigArms <- emm_zi_pairs_df %>%
   left_join(rownames_to_column(data$taxa_data, "Model"), by = "Model") %>%
   mutate(
     change = ifelse(estimate < 0, "Decrease", "Increase"),
-    time = ifelse(time == 1, "Endpoint", "Basepoint")
+    timepoint = ifelse(time == 1, "Endpoint", "Basepoint")
   )
 ```
 
@@ -1036,11 +1118,372 @@ ZIsigArms <- emm_zi_pairs_df %>%
 #| fig-cap: Estimated marginal mean differences between intervention arms at baseline and endpoint
 
 plotPhylaEMMs(ZIsigArms) +
-  facet_wrap(~time, scales = "free") +
-  theme(axis.text.y = element_text(size = 10))
+  facet_wrap(~timepoint, scales = "free")
 ```
 
-## Effect of Stunting on OGU Abundances
+##### Effect Size
+
+> [!quote]
+> When a logistic regression is calculated, the regression coefficient (b1) is the estimated increase in the log odds of the outcome per unit increase in the value of the exposure. In other words, the exponential function of the regression coefficient (eb1) is the odds ratio associated with a one-unit increase in the exposure. [@Szumilas2010]
+
+i.e. if $\beta_x = log(odds)$, then the odds ratio is $OR = \exp(\beta_x) = e^{\beta_x}$
+
+```{r}
+#| eval: true
+#| label: odds-ratio
+#| tbl-cap: Effect size calculated as odds-ratio for zero-inflation component
+ZIodds <- lapply(fits, function(model) {
+  exp(fixef(model)$zi)
+})
+
+ZIodds <- do.call(rbind, ZIodds) %>%
+  as.data.frame() %>%
+  rownames_to_column("Model")
+```
+
+```{r}
+#| eval: true
+#| label: cohens-d
+#| fig-cap: NA
+#| tbl-cap: NA
+ZIemmEff <- lapply(1:length(emm_zi_pairs), function(i) {
+  eff_size(
+    emm_zi_pairs[[i]],
+    sigma = attr(VarCorr(fits[[i]])$cond$subject, "stddev") * sqrt(2),
+    edf = df.residual(fits[[i]]),
+    method = "identity"
+  )
+})
+
+names(ZIemmEff) <- names(emm_zi_pairs)
+
+ZIemmEff <- emm_bind(ZIemmEff, kable = F)
+
+ZIemmEff <- ZIemmEff %>%
+  filter(Model %in% sigArms$Model) %>%
+  mutate(
+    magnitude = case_when(
+      abs(effect.size) < 0.2 ~ "negligible",
+      abs(effect.size) >= 0.2 & abs(effect.size) < 0.5 ~ "small",
+      abs(effect.size) >= 0.5 & abs(effect.size) < 0.8 ~ "medium",
+      abs(effect.size) >= 0.8 ~ "large",
+    ),
+    lower.CL = ifelse(is.na(lower.CL), asymp.LCL, lower.CL),
+    upper.CL = ifelse(is.na(upper.CL), asymp.UCL, upper.CL)
+  ) %>%
+  arrange(abs(effect.size)) %>%
+  select(Model, time, effect.size, magnitude) %>%
+  mutate_at(vars(everything()), type.convert, as.is = T)
+
+ZIsigArmsEff <- left_join(ZIsigArms, ZIemmEff, by = c("Model", "time"))
+kable(ZIsigArmsEff <- left_join(ZIsigArmsEff, ZIodds, by = c("Model")))
+```
+
+```{r}
+#| eval: true
+#| label: fig-phyla-emms-effsize
+#| fig-cap: Estimated marginal mean differences between intervention arms at baseline and endpoint. Significant differences with an effect size > 0.5 (medium effect size) are shown in the plot.
+
+plotPhylaEMMs(ZIsigArmsEff) +
+  facet_wrap(~timepoint, scales = "free")
+```
+
+#### OGU EMM changes over time within each intervention arm
+
+```{r}
+#| eval: true
+#| label: tbl-emm-arm-trend
+#| tbl-cap: Rate of change per unit increase of abundance marginal mean estimates over time. The time.trend column represents the slope of the relationship with time.
+
+trend_zi <- lapply(fits, function(x) {
+  emtrends(x, ~ arm | time, var = "time")
+})
+```
+
+```{r}
+#| eval: true
+#| label: tbl-emm-arm-trend-compare
+#| tbl-cap: Comparison of the rates of change from baseline to endpoint in abundance EMMs between intervention arms.
+
+slopes_zi <- lapply(trend_zi, pairs, reverse = TRUE)
+
+slopes_zi_df <- emm_bind(slopes_zi, kable = F)
+
+ZIsigArmsTime <- slopes_zi_df %>%
+  filter(p.value <= 0.05) %>%
+  left_join(rownames_to_column(data$taxa_data, "Model"), by = "Model") %>%
+  mutate(timepoint = ifelse(time == 1, "Endpoint", "Basepoint"))
+```
+
+```{r}
+#| eval: true
+#| label: fig-phyla-emms
+#| fig-cap: Estimated marginal mean differences between intervention arms at baseline and endpoint
+
+plotPhylaEMMs(ZIsigArmsTime)
+```
+
+##### Effect Size
+
+The default value used to standardise the effect size is the model's residual standard deviation (sigma; within-group variation). However, this may underestimate effect sizes in mixed models where combined variance may be more accurate. Here, the random effect variance is used to standardise effect sizes.
+
+```{r}
+#| eval: true
+#| label: sigArm-eff
+#| fig-cap: NA
+#| tbl-cap: Effect sizes calculated as a standardized mean difference similar to Cohen's d.
+
+emmEff_zi <- lapply(1:length(slopes_zi), function(i) {
+  eff_size(
+    slopes[[i]],
+    sigma = attr(VarCorr(fits[[i]])$zi$subject, "stddev") * sqrt(2),
+    edf = df.residual(fits[[i]]),
+    method = "identity"
+  )
+})
+
+names(emmEff_zi) <- names(slopes_zi)
+
+emmEff_zi_df <- emm_bind(emmEff_zi, kable = F)
+
+emmEff_zi_df <- emmEff_df_zi %>%
+  filter(Model %in% ZIsigArmsTime$Model) %>%
+  mutate(
+    magnitude = case_when(
+      abs(effect.size) < 0.2 ~ "negligible",
+      abs(effect.size) >= 0.2 & abs(effect.size) < 0.5 ~ "small",
+      abs(effect.size) >= 0.5 & abs(effect.size) < 0.8 ~ "medium",
+      abs(effect.size) >= 0.8 ~ "large",
+    ),
+    lower.CL = ifelse(is.na(lower.CL), asymp.LCL, lower.CL),
+    upper.CL = ifelse(is.na(upper.CL), asymp.UCL, upper.CL)
+  ) %>%
+  arrange(abs(effect.size)) %>%
+  select(Model, time, effect.size, magnitude) %>%
+  mutate_at(vars(everything()), type.convert, as.is = T)
+
+ZIsigArmsTimeEff <- left_join(
+  ZIsigArmsTime,
+  emmEff_zi_df,
+  by = c("Model", "time")
+)
+
+```
+
+```{r}
+#| eval: true
+#| label: fig-phyla-emms-effsize
+#| fig-cap: Estimated marginal mean differences between intervention arms at baseline and endpoint.
+
+plotPhylaEMMs(filter(ZIsigArmsTimeEff))
+```
+
+### OGUs Common between GLMMs and differential abundance changes over time
+
+```{r}
+#| eval: true
+#| label: changes in relative abundace plot
+#common <- read.csv("07-Research_Q_analysis/03-diversity_analysis/02-Longitudinal_analysis/01-Base_End_alpha_diversity/01-Bacteria/01-Differential_abundance/bac_base_end_timepoint_up_down_reg_OGUs_FDR5_FC2_LMM_Mumbai_ID14768_Feb_07_2024_02:35_NC.csv", header = T)
+
+#updated results file 22-08-24
+common <- read.csv(
+  "~/Work/05-Projects/01-Precision_nutrition/07-Research_Q_analysis/03-diversity_analysis/02-Longitudinal_analysis/01-Base_End_alpha_diversity/01-Bacteria/01-Differential_abundance/bac_base_end_timepoint_up_down_reg_OGUs_FDR5_FC2_LMM_Mumbai_ID14768_Aug_22_2024_04:23_NC.csv",
+  header = T
+)
+
+dim(common)
+
+# some OGUs represent the same species, therefore I will combine them and take the sum of their FC
+common_combined <- common %>%
+  ungroup() %>%
+  group_by(Phylum, Species) %>%
+  dplyr::summarise(logFC = sum(logFC), FC = fc(logFC)) %>%
+  arrange(desc(abs(logFC)), .by_group = T) %>%
+  as.data.frame()
+
+phylum_anno <- assign_unique_colors(
+  as.vector(common_combined$Phylum),
+  phyla_colours
+)
+
+paste0(
+  "Some OGUs represent the same species. When combined there are ",
+  nrow(common_combined),
+  " total species"
+)
+```
+
+```{r}
+#| eval: true
+#| label: Combined OGU fold change table
+#| tab-cap: For significant fold changes of 2 or more, the number of OGUs common between differential abundance results and LMM results is 106, representing 91 unique species
+
+common_combined %>%
+  arrange(desc(logFC)) %>%
+  kable()
+```
+
+```{r}
+#| eval: true
+#| label: Combined OGU fold change table
+#| tab-cap: For significant fold changes of 2 or more, the percentage of OGUs in each phyla that are common between differential abundance results and LMM results.
+
+common_combined %>%
+  group_by(Phylum) %>%
+  summarise(total = n(), percent = n() / nrow(common_combined) * 100) %>%
+  kable()
+```
+
+```{r}
+#| eval: true
+#| label: plots
+#| fig-cap: Log2 fold change of OGUs shared across LMM and DA results
+
+#png(paste("~/Work/05-Projects/01-Precision_nutrition/07-Research_Q_analysis/03-diversity_analysis/02-Longitudinal_analysis/01-Base_End_alpha_diversity/01-Bacteria/01-Differential_abundance/bac_base_end_timepoint_up_down_reg_OGUs_FDR5_FC2_LMM_barplot", "Mumbai_ID14768", format(Sys.time(), "%b_%d_%Y_%I:%M"), "NC.png", sep = "_"), 1200, 1500)
+
+common_combined %>%
+  arrange(logFC) %>%
+  ggplot(aes(y = reorder(Species, logFC), x = logFC, fill = Phylum)) +
+  geom_bar(position = position_dodge(), stat = "identity") +
+  xlab(NULL) +
+  ylab(NULL) + #labels the y axis
+  scale_color_manual(values = phylum_anno, aesthetics = 'fill') +
+  geom_vline(xintercept = 0) +
+  theme(
+    axis.text.x = element_text(
+      angle = 0,
+      size = fontsize,
+      face = 'bold',
+      color = 'black'
+    ),
+    axis.text.y = element_text(size = 12, face = 'bold', color = 'black')
+  )
+
+#dev.off()
+```
+
+```{r}
+#| eval: true
+#| label: top50 OGU barplot
+#| fig-cap: Log2 fold change of the top 50 OGUs shared across LMM and DA results
+
+#png(paste("~/Work/05-Projects/01-Precision_nutrition/07-Research_Q_analysis/03-diversity_analysis/02-Longitudinal_analysis/01-Base_End_alpha_diversity/01-Bacteria/01-Differential_abundance/bac_base_end_timepoint_up_down_reg_OGUs_FDR5_FC2_LMM_barplot_top50", "Mumbai_ID14768", format(Sys.time(), "%b_%d_%Y_%I:%M"), "NC.png", sep = "_"), 1200, 800)
+
+common_combined %>%
+  arrange(desc(logFC)) %>%
+  slice(1:50) %>%
+  ggplot(aes(y = reorder(Species, logFC), x = logFC, fill = Phylum)) +
+  geom_bar(position = position_dodge(), stat = "identity") +
+  xlab(NULL) +
+  ylab(NULL) + #labels the y axis
+  scale_color_manual(values = phylum_anno, aesthetics = 'fill') +
+  geom_vline(xintercept = 0) +
+  theme(
+    axis.text.x = element_text(
+      angle = 0,
+      size = fontsize,
+      face = 'bold',
+      color = 'black'
+    ),
+    axis.text.y = element_text(size = 12, face = 'bold', color = 'black')
+  )
+
+#dev.off()
+```
+
+The below chunk is no longer needed with the new reuslts only having 106 OGUs rather
+than 209.
+
+```{r}
+#| eval: false
+#| label: breakdown of barplot for better visualisation
+
+p1 <- common_combined %>%
+  arrange(logFC) %>%
+  slice(1:45) %>%
+  ggplot(aes(y = reorder(Species, logFC), x = logFC, fill = Phylum)) +
+  geom_bar(position = position_dodge(), stat = "identity") +
+  xlab(NULL) +
+  ylab(NULL) + #labels the y axis
+  scale_color_manual(values = phylum_anno, aesthetics = 'fill') +
+  geom_vline(xintercept = 0) +
+  theme(
+    axis.text.x = element_text(
+      angle = 0,
+      size = fontsize,
+      face = 'bold',
+      color = 'black'
+    ),
+    axis.text.y = element_text(size = 8, face = 'bold', color = 'black')
+  )
+
+p2 <- common_combined %>%
+  arrange(logFC) %>%
+  slice(45:90) %>%
+  ggplot(aes(y = reorder(Species, logFC), x = logFC, fill = Phylum)) +
+  geom_bar(position = position_dodge(), stat = "identity") +
+  xlab(NULL) +
+  ylab(NULL) + #labels the y axis
+  scale_color_manual(values = phylum_anno, aesthetics = 'fill') +
+  geom_vline(xintercept = 0) +
+  theme(
+    axis.text.x = element_text(
+      angle = 0,
+      size = fontsize,
+      face = 'bold',
+      color = 'black'
+    ),
+    axis.text.y = element_text(size = 8, face = 'bold', color = 'black')
+  )
+
+p3 <- common_combined %>%
+  arrange(logFC) %>%
+  slice(90:135) %>%
+  ggplot(aes(y = reorder(Species, logFC), x = logFC, fill = Phylum)) +
+  geom_bar(position = position_dodge(), stat = "identity") +
+  xlab(NULL) +
+  ylab(NULL) + #labels the y axis
+  scale_color_manual(values = phylum_anno, aesthetics = 'fill') +
+  geom_vline(xintercept = 0) +
+  theme(
+    axis.text.x = element_text(
+      angle = 0,
+      size = fontsize,
+      face = 'bold',
+      color = 'black'
+    ),
+    axis.text.y = element_text(size = 8, face = 'bold', color = 'black')
+  )
+
+p4 <- common_combined %>%
+  arrange(logFC) %>%
+  slice(135:185) %>%
+  ggplot(aes(y = reorder(Species, logFC), x = logFC, fill = Phylum)) +
+  geom_bar(position = position_dodge(), stat = "identity") +
+  xlab(NULL) +
+  ylab(NULL) + #labels the y axis
+  scale_color_manual(values = phylum_anno, aesthetics = 'fill') +
+  geom_vline(xintercept = 0) +
+  theme(
+    axis.text.x = element_text(
+      angle = 0,
+      size = fontsize,
+      face = 'bold',
+      color = 'black'
+    ),
+    axis.text.y = element_text(size = 8, face = 'bold', color = 'black')
+  )
+
+#png(paste("07-Research_Q_analysis/03-diversity_analysis/02-Longitudinal_analysis/01-Base_End_alpha_diversity/01-Bacteria/01-Differential_abundance/bac_base_end_timepoint_up_down_reg_OGUs_FDR5_FC2_LMM_barplot", "Mumbai_ID14768", format(Sys.time(), "%b_%d_%Y_%I:%M"), "NC.png", sep = "_"), 1500, 1300)
+
+ggarrange(p1, p2, p3, p4, legend.grob = get_legend(p))
+
+#dev.off()
+```
+
+## Appendix
+
+### Effect of Stunting on OGU Abundances
 
 ```{r}
 #| eval: false
@@ -1064,6 +1507,6 @@ compare_nested_models(list(
 ```
 
 
-## Note on applying Structured Covariance Matricies to Zero-inflated data
+### Note on applying Structured Covariance Matricies to Zero-inflated data
 
 Structured covariance matricies are typically avoided when the data is sparse, zero-inflated or have few repeated measures available. See notes on "Approaches to Modelling Covariance".
