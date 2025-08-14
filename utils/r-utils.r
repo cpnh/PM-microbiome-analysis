@@ -2477,7 +2477,7 @@ emm_bind <- function(
   # Create results data frame
   results <- data.frame(
     Model = rep(names(df_list), sapply(df_list, nrow)),
-    do.call(rbind, df_list),
+    data.table::rbindlist(df_list, fill = TRUE),
     check.names = FALSE
   )
 
@@ -2549,9 +2549,10 @@ plot.emm_table = function(x,
         )
 
     # Calculate plot dimensions
-    max_est <- max(abs(x$estimate))
+    max_est <- ceiling(max(abs(x$estimate + x$SE)))
     x_padding <- max_est * 0.15  # 15% padding
- # Add comparison arrows if requested
+ 
+  # Add comparison arrows if requested
     if(comparisons) {
         # Create comparison data
         comp_data <- x %>%
@@ -2645,41 +2646,181 @@ plot.emm_table = function(x,
     return(p)
 }
 
-
-plotPhylaEMMs <- function(df, comparisons = TRUE) {
+#' Plot Phylogenetic Estimated Marginal Means
+#'
+#' @description
+#' Creates a forest plot of estimated marginal means (EMMs) for phylogenetic data,
+#' with colored labels for species present across multiple timepoints. The plot includes
+#' error bars, significance indicators, and phylum-based coloring.
+#'
+#' @param df A data frame containing the following required columns:
+#'   * `contrast`: The comparison being made
+#'   * `Model`: Model identifier
+#'   * `Species`: Species name
+#'   * `Genus`: Genus name
+#'   * `Phylum`: Phylum classification
+#'   * `estimate`: EMM estimate (or `ratio` if estimate not available)
+#'   * `SE`: Standard error
+#'   * `p.value`: P-value for statistical significance
+#'   * `timepoint`: Timepoint identifier
+#'   Optional column:
+#'   * `effect.size`: Effect size for magnitude calculation
+#'
+#' @param comparisons Logical, whether to show comparisons (default: TRUE)
+#' @param common_color Character, color for species present in multiple timepoints (default: "red")
+#' @param other_color Character, color for species present in single timepoint (default: "black")
+#' @param common_weight Character, font weight for common species (default: "bold")
+#' @param other_weight Character, font weight for other species (default: "normal")
+#' @param text_size Numeric, size of y-axis text (default: 8)
+#'
+#' @return A ggplot2 object containing the forest plot with:
+#'   * Colored species labels (red for common species)
+#'   * Point estimates with error bars
+#'   * Phylum-based color coding
+#'   * Significance indicators
+#'   * Reference line at 0
+#'   * Magnitude indicators (if effect.size is present)
+#'
+#' @details
+#' The function automatically:
+#' * Calculates magnitude categories if effect.size is present:
+#'   - negligible: |effect.size| < 0.2
+#'   - small: 0.2 ≤ |effect.size| < 0.5
+#'   - medium: 0.5 ≤ |effect.size| < 0.8
+#'   - large: |effect.size| ≥ 0.8
+#' * Adds significance indicators:
+#'   - ***: p < 0.001
+#'   - **: p < 0.01
+#'   - *: p ≤ 0.05
+#'   - ns: p > 0.05
+#'
+#' @examples
+#' # Basic usage
+#' plotPhylaEMMs(emm_results)
+#'
+#' # Custom styling
+#' plotPhylaEMMs(
+#'   emm_results,
+#'   common_color = "#E41A1C",
+#'   other_color = "#666666",
+#'   text_size = 10
+#' )
+#'
+#' # Without effect size
+#' plotPhylaEMMs(emm_results_no_effect_size)
+#'
+#' @import ggplot2
+#' @import dplyr
+#' @import forcats
+#' @import ggtext
+#' @importFrom scales pretty_breaks
+#'
+#' @seealso
+#' * [emmeans] for generating estimated marginal means
+#' * [ggplot2] for additional plot customization
+#'
+#' @export
+plotPhylaEMMs <- function(df, 
+                         comparisons = TRUE,
+                         highlight_common = TRUE,
+                         common_color = "red",
+                         other_color = "black",
+                         common_weight = "bold",
+                         other_weight = "normal",
+                         text_size = 10) {
+  
   contrast <- unique(df$contrast)
-
-  df %>%
+  
+  # Effect size processing
+  if(any(colnames(df) == "effect.size")){
+    df <- df %>%
+      mutate(
+        magnitude = case_when(
+          abs(effect.size) < 0.2 ~ "negligible",
+          abs(effect.size) >= 0.2 & abs(effect.size) < 0.5 ~ "small",
+          abs(effect.size) >= 0.5 & abs(effect.size) < 0.8 ~ "medium",
+          abs(effect.size) >= 0.8 ~ "large"
+        )
+      )
+    legend = "legend"
+  } else {
+    df <- df %>%
+      mutate(magnitude = "1")
+    legend = NULL
+  }
+  
+  # Data preparation
+  df <- df %>%
+    arrange(desc(Genus)) %>%
     mutate(
       Species = paste0(Model, "; ", ifelse(Species != "", Species, Genus)),
-      # Significance indicator
       sig_level = case_when(
         p.value < 0.001 ~ "***",
         p.value < 0.01 ~ "**",
         p.value <= 0.05 ~ "*",
         TRUE ~ "ns"
       ),
-      estimate = ifelse(is.na(estimate), ratio,estimate)
-    ) %>%
-    ggplot(aes(x = estimate, y = Species, estimate)) +
+      estimate = ifelse(is.na(estimate), ratio, estimate)
+    )
+  if(highlight_common == TRUE){
+  # Find common species
+  common_species <- df %>%
+    group_by(Species) %>%
+    summarize(n = n_distinct(timepoint)) %>%
+    filter(n > 1) %>%
+    pull(Species)
+  
+  # Add colored labels
+  df <- df %>%
+    mutate(
+      Species_colored = case_when(
+        Species %in% common_species ~ 
+          sprintf("<span style='color:%s;font-weight:%s'>%s</span>",
+                 common_color, common_weight, Species),
+        TRUE ~ 
+          sprintf("<span style='color:%s;font-weight:%s'>%s</span>",
+                 other_color, other_weight, Species)
+      )
+    )} else {
+    Species_colored = Species
+  }
+  
+  # Create plot
+  max_estimate <- max(df$estimate, na.rm = TRUE)
+  significance_x_pos <- max_estimate + 0.5
+  
+  p <- ggplot(df, aes(x = estimate, y = forcats::fct_inorder(Species_colored))) +
     # Add reference line at 0
     geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
     # Add horizontal bars for EMM contrasts
     geom_pointrange(
-      aes(xmin = estimate - SE, xmax = estimate + SE, color = Phylum),
+      aes(xmin = estimate - SE, xmax = estimate + SE, 
+          color = Phylum, shape = magnitude), 
       size = 1
     ) +
     # Add significance indicators
-    geom_text(aes(x = max(estimate) + 0.5, label = sig_level), hjust = 0) +
+    geom_text(
+      aes(x = significance_x_pos, label = sig_level), 
+      hjust = 0
+    ) +
     scale_color_brewer(palette = "Paired") +
+    scale_shape(guide = legend) +
+    theme(
+      axis.text.y = element_markdown(size = text_size),
+      panel.grid.major.y = element_blank(),
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
     labs(
       caption = paste("Contrast:", contrast),
       x = "Estimated Marginal Mean Contrast Estimate",
       y = "",
       color = "Phylum"
-    ) +
-    # Add annotation for significance levels
-    annotate(
+    )
+  
+  # Add significance level annotation
+  if(exists("sigArms")) {  # Check if sigArms exists
+    p <- p + annotate(
       "text",
       x = max(sigArms$estimate) + 0.5,
       y = 0,
@@ -2687,9 +2828,158 @@ plotPhylaEMMs <- function(df, comparisons = TRUE) {
       hjust = 0,
       vjust = 1
     )
+  }
+  
+  return(p)
 }
 
 #end
+
+#' Color Common Labels
+#' 
+#' Creates a plot with colored labels for items that appear in multiple groups
+#' @param data A data frame
+#' @param grp Column name for grouping variable (e.g., "timepoint")
+#' @param y Column name for y-axis variable
+#' @param x Column name for x-axis variable (default: NULL)
+#' @param fill Column name for fill variable (default: same as grp)
+#' @param facet Column name for faceting (default: NULL)
+#' @param common_color Color for common items (default: "red")
+#' @param other_color Color for other items (default: "black")
+#' @param common_weight Font weight for common items (default: "normal")
+#' @param other_weight Font weight for other items (default: "normal")
+#' @param text_size Size of y-axis text (default: 10)
+#' @param ... Additional arguments passed to ggplot(aes())
+#' @return A ggplot object
+color_common_labels <- function(data, 
+                              grp, 
+                              y, 
+                              x = NULL,
+                              fill = NULL,
+                              facet = NULL,
+                              common_color = "red",
+                              other_color = "black",
+                              common_weight = "normal",
+                              other_weight = "normal",
+                              text_size = 10,
+                              position = "dodge",
+                              ...) {
+  
+  # Input validation
+  if (!all(c(grp, y) %in% colnames(data))) {
+    stop("Specified columns not found in data")
+  }
+  
+  # Set fill to grp if not specified
+  if (is.null(fill)) fill <- grp
+  
+  # Find common items
+  common <- data %>%
+    group_by(!!sym(y)) %>%
+    summarize(n = n_distinct(!!sym(grp))) %>%
+    filter(n > 1) %>%
+    pull(!!sym(y))
+  
+  # Add colored labels to data
+  data <- data %>%
+    mutate(
+      label_colored = case_when(
+        !!sym(y) %in% common ~ 
+          sprintf("<span style='color:%s;font-weight:%s'>%s</span>",
+                 common_color, common_weight, !!sym(y)),
+        TRUE ~ 
+          sprintf("<span style='color:%s;font-weight:%s'>%s</span>",
+                 other_color, other_weight, !!sym(y))
+      )
+    )
+  
+  # Create base plot
+  if (is.null(x)) {
+    # Default to using row numbers if x is not specified
+    p <- ggplot(data, aes(y = label_colored, fill = !!sym(fill), ...))
+  } else {
+    p <- ggplot(data, aes(x = !!sym(x), y = label_colored, fill = !!sym(fill), ...))
+  }
+  
+  # Add geom based on whether x is specified
+  if (is.null(x)) {
+    p <- p + geom_bar(position = position)
+  } else {
+    p <- p + geom_col(position = position)
+  }
+  
+  # Add faceting if specified
+  if (!is.null(facet)) {
+    p <- p + facet_wrap(as.formula(paste("~", facet)), scales = "free_y")
+  }
+  
+  # Add theme elements
+  p <- p + 
+    theme_minimal() +
+    theme(
+      axis.text.y = element_markdown(size = text_size),
+      panel.grid.major.y = element_blank(),
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
+    labs(y = NULL)
+  
+  return(p)
+}
+
+# #TODO #ADD Example usage
+
+# # Basic usage
+# p1 <- color_common_labels(
+#   data = data,
+#   grp = "timepoint",
+#   y = "Model",
+#   x = "estimate",
+#   text_size = 8
+# )
+
+# # With faceting
+# p2 <- color_common_labels(
+#   data = data,
+#   grp = "timepoint",
+#   y = "Model",
+#   x = "estimate",
+#   facet = "Phylum",
+#   common_color = "#E41A1C",
+#   other_color = "#666666",
+#   common_weight = "bold",
+#   text_size = 8
+# )
+
+# # With custom aesthetics
+# p3 <- color_common_labels(
+#   data = data,
+#   grp = "timepoint",
+#   y = "Model",
+#   x = "estimate",
+#   fill = "change",  # Using different fill variable
+#   facet = "Phylum",
+#   common_color = "darkred",
+#   other_color = "grey30",
+#   common_weight = "bold",
+#   text_size = 8
+# ) +
+#   scale_fill_manual(values = c("Increase" = "forestgreen", "Decrease" = "red"))
+
+# # Print plots
+# print(p1)
+# print(p2)
+# print(p3)
+
+# # Example with different position
+# p4 <- color_common_labels(
+#   data = data,
+#   grp = "timepoint",
+#   y = "Model",
+#   x = "estimate",
+#   position = "stack"
+# )
+
 
 calculate_pairwise_vda <- function(data, value_col, group_col) {
   # Get unique groups
@@ -4253,6 +4543,13 @@ backtransform_scaled_values <- function(scaled_value, original_data) {
   return(backtransformed_value)
 }
 
+#for when the value is not present in the data and you want its scaled form
+get_scaled_value <- function(value, data) {
+  range <- max(data) - min(data)
+  scaled_value <- (value - min(data))/range
+  return(scaled_value)
+}
+
 #' Calculate Summary Statistics for Numeric Data
 #'
 #' @description Calculates summary statistics (mean, standard deviation, standard error,
@@ -5046,6 +5343,7 @@ fc <- function(coef, log_scale = 2) {
   coef^2
 }
 #determine the coefficient threshold for a particular fold change of interest
+#TODO change function name so not to conflict with stats package coef function
 coef <- function(desired_fold_change, log_scale = 2) {
   log(desired_fold_change, base = log_scale)
 }
