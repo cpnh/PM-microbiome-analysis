@@ -22,6 +22,10 @@ The phyloseq object saved as "rarefied_bacteria.rds" in [Section 3](../03-rarefa
 (seqdata_bac <- readRDS(paste0(RARE_RESULTS, "/rarefied_bacteria.rds")))
 ```
 
+::: {.callout-note}
+Metadata was modified as per [Appendix 2]("analysis/100-Appendix/Appendix-2-Metadata.qmd)
+:::
+
 Next, data is filtered to contain only baseline samples.
 
 ```{r}
@@ -33,7 +37,10 @@ Next, data is filtered to contain only baseline samples.
 baseline <- phyloseq::subset_samples(seqdata_bac, timepoint == "1Baseline")
 
 # Creates a new column with sample names by reassigning rownames (containing sample names)
-sample_data(baseline) <- cbind(sample_names = rownames(sample_data(baseline)), sample_data(baseline))
+sample_data(baseline) <- cbind(
+  sample_names = rownames(sample_data(baseline)),
+  sample_data(baseline)
+)
 
 # Ensures the treatment variable (arm) is properly formatted as a categorical factor
 sample_data(baseline)$trt <- as.factor(as.character(sample_data(baseline)$trt))
@@ -43,8 +50,6 @@ sample_data(baseline)$trt <- as.factor(as.character(sample_data(baseline)$trt))
 
 Relative abundances are calculated to show the proportion of each bacterial group in a sample.
 
-Calculate relative abundances and modify taxonomy to collapse Bacillota into a single genus rather than Bacillota_A, Bacillota_B etc. 
-
 ```{r}
 #| eval: true
 #| label: calculate relative abundances
@@ -53,23 +58,10 @@ Calculate relative abundances and modify taxonomy to collapse Bacillota into a s
 baseTmp <- baseline
 
 #OGU table to relative abundances
-otu_table(baseTmp) <- otu_table(microbiome::abundances(baseTmp, "compositional"), taxa_are_rows =T)
-
-#slight modification to group Bacillota subgroups into one
-tax_table(baseTmp) <- tax_df(baseTmp) %>% 
-                            mutate(across(where(is.character), str_trim, "both")) %>%
-                            mutate(Phylum = str_remove(Phylum, "_[a-zA-Z]\\b")) %>%
-                            mutate(Genus = str_remove(Genus, "_[a-zA-Z]\\b")) %>%
-                            mutate(Phylum = case_when(
-                              Phylum == "" ~ "Unknown",
-                              str_detect(Phylum, "\\d") ~ "Unclassified",
-                              !str_detect(Phylum, "Actinobacteriota|Pseudomonadota|Bacteroidota|Verrucomicrobiota|Campylobacterota|Bacillota") ~ "Other",
-                              TRUE ~ Phylum)) %>%
-                            mutate(Genus = case_when(
-                              str_detect(Genus, "\\d") ~ "Unclassified",
-                              Genus == "" ~ "Unknown",
-                              TRUE ~ Genus)) %>%
-                            as.matrix()
+otu_table(baseTmp) <- otu_table(
+  microbiome::abundances(baseTmp, "compositional"),
+  taxa_are_rows = T
+)
 ```
 
 #### Top Phyla at Baseline
@@ -82,7 +74,11 @@ Create an ampvis object from phyloseq object
 
 library(ampvis2)
 
-d <- amp_load(otutable = otu_table(baseTmp), metadata = microbiome::meta(baseTmp), taxonomy = tax_table(baseTmp))
+d <- amp_load(
+  otutable = otu_table(baseTmp),
+  metadata = microbiome::meta(baseTmp),
+  taxonomy = tax_table(baseTmp)
+)
 ```
 
 
@@ -92,20 +88,27 @@ d <- amp_load(otutable = otu_table(baseTmp), metadata = microbiome::meta(baseTmp
 #| fig-cap: Relative abundance of bacterial phyla at baseline.
 
 #default settings plot relative abundances (normalise = TRUE)
-p <- amp_boxplot(d,
-            normalise = FALSE,
-            tax_aggregate = "Phylum",
-            tax_show = 20,
-            point_size = 0,
-            plot_flip = T)
+p <- amp_boxplot(
+  d,
+  normalise = FALSE,
+  tax_aggregate = "Phylum",
+  tax_show = 20,
+  point_size = 0,
+  plot_flip = T
+)
 
-p + 
+p +
   geom_point(colour = "white") +
-  geom_boxplot(aes(fill = Display), colour = "black", position=position_dodge(5), outlier.shape=NA) +
-  geom_jitter(color = "black", size = 1.5,stat = "identity", width = 0.35) +
-  scale_color_manual(values =  phyla_colours, aesthetics = "fill") +
+  geom_boxplot(
+    aes(fill = Display),
+    colour = "black",
+    position = position_dodge(5),
+    outlier.shape = NA
+  ) +
+  geom_jitter(color = "black", size = 1.5, stat = "identity", width = 0.35) +
+  scale_color_manual(values = phyla_colours, aesthetics = "fill") +
   theme(legend.position = "none")
-        
+
 ```
 
 #### Top Genera at Baseline
@@ -114,19 +117,26 @@ p +
 #| eval: true
 #| label: top genera at baseline
 #| fig-cap: Relative abundance of the top 20 bacterial genera at baseline.
-p <- amp_boxplot(d,
-            normalise = FALSE,
-            tax_aggregate = "Genus",
-            tax_add = "Phylum",
-            point_size = 0,
-            tax_show = 20, 
-            plot_flip = T)
+p <- amp_boxplot(
+  d,
+  normalise = FALSE,
+  tax_aggregate = "Genus",
+  tax_add = "Phylum",
+  point_size = 0,
+  tax_show = 20,
+  plot_flip = T
+)
 
-p + 
+p +
   geom_point(colour = "white") +
-  geom_boxplot(aes(fill= Display), colour = "black", position=position_dodge(5), outlier.shape=NA) +
-  geom_jitter(color = "black", size = 1.5,stat = "identity", width = 0.35) +
-  scale_color_manual(values =  pairedColours(n=20), aesthetics = "fill") +
+  geom_boxplot(
+    aes(fill = Display),
+    colour = "black",
+    position = position_dodge(5),
+    outlier.shape = NA
+  ) +
+  geom_jitter(color = "black", size = 1.5, stat = "identity", width = 0.35) +
+  scale_color_manual(values = pairedColours(n = 20), aesthetics = "fill") +
   theme(legend.position = "none")
 ```
 
@@ -154,21 +164,29 @@ In practice, the true number of total seceis in a microbiome sample is unknown d
 
 ```{r}
 #| eval: true
-#| label: alpha diversity calculation 
+#| label: alpha diversity calculation
 
 #bacterial baseline samples as defiend above
 #calculate abundance based alpha diversity metrics
 # absolute abundances need to be used as the microbiome package calculates relative abundances in-function
 alpha.baseline <- microbiome::alpha(baseline, index = "all")
 
-pd <- picante::pd(samp = as.matrix(otu_table(baseline)), tree = phy_tree(baseline), include.root = FALSE)
+pd <- picante::pd(
+  samp = as.matrix(otu_table(baseline)),
+  tree = phy_tree(baseline),
+  include.root = FALSE
+)
 colnames(pd) <- c("pd", "sr")
 
 #merge alpha metrics with metadata
 baseline_metadata <- microbiome::meta(baseline)
 
-baseline_metadata <- microbiome::meta(baseline) %>% 
-  left_join(., rownames_to_column(alpha.baseline), by = c("sample_names" = "rowname")) %>%
+baseline_metadata <- microbiome::meta(baseline) %>%
+  left_join(
+    .,
+    rownames_to_column(alpha.baseline),
+    by = c("sample_names" = "rowname")
+  ) %>%
   left_join(., rownames_to_column(pd), by = c("sample_names" = "rowname")) %>%
   mutate(arm = case_when(trt == 0 ~ "CPM", trt == 1 ~ "FeZnPM"))
 
@@ -184,11 +202,18 @@ sample_data(baseline) <- baseline_metadata
 
 #compare between intervention arms
 unpaired_intervention_wilcox <- baseline_metadata %>%
-  dplyr::select(arm, observed, chao1, diversity_shannon, evenness_pielou, pd) %>%
-  pivot_longer(cols = !arm, names_to = "diversity_metric") %>% 
+  dplyr::select(
+    arm,
+    observed,
+    chao1,
+    diversity_shannon,
+    evenness_pielou,
+    pd
+  ) %>%
+  pivot_longer(cols = !arm, names_to = "diversity_metric") %>%
   group_by(diversity_metric) %>%
   wilcox_test(value ~ arm, paired = FALSE) %>%
-  add_xy_position(x = "arm",  step.increase = 0)
+  add_xy_position(x = "arm", step.increase = 0)
 ```
 
 ```{r}
@@ -196,26 +221,50 @@ unpaired_intervention_wilcox <- baseline_metadata %>%
 #| label: fig-baseline-arm-alpha
 #| fig-cap: Alpha diversity statistics among baseline samples separated by intervention arm (n = 168).
 
-plot_names <- c('pd' = "Faith's Phylogentic Diversity",
-                'observed' = "Observed Features",
-                'diversity_shannon' = "Shannon Diversity Index",
-                'evenness_pielou' = "Pielou Evenness",
-                "chao1" = "Chao diversity Index")
+plot_names <- c(
+  'pd' = "Faith's Phylogentic Diversity",
+  'observed' = "Observed Features",
+  'diversity_shannon' = "Shannon Diversity Index",
+  'evenness_pielou' = "Pielou Evenness",
+  "chao1" = "Chao diversity Index"
+)
 
 
-baseline_metadata %>% 
-  dplyr::select(arm, observed, chao1, diversity_shannon, evenness_pielou, pd) %>%
+baseline_metadata %>%
+  dplyr::select(
+    arm,
+    observed,
+    chao1,
+    diversity_shannon,
+    evenness_pielou,
+    pd
+  ) %>%
   pivot_longer(cols = !arm, names_to = "diversity_metric") %>%
-    ggplot(aes(x = as.factor(arm), y = value)) +
-    geom_boxplot(aes(fill = as.factor(arm))) +
-    stat_boxplot(geom = "errorbar") +
-    geom_jitter(size = 1.5,stat = "identity", width = 0.35) +
-    stat_pvalue_manual(unpaired_intervention_wilcox, label = "p = {p}", step.increase = 0.1) + 
-    scale_y_continuous(expand = expansion(mult = c(0.05, 0.1))) +
-    xlab("Intervention Arm") +
-    ylab(NULL) +
-    theme(legend.position = "bottom", legend.direction = "horizontal", panel.spacing = unit(2, "lines"), strip.background = element_blank(), strip.placement = "outside") +
-    facet_wrap(diversity_metric ~., scales = "free", ncol = 2, labeller = as_labeller(plot_names))
+  ggplot(aes(x = as.factor(arm), y = value)) +
+  geom_boxplot(aes(fill = as.factor(arm))) +
+  stat_boxplot(geom = "errorbar") +
+  geom_jitter(size = 1.5, stat = "identity", width = 0.35) +
+  stat_pvalue_manual(
+    unpaired_intervention_wilcox,
+    label = "p = {p}",
+    step.increase = 0.1
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.1))) +
+  xlab("Intervention Arm") +
+  ylab(NULL) +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "horizontal",
+    panel.spacing = unit(2, "lines"),
+    strip.background = element_blank(),
+    strip.placement = "outside"
+  ) +
+  facet_wrap(
+    diversity_metric ~ .,
+    scales = "free",
+    ncol = 2,
+    labeller = as_labeller(plot_names)
+  )
 ```
 
 ```{r}
@@ -223,18 +272,28 @@ baseline_metadata %>%
 #| label: baseline alpha diversity plots
 #| fig-cap: Alpha diversity statistics among baseline samples (n = 168).
 
-baseline_metadata %>% 
-  dplyr::select(timepoint, observed, chao1, diversity_shannon, evenness_pielou, pd) %>%
+baseline_metadata %>%
+  dplyr::select(
+    timepoint,
+    observed,
+    chao1,
+    diversity_shannon,
+    evenness_pielou,
+    pd
+  ) %>%
   pivot_longer(cols = !timepoint, names_to = "diversity_metric") %>%
-    ggplot(aes(x = timepoint, y = value, fill = diversity_metric)) +
-      geom_boxplot(position=position_dodge(5), outlier.shape=NA) +
-      stat_boxplot(geom = "errorbar") +
-      geom_jitter(aes(color = ), size = 1.5,stat = "identity", width = 0.35) +
-      xlab(NULL) +
-      ylab(NULL) +
-      scale_x_discrete(label= "Baseline")+
-      theme(axis.text.x = element_text(angle = 0, hjust = 0.5), legend.position = "none") +
-      facet_wrap(diversity_metric ~., scales = "free", ncol = 2)
+  ggplot(aes(x = timepoint, y = value, fill = diversity_metric)) +
+  geom_boxplot(position = position_dodge(5), outlier.shape = NA) +
+  stat_boxplot(geom = "errorbar") +
+  geom_jitter(aes(color = ), size = 1.5, stat = "identity", width = 0.35) +
+  xlab(NULL) +
+  ylab(NULL) +
+  scale_x_discrete(label = "Baseline") +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    legend.position = "none"
+  ) +
+  facet_wrap(diversity_metric ~ ., scales = "free", ncol = 2)
 
 ```
 
@@ -245,23 +304,36 @@ baseline_metadata %>%
 #| label: phyla relative abundance per indv
 #| fig-cap: Relative abundance of bacterial phyla at baseline across all individuals (n = 168).
 
-#baseTmp as defined in the realtive abundance boxplots above 
+#baseTmp as defined in the realtive abundance boxplots above
 #collapse into phyla to make computation easier
 base_genus <- microbiome::aggregate_taxa(baseTmp, level = "Genus")
 base_phyla <- microbiome::aggregate_taxa(baseTmp, level = "Phylum")
 
 #top phyla at baseline for each individual
 p <- plot_bar(base_phyla, fill = "Phylum")
-p$data$Sample <-  str_remove_all(p$data$Sample, "SO_8465_|_B_wol_alignment|_B|_G")
+p$data$Sample <- str_remove_all(
+  p$data$Sample,
+  "SO_8465_|_B_wol_alignment|_B|_G"
+)
 
 #order by high to low Pseudomonadota/Bacillota
-levels <- p$data %>% dplyr::filter(OTU == "Pseudomonadota") %>% arrange(desc(Abundance))
+levels <- p$data %>%
+  dplyr::filter(OTU == "Pseudomonadota") %>%
+  arrange(desc(Abundance))
 p$data$Sample <- factor(p$data$Sample, levels = levels$Sample)
 
 p +
-  geom_bar(aes(fill= forcats::fct_reorder(Phylum, Abundance)), stat="identity", position="stack")+
+  geom_bar(
+    aes(fill = forcats::fct_reorder(Phylum, Abundance)),
+    stat = "identity",
+    position = "stack"
+  ) +
   scale_fill_manual(values = phyla_colours) +
-  theme(axis.text.x = element_text(size = 8), plot.margin = unit(c(1,0.1,0,0), "cm"), legend.direction = "horizontal") + #unit(c(top, right, bottom, left), units)
+  theme(
+    axis.text.x = element_text(size = 8),
+    plot.margin = unit(c(1, 0.1, 0, 0), "cm"),
+    legend.direction = "horizontal"
+  ) + #unit(c(top, right, bottom, left), units)
   scale_y_continuous(expand = c(0, 0)) + #removes white space between plot and x axis
   ylab("Relative Abundance")
 
@@ -273,15 +345,36 @@ p +
 #| fig-cap: Relative abundance of bacterial phyla at baseline across all individuals ordered by age (days) (n = 168).
 
 #order samples by age
-age_labels <- baseline_metadata %>% dplyr::select(displayid, agedays_rounded) %>% arrange(agedays_rounded)
+age_labels <- baseline_metadata %>%
+  dplyr::select(displayid, agedays_rounded) %>%
+  arrange(agedays_rounded)
 p$data$Sample <- factor(p$data$Sample, levels = age_labels$displayid)
 
 p +
-  geom_bar(aes(fill= forcats::fct_reorder(Phylum, Abundance)), stat="identity", position="stack")+
+  geom_bar(
+    aes(fill = forcats::fct_reorder(Phylum, Abundance)),
+    stat = "identity",
+    position = "stack"
+  ) +
   scale_fill_manual(values = phyla_colours) +
-  geom_text(aes(y = max(Abundance + 0.05), label = agedays_rounded, group = Sample), angle = 90, size = 3, check_overlap = T) +
-  annotate(geom = "text", x = 84, y = 1.06, label = "Age (days)", fontface = "bold") +
-  theme(axis.text.x = element_text(size = 8), plot.margin = unit(c(1,0.1,0,0), "cm"), legend.direction = "horizontal") + #unit(c(top, right, bottom, left), units)
+  geom_text(
+    aes(y = max(Abundance + 0.05), label = agedays_rounded, group = Sample),
+    angle = 90,
+    size = 3,
+    check_overlap = T
+  ) +
+  annotate(
+    geom = "text",
+    x = 84,
+    y = 1.06,
+    label = "Age (days)",
+    fontface = "bold"
+  ) +
+  theme(
+    axis.text.x = element_text(size = 8),
+    plot.margin = unit(c(1, 0.1, 0, 0), "cm"),
+    legend.direction = "horizontal"
+  ) + #unit(c(top, right, bottom, left), units)
   scale_y_continuous(expand = c(0, 0)) + #removes white space between plot and x axis
   ylim(0, 1.06) +
   ylab("Relative Abundance")
@@ -294,44 +387,79 @@ p +
 #| label: tbl-ms-2
 #| tbl-cap: Microbiome composition and diversity statistics at baseline (n = 168)
 
-top10_genera_list <- names(sort(apply(as.data.frame(t(otu_table(base_genus))), 2, median), decreasing = T)[1:10])
+top10_genera_list <- names(sort(
+  apply(as.data.frame(t(otu_table(base_genus))), 2, median),
+  decreasing = T
+)[1:10])
 top_phyla_list <- colnames(as.data.frame(t(otu_table(base_phyla))))
 
-top10_genera <- as.data.frame(t(otu_table(base_genus))) %>% dplyr::select(all_of(top10_genera_list))
+top10_genera <- as.data.frame(t(otu_table(base_genus))) %>%
+  dplyr::select(all_of(top10_genera_list))
 
-baseline_metadata <- baseline_metadata %>% 
-                      mutate(timepoint = case_when(
-                        str_detect(timepoint, "Baseline") ~ "Baseline"
-                        )) %>%
-                      left_join(., rownames_to_column(as.data.frame(t(otu_table(base_phyla)))), by = c("sample_names" = "rowname")) %>% 
-                      left_join(., rownames_to_column(top10_genera), by = c("sample_names" = "rowname"))
+baseline_metadata <- baseline_metadata %>%
+  mutate(
+    timepoint = case_when(
+      str_detect(timepoint, "Baseline") ~ "Baseline"
+    )
+  ) %>%
+  left_join(
+    .,
+    rownames_to_column(as.data.frame(t(otu_table(base_phyla)))),
+    by = c("sample_names" = "rowname")
+  ) %>%
+  left_join(
+    .,
+    rownames_to_column(top10_genera),
+    by = c("sample_names" = "rowname")
+  )
 
 saveRDS(baseline_metadata, "data/metadata/baseline-metadata.rds")
 
 (p <- baseline_metadata %>%
-  dplyr::select(arm, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Diversity Index` = diversity_shannon, Evenness = evenness_pielou,`Faiths Phylogenetic Diversity` = pd, all_of(top_phyla_list),all_of(top10_genera_list)) %>%
+  dplyr::select(
+    arm,
+    `Observed features` = observed,
+    `Chao 1 Index` = chao1,
+    `Shannon Diversity Index` = diversity_shannon,
+    Evenness = evenness_pielou,
+    `Faiths Phylogenetic Diversity` = pd,
+    all_of(top_phyla_list),
+    all_of(top10_genera_list)
+  ) %>%
   dplyr::select(!c(Unknown)) %>%
   mutate_at(vars(everything()), type.convert, as.is = TRUE) %>%
-    tbl_summary(
-      by = arm,
-      missing = "no", 
-      statistic = list(
-        all_continuous() ~ "{median}  \n({IQR}; {min}-{max})", # stats and format for continuous columns
-        all_categorical() ~ "{n} / {N}  \n({p}%)")) %>% # stats and format for categorical columns
-    add_n() %>%
-    add_overall() %>%
-    add_p(pvalue_fun = function(x) pvalue_format(x)) %>%
-    add_q(pvalue_fun = function(x) pvalue_format(x)) %>%
-    bold_p(q = T) %>%
-		as_gt() %>% 
-			fmt_markdown(columns=where(~is.character(.x))) %>%
-			fmt_number(columns = where(~is.numeric(.x)), drop_trailing_zeros = TRUE, use_seps = FALSE) %>% 
-			fmt_number(columns = where(~is.numeric(.x)<0.0001), pattern = "<0.0001") %>% 
-			fmt_number(columns = where(~is.numeric(.x)<0.001), pattern = "<0.001")%>% 
-			fmt_number(columns = where(~is.numeric(.x)<0.01), pattern = "<0.01")%>% 
-			fmt_number(columns = where(~is.numeric(.x)<0.05), pattern = "<0.05"))
+  tbl_summary(
+    by = arm,
+    missing = "no",
+    statistic = list(
+      all_continuous() ~ "{median}  \n({IQR}; {min}-{max})", # stats and format for continuous columns
+      all_categorical() ~ "{n} / {N}  \n({p}%)"
+    )
+  ) %>% # stats and format for categorical columns
+  add_n() %>%
+  add_overall() %>%
+  add_p(pvalue_fun = function(x) pvalue_format(x)) %>%
+  add_q(pvalue_fun = function(x) pvalue_format(x)) %>%
+  bold_p(q = T) %>%
+  as_gt() %>%
+  fmt_markdown(columns = where(~ is.character(.x))) %>%
+  fmt_number(
+    columns = where(~ is.numeric(.x)),
+    drop_trailing_zeros = TRUE,
+    use_seps = FALSE
+  ) %>%
+  fmt_number(
+    columns = where(~ is.numeric(.x) < 0.0001),
+    pattern = "<0.0001"
+  ) %>%
+  fmt_number(columns = where(~ is.numeric(.x) < 0.001), pattern = "<0.001") %>%
+  fmt_number(columns = where(~ is.numeric(.x) < 0.01), pattern = "<0.01") %>%
+  fmt_number(columns = where(~ is.numeric(.x) < 0.05), pattern = "<0.05"))
 
-htmltools::save_html(gt::as_raw_html(p), paste0(RESULTS, "/baseline-diversity-analysis/alpha-div.tbl"))
+htmltools::save_html(
+  gt::as_raw_html(p),
+  paste0(RESULTS, "/baseline-diversity-analysis/alpha-div.tbl")
+)
 
 ```
 
@@ -345,23 +473,44 @@ phyloseq provides a wrapper function around ggplot and NeatMapand uses ordinatio
 #| fig-cap: "β-diversity ordination plots comparing intervention arms at baseline."
 
 #phyloseq wraps a number of vegan package functions and can be used to call vegdist()
-bray <- phyloseq::distance(baseline, method = "bray") #calculated on abundance 
+bray <- phyloseq::distance(baseline, method = "bray") #calculated on abundance
 jac <- phyloseq::distance(baseline, method = "jaccard")
 uunifrac <- phyloseq::distance(baseline, method = "uunifrac")
 wunifrac <- phyloseq::distance(baseline, method = "wunifrac")
 
 bray.ord <- phyloseq::ordinate(baseline, method = "NMDS", distance = bray)
 jac.ord <- phyloseq::ordinate(baseline, method = "NMDS", distance = jac)
-uunifrac.ord <- phyloseq::ordinate(baseline, method = "NMDS", distance = uunifrac)
-wunifrac.ord <- phyloseq::ordinate(baseline, method = "NMDS", distance = wunifrac)
+uunifrac.ord <- phyloseq::ordinate(
+  baseline,
+  method = "NMDS",
+  distance = uunifrac
+)
+wunifrac.ord <- phyloseq::ordinate(
+  baseline,
+  method = "NMDS",
+  distance = wunifrac
+)
 
-bray.plot <- plot_ordination(baseline, bray.ord, color = "arm") + labs(title="Bray-Curtis Distance")
-jac.plot <- plot_ordination(baseline, jac.ord, color = "arm") + labs(title="Jaccard Disimilarity")
-uunifrac.plot <- plot_ordination(baseline, uunifrac.ord, color = "arm") + labs(title="Unweighted UniFrac")
-wunifrac.plot <- plot_ordination(baseline, wunifrac.ord, color = "arm") + labs(title="Weighted UniFrac")
+bray.plot <- plot_ordination(baseline, bray.ord, color = "arm") +
+  labs(title = "Bray-Curtis Distance")
+jac.plot <- plot_ordination(baseline, jac.ord, color = "arm") +
+  labs(title = "Jaccard Disimilarity")
+uunifrac.plot <- plot_ordination(baseline, uunifrac.ord, color = "arm") +
+  labs(title = "Unweighted UniFrac")
+wunifrac.plot <- plot_ordination(baseline, wunifrac.ord, color = "arm") +
+  labs(title = "Weighted UniFrac")
 
 #set layout
-ggarrange(bray.plot, jac.plot, uunifrac.plot, wunifrac.plot, ncol = 2, nrow=2, common.legend = T, legend = "bottom")
+ggarrange(
+  bray.plot,
+  jac.plot,
+  uunifrac.plot,
+  wunifrac.plot,
+  ncol = 2,
+  nrow = 2,
+  common.legend = T,
+  legend = "bottom"
+)
 
 ```
 
@@ -378,7 +527,7 @@ timepoints <- unique(sample_data(baseline)$timepoint)
 distance_methods <- c("bray", "jaccard", "uunifrac", "wunifrac")
 
 # Calculate dissimilarity for each timepoint
-for(t in timepoints) {
+for (t in timepoints) {
   index <- timepoints == t
   for (method in distance_methods) {
     # Print out current timepoint and distance method for debugging
@@ -386,75 +535,120 @@ for(t in timepoints) {
 
     # Subset the data by timepoint
     subset_physeq_time <- phyloseq::subset_samples(baseline, index)
-    
+
     # Get unique treatment groups within this timepoint
     treatments_in_timepoint <- unique(sample_data(subset_physeq_time)$arm)
-    
+
     # Calculate Bray-Curtis dissimilarity for each treatment group within this timepoint
     for (treat in treatments_in_timepoint) {
       # Subset the data by treatment group within the timepoint
-      subset_physeq_treatment <- phyloseq::subset_samples(subset_physeq_time, arm == treat) 
-      
+      subset_physeq_treatment <- phyloseq::subset_samples(
+        subset_physeq_time,
+        arm == treat
+      )
+
       # Calculate dissimilarity
       dist_subset <- distance(subset_physeq_treatment, method = method)
-      
+
       # Store the dissimilarity matrix in the list
-      dissimilarity_by_time_treatment[[paste(t, treat, method, sep = "_")]] <- as.numeric(dist_subset)
+      dissimilarity_by_time_treatment[[paste(
+        t,
+        treat,
+        method,
+        sep = "_"
+      )]] <- as.numeric(dist_subset)
     }
   }
 }
 
-baseline_betadivCPM <- data.frame(dissimilarity_by_time_treatment$`1Baseline_CPM_bray`, dissimilarity_by_time_treatment$`1Baseline_CPM_jaccard`, dissimilarity_by_time_treatment$`1Baseline_CPM_uunifrac`, dissimilarity_by_time_treatment$`1Baseline_CPM_wunifrac`)
+baseline_betadivCPM <- data.frame(
+  dissimilarity_by_time_treatment$`1Baseline_CPM_bray`,
+  dissimilarity_by_time_treatment$`1Baseline_CPM_jaccard`,
+  dissimilarity_by_time_treatment$`1Baseline_CPM_uunifrac`,
+  dissimilarity_by_time_treatment$`1Baseline_CPM_wunifrac`
+)
 
 baseline_betadivCPM$id <- seq_len(nrow(baseline_betadivCPM))
 
 baseline_betadivCPM <- baseline_betadivCPM %>%
-  pivot_longer(cols = -id,names_to = "variable",values_to = "value") %>%
-  mutate(variable = str_remove_all(variable, "dissimilarity_by_time_treatment|\\.")) %>%
-  separate(variable, into = c("timepoint", "arm", "metric"), sep = "_")%>%
+  pivot_longer(cols = -id, names_to = "variable", values_to = "value") %>%
+  mutate(
+    variable = str_remove_all(variable, "dissimilarity_by_time_treatment|\\.")
+  ) %>%
+  separate(variable, into = c("timepoint", "arm", "metric"), sep = "_") %>%
   pivot_wider(names_from = metric) %>%
   dplyr::select(!id)
 
-baseline_betadivFeZnPM <- data.frame(dissimilarity_by_time_treatment$`1Baseline_FeZnPM_bray`, dissimilarity_by_time_treatment$`1Baseline_FeZnPM_jaccard`, dissimilarity_by_time_treatment$`1Baseline_FeZnPM_uunifrac`, dissimilarity_by_time_treatment$`1Baseline_FeZnPM_wunifrac`)
+baseline_betadivFeZnPM <- data.frame(
+  dissimilarity_by_time_treatment$`1Baseline_FeZnPM_bray`,
+  dissimilarity_by_time_treatment$`1Baseline_FeZnPM_jaccard`,
+  dissimilarity_by_time_treatment$`1Baseline_FeZnPM_uunifrac`,
+  dissimilarity_by_time_treatment$`1Baseline_FeZnPM_wunifrac`
+)
 
 baseline_betadivFeZnPM$id <- seq_len(nrow(baseline_betadivFeZnPM))
 baseline_betadivFeZnPM <- baseline_betadivFeZnPM %>%
-  pivot_longer(cols = -id,names_to = "variable",values_to = "value") %>%
-  mutate(variable = str_remove_all(variable, "dissimilarity_by_time_treatment|\\.")) %>%
-  separate(variable, into = c("timepoint", "arm", "metric"), sep = "_")%>%
+  pivot_longer(cols = -id, names_to = "variable", values_to = "value") %>%
+  mutate(
+    variable = str_remove_all(variable, "dissimilarity_by_time_treatment|\\.")
+  ) %>%
+  separate(variable, into = c("timepoint", "arm", "metric"), sep = "_") %>%
   pivot_wider(names_from = metric) %>%
   dplyr::select(!id)
 
 baseline_betadiv <- bind_rows(baseline_betadivCPM, baseline_betadivFeZnPM)
 
-saveRDS(baseline_betadiv, file.path(RESULTS, "baseline-diversity-analysis/baseline-beta-div.rds"))
+saveRDS(
+  baseline_betadiv,
+  file.path(RESULTS, "baseline-diversity-analysis/baseline-beta-div.rds")
+)
 
-(p <- baseline_betadiv %>%  
-              tbl_strata(strata = timepoint, .tbl_fun = ~ .x %>% 
-                tbl_summary(
-                  by = arm,
-                  missing = "no", 
-                  statistic = list(
-                    all_continuous() ~ "{median}  \n({IQR}; {min}-{max})", # stats and format for continuous columns
-                    all_categorical() ~ "{n} / {N}  \n({p}%)")) %>% # stats and format for categorical columns
-              add_n() %>%
-              add_overall() %>%
-              add_p(test = everything() ~ "wilcox.test", pvalue_fun = function(x) pvalue_format(x)) %>%
-          	  add_q(pvalue_fun = function(x) pvalue_format(x)) %>%
-              bold_p(q = T)%>%
-              add_stat(fns = all_continuous() ~ vda) %>% 
-              modify_fmt_fun(list(vda_magnitude ~ as.character)) %>%
-              modify_header(list(vda_estimate ~ "**Effect Size Estimate**", vda_magnitude ~ "**Magnitude**")),
-            .header = "**{strata}**, N = {n}") %>%
-		as_gt() %>% 
-			fmt_markdown(columns=where(~is.character(.x))) %>%  
-      fmt_number(columns = where(~is.numeric(.x)), drop_trailing_zeros = TRUE, use_seps = FALSE) %>% 
-			fmt_number(columns = where(~is.numeric(.x)<0.0001), pattern = "<0.0001") %>% 
-			fmt_number(columns = where(~is.numeric(.x)<0.001), pattern = "<0.001")%>% 
-			fmt_number(columns = where(~is.numeric(.x)<0.01), pattern = "<0.01")%>% 
-			fmt_number(columns = where(~is.numeric(.x)<0.05), pattern = "<0.05"))
+(p <- baseline_betadiv %>%
+  tbl_strata(
+    strata = timepoint,
+    .tbl_fun = ~ .x %>%
+      tbl_summary(
+        by = arm,
+        missing = "no",
+        statistic = list(
+          all_continuous() ~ "{median}  \n({IQR}; {min}-{max})", # stats and format for continuous columns
+          all_categorical() ~ "{n} / {N}  \n({p}%)"
+        )
+      ) %>% # stats and format for categorical columns
+      add_n() %>%
+      add_overall() %>%
+      add_p(test = everything() ~ "wilcox.test", pvalue_fun = function(x) {
+        pvalue_format(x)
+      }) %>%
+      add_q(pvalue_fun = function(x) pvalue_format(x)) %>%
+      bold_p(q = T) %>%
+      add_stat(fns = all_continuous() ~ vda) %>%
+      modify_fmt_fun(list(vda_magnitude ~ as.character)) %>%
+      modify_header(list(
+        vda_estimate ~ "**Effect Size Estimate**",
+        vda_magnitude ~ "**Magnitude**"
+      )),
+    .header = "**{strata}**, N = {n}"
+  ) %>%
+  as_gt() %>%
+  fmt_markdown(columns = where(~ is.character(.x))) %>%
+  fmt_number(
+    columns = where(~ is.numeric(.x)),
+    drop_trailing_zeros = TRUE,
+    use_seps = FALSE
+  ) %>%
+  fmt_number(
+    columns = where(~ is.numeric(.x) < 0.0001),
+    pattern = "<0.0001"
+  ) %>%
+  fmt_number(columns = where(~ is.numeric(.x) < 0.001), pattern = "<0.001") %>%
+  fmt_number(columns = where(~ is.numeric(.x) < 0.01), pattern = "<0.01") %>%
+  fmt_number(columns = where(~ is.numeric(.x) < 0.05), pattern = "<0.05"))
 
 
-htmltools::save_html(gt::as_raw_html(p), paste0(RESULTS, "/baseline-diversity-analysis/baseline-beta-div.tbl"))
+htmltools::save_html(
+  gt::as_raw_html(p),
+  paste0(RESULTS, "/baseline-diversity-analysis/baseline-beta-div.tbl")
+)
 
 ```

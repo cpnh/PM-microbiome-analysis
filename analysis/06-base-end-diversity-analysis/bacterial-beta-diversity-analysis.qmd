@@ -16,28 +16,42 @@ Four different distance metrics were calculated:
 
 # This initial code block loads custom utility functions and environment variables
 # These are stored in separate files to keep the main analysis clean and organized
-source("utils/r-utils.r")
-source("_environment.required")
-load("data/seqdata.RData")
+suppressWarnings(suppressMessages({
+  source("utils/r-utils.r")
+  source("_environment.required")
+  load("data/seqdata.RData")
 
-suppressPackageStartupMessages(library(vegan))
-suppressPackageStartupMessages(library(ComplexHeatmap))
-suppressPackageStartupMessages(library(pairwiseAdonis))
-
+  library(phyloseq)
+  library(vegan)
+  library(ComplexHeatmap)
+  library(pairwiseAdonis)
+}))
 ```
 
 ```{r}
 #| eval: true
 #| label: BE beta diversity distance matrix calculation
 
-bray <- phyloseq::distance(bac_base_end, method = "bray", type = "samples") #calculated on abundance
-jac <- phyloseq::distance(bac_base_end, method = "jaccard", type = "samples")
-uunifrac <- phyloseq::distance(
+#calculated on abundance
+bray <- distance(
+  bac_base_end,
+  method = "bray",
+  type = "samples"
+)
+
+jac <- distance(
+  bac_base_end,
+  method = "jaccard",
+  type = "samples"
+)
+
+uunifrac <- distance(
   bac_base_end,
   method = "uunifrac",
   type = "samples"
 )
-wunifrac <- phyloseq::distance(
+
+wunifrac <- distance(
   bac_base_end,
   method = "wunifrac",
   type = "samples"
@@ -50,7 +64,7 @@ Three complementary approaches were used to test for community differences:
 
 ::: {.grid}
 
-::: {.g-col-4}
+::: {.g-col-3}
 
 **ANOSIM (Analysis of Similarity)**
 
@@ -63,7 +77,7 @@ Tests whether between-group differences are larger than within-group differences
 
 :::
 
-::: {.g-col-4}
+::: {.g-col-3}
 
 **PERMDISP (Permutational Analysis of Multivariate Dispersions)**
 
@@ -75,7 +89,7 @@ Tests for homogeneity of dispersions between groups
 
 :::
 
-::: {.g-col-4}
+::: {.g-col-3}
 
 **PERMANOVA (Permutational Multivariate Analysis of Variance)**
 
@@ -101,27 +115,60 @@ $H_1$ =  biofortified pearl millet differentlaly changes beta diversity metrics 
 ```{r}
 #| eval:  true
 #| label: ANOSIM
+
+anosim <- list()
+
 #function requires that rows = sample and column = OGU
-summary(vegan::anosim(
-  bray,
-  grouping = microbiome::meta(bac_base_end)$arm,
-  strata = microbiome::meta(bac_base_end)$timepoint
-)) #there is no difference in Bray Curtis distance between treatment groups
-summary(vegan::anosim(
-  jac,
-  grouping = microbiome::meta(bac_base_end)$arm,
-  strata = microbiome::meta(bac_base_end)$timepoint
-)) #there is no difference in Jaccard distance between treatment groups
-summary(vegan::anosim(
-  uunifrac,
-  grouping = microbiome::meta(bac_base_end)$arm,
-  strata = microbiome::meta(bac_base_end)$timepoint
-)) #there is no difference in unweighted unifrac distance between treatment groups
-summary(vegan::anosim(
-  wunifrac,
-  grouping = microbiome::meta(bac_base_end)$arm,
-  strata = microbiome::meta(bac_base_end)$timepoint
-)) #there is no difference in weighted unifrac distance between treatment groups
+summary(
+  anosim$bray <- anosim(
+    bray,
+    grouping = microbiome::meta(bac_base_end)$arm,
+    strata = microbiome::meta(bac_base_end)$timepoint
+  )
+) #there is no difference in Bray Curtis distance between treatment groups
+
+summary(
+  anosim$jac <- anosim(
+    jac,
+    grouping = microbiome::meta(bac_base_end)$arm,
+    strata = microbiome::meta(bac_base_end)$timepoint
+  )
+) #there is no difference in Jaccard distance between treatment groups
+
+summary(
+  anosim$uunifrac <- anosim(
+    uunifrac,
+    grouping = microbiome::meta(bac_base_end)$arm,
+    strata = microbiome::meta(bac_base_end)$timepoint
+  )
+) #there is no difference in unweighted unifrac distance between treatment groups
+
+summary(
+  anosim$wunifrac <- anosim(
+    wunifrac,
+    grouping = microbiome::meta(bac_base_end)$arm,
+    strata = microbiome::meta(bac_base_end)$timepoint
+  )
+) #there is no difference in weighted unifrac distance between treatment groups
+```
+
+```{r}
+#| eval: true
+#| label: anosim-table
+#| tbl-cap: ANOSIM results table
+
+list_to_df(
+  anosim,
+  elements = c("statistic", "signif"),
+  nested = TRUE,
+  row_names = c(
+    "Bray-Curtis",
+    "Jaccard",
+    "Unweighted UniFrac",
+    "Weighted UniFrac"
+  ),
+  col_names = c("R-squared", "p-value")
+)
 ```
 
 #### PERMDISP
@@ -136,41 +183,75 @@ bray_disp <- betadisper(
   group = microbiome::meta(bac_base_end)$arm,
   type = "centroid"
 )
-permutest(bray_disp, pairwise = F, group = timepoint)
-report::report_table(anova(bray_disp))
 
 jac_disp <- betadisper(
   d = jac,
   group = microbiome::meta(bac_base_end)$arm,
   type = "centroid"
 )
-permutest(jac_disp, pairwise = F, group = timepoint)
-report::report_table(anova(jac_disp))
 
 uunifrac_disp <- betadisper(
   d = uunifrac,
   group = microbiome::meta(bac_base_end)$arm,
   type = "centroid"
 )
-permutest(uunifrac_disp, pairwise = F, group = timepoint)
-report::report_table(anova(uunifrac_disp))
 
 wunifrac_disp <- betadisper(
   d = wunifrac,
   group = microbiome::meta(bac_base_end)$arm,
   type = "centroid"
 )
-permutest(wunifrac_disp, pairwise = F, group = timepoint)
-report::report_table(anova(wunifrac_disp))
 
-#variance (dispersion) is homogenous among treatment groups (P-val > 0.9)
-#note that this does NOT account for time
+```
+
+If the variance (dispersion) p-value is > 0.05 between groups, this suggest that varaince is homogenous. Note that this does NOT account for time
+
+```{r}
+#| eval: true
+#| label: permdisp-results
+#| tbl-cap: PERMIDISP test results
+#| results: asis
+
+tmp <- list(
+  bray = bray_disp,
+  jac = jac_disp,
+  uunifrac = uunifrac_disp,
+  wunifrac = wunifrac_disp
+)
+
+permdisp_results <- lapply(
+  tmp,
+  function(x) {
+    permutest(x, pairwise = F, group = timepoint)
+  }
+)
+
+data.table::rbindlist(
+  permdisp_results,
+  idcol = "Distance"
+) %>%
+  kable()
+```
+
+```{r}
+#| eval: true
+#| label: permdisp-report
+#| tbl-cap: PERMIDISP ANOVA report table
+
+data.table::rbindlist(
+  lapply(tmp, function(x) {
+    report::report_table(anova(x))
+  }),
+  idcol = "Distance"
+) %>%
+  kable()
 ```
 
 #### PERMANOVA
 
 $H_0$ =  there is no change in beta diversity metrics arosss time (baseline to endpoint)
 $H_1$ =  beta diversity metrics change (increase) across time (baseline to endpoint)
+
 assumption: variance of dispersions are homogenous across groups
 
 ```{r}
@@ -178,25 +259,45 @@ assumption: variance of dispersions are homogenous across groups
 #| label: PERMANOVA results output
 (bray_adon <- adonis2(
   bray ~ timepoint * arm,
-  data = microbiome::meta(bac_base_end)
+  data = microbiome::meta(bac_base_end),
+  by = "terms"
 ))
 
 (jac_adon <- adonis2(
   jac ~ timepoint * arm,
-  data = microbiome::meta(bac_base_end)
+  data = microbiome::meta(bac_base_end),
+  by = "terms"
 ))
 
 (wunifrac_adon <- adonis2(
   wunifrac ~ timepoint * arm,
-  data = microbiome::meta(bac_base_end)
+  data = microbiome::meta(bac_base_end),
+  by = "terms"
 ))
 
 (uunifrac_adon <- adonis2(
   uunifrac ~ timepoint * arm,
-  data = microbiome::meta(bac_base_end)
+  data = microbiome::meta(bac_base_end),
+  by = "terms"
 ))
 
 ```
+
+```{r}
+#| eval: true
+#| label: tbl-permanova-results
+#| tbl-cap: NA
+
+tmp <- list(
+  bray = bray_adon,
+  jac = jac_adon,
+  uunifrac = uunifrac_adon,
+  wunifrac = wunifrac_adon
+)
+
+data.table::rbindlist(tmp, idcol = "Distance")
+```
+
 
 #### Effect Size Calculations
 
@@ -295,25 +396,25 @@ MDS creates a visualization where:
 #| label: beta div MDS ordination
 
 #perform metric multidimensional scaling
-bray.ord.mds <- phyloseq::ordinate(
+bray.ord.mds <- ordinate(
   bac_base_end,
   method = "MDS",
   distance = bray,
   trymax = 100
 )
-jac.ord.mds <- phyloseq::ordinate(
+jac.ord.mds <- ordinate(
   bac_base_end,
   method = "MDS",
   distance = jac,
   trymax = 100
 )
-uunifrac.ord.mds <- phyloseq::ordinate(
+uunifrac.ord.mds <- ordinate(
   bac_base_end,
   method = "MDS",
   distance = uunifrac,
   trymax = 100
 )
-wunifrac.ord.mds <- phyloseq::ordinate(
+wunifrac.ord.mds <- ordinate(
   bac_base_end,
   method = "MDS",
   distance = wunifrac,
@@ -334,25 +435,25 @@ NMDS is often preferred for ecological data because:
 ```{r}
 #| eval:  true
 #| label: beta div NMDS ordination
-bray.ord.nmds <- phyloseq::ordinate(
+bray.ord.nmds <- ordinate(
   bac_base_end,
   method = "NMDS",
   distance = bray,
   trymax = 100
 )
-jac.ord.nmds <- phyloseq::ordinate(
+jac.ord.nmds <- ordinate(
   bac_base_end,
   method = "NMDS",
   distance = jac,
   trymax = 100
 )
-uunifrac.ord.nmds <- phyloseq::ordinate(
+uunifrac.ord.nmds <- ordinate(
   bac_base_end,
   method = "NMDS",
   distance = uunifrac,
   trymax = 100
 )
-wunifrac.ord.nmds <- phyloseq::ordinate(
+wunifrac.ord.nmds <- ordinate(
   bac_base_end,
   method = "NMDS",
   distance = wunifrac,
@@ -697,71 +798,71 @@ ggarrange(
 #| label: Base-End Bacteria Beta diversity stat summary table
 
 subsets <- list(
-  baseCPM = phyloseq::subset_samples(
+  baseCPM = subset_samples(
     bac_base_end,
     timepoint == "Baseline" & arm == "CPM"
   ),
-  endCPM = phyloseq::subset_samples(
+  endCPM = subset_samples(
     bac_base_end,
     timepoint == "Endpoint" & arm == "CPM"
   ),
-  baseFe = phyloseq::subset_samples(
+  baseFe = subset_samples(
     bac_base_end,
     timepoint == "Baseline" & arm == "FeZnPM"
   ),
-  endFe = phyloseq::subset_samples(
+  endFe = subset_samples(
     bac_base_end,
     timepoint == "Endpoint" & arm == "FeZnPM"
   )
 )
 
 list <- list(
-  bray_Baseline_CPM = phyloseq::distance(subsets$baseCPM, method = "bray"),
-  jaccard_Baseline_CPM = phyloseq::distance(
+  bray_Baseline_CPM = distance(subsets$baseCPM, method = "bray"),
+  jaccard_Baseline_CPM = distance(
     subsets$baseCPM,
     method = "jaccard"
   ),
-  uunifrac_Baseline_CPM = phyloseq::distance(
+  uunifrac_Baseline_CPM = distance(
     subsets$baseCPM,
     method = "uunifrac"
   ),
-  wunifrac_Baseline_CPM = phyloseq::distance(
+  wunifrac_Baseline_CPM = distance(
     subsets$baseCPM,
     method = "wunifrac"
   ),
-  bray_Endpoint_CPM = phyloseq::distance(subsets$endCPM, method = "bray"),
-  jaccard_Endpoint_CPM = phyloseq::distance(subsets$endCPM, method = "jaccard"),
-  uunifrac_Endpoint_CPM = phyloseq::distance(
+  bray_Endpoint_CPM = distance(subsets$endCPM, method = "bray"),
+  jaccard_Endpoint_CPM = distance(subsets$endCPM, method = "jaccard"),
+  uunifrac_Endpoint_CPM = distance(
     subsets$endCPM,
     method = "uunifrac"
   ),
-  wunifrac_Endpoint_CPM = phyloseq::distance(
+  wunifrac_Endpoint_CPM = distance(
     subsets$endCPM,
     method = "wunifrac"
   ),
-  bray_Baseline_FeZnPM = phyloseq::distance(subsets$baseFe, method = "bray"),
-  jaccard_Baseline_FeZnPM = phyloseq::distance(
+  bray_Baseline_FeZnPM = distance(subsets$baseFe, method = "bray"),
+  jaccard_Baseline_FeZnPM = distance(
     subsets$baseFe,
     method = "jaccard"
   ),
-  uunifrac_Baseline_FeZnPM = phyloseq::distance(
+  uunifrac_Baseline_FeZnPM = distance(
     subsets$baseFe,
     method = "uunifrac"
   ),
-  wunifrac_Baseline_FeZnPM = phyloseq::distance(
+  wunifrac_Baseline_FeZnPM = distance(
     subsets$baseFe,
     method = "wunifrac"
   ),
-  bray_Endpoint_FeZnPM = phyloseq::distance(subsets$endFe, method = "bray"),
-  jaccard_Endpoint_FeZnPM = phyloseq::distance(
+  bray_Endpoint_FeZnPM = distance(subsets$endFe, method = "bray"),
+  jaccard_Endpoint_FeZnPM = distance(
     subsets$endFe,
     method = "jaccard"
   ),
-  uunifrac_Endpoint_FeZnPM = phyloseq::distance(
+  uunifrac_Endpoint_FeZnPM = distance(
     subsets$endFe,
     method = "uunifrac"
   ),
-  wunifrac_Endpoint_FeZnPM = phyloseq::distance(
+  wunifrac_Endpoint_FeZnPM = distance(
     subsets$endFe,
     method = "wunifrac"
   )
@@ -809,8 +910,6 @@ betadivFeZnPM <- betadivFeZnPM %>%
 
 bac_base_end_betadiv <- bind_rows(betadivCPM, betadivFeZnPM)
 ```
-
-\blandscape
 
 ```{r}
 #| eval:  true
@@ -867,5 +966,3 @@ htmltools::save_html(
 )
 
 ```
-
-\elandscape

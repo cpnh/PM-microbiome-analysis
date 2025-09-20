@@ -49,8 +49,13 @@ Sample names were standardized by removing technical suffixes (like '_wol_alignm
 base_end_paired_samples <-
   microbiome::meta(seqdata_bac) %>% #whole dataset metadata file
   rownames_to_column() %>%
+  mutate(sample = str_replace(
+      str_replace(str_remove(rowname, "_G"), "_B_B", "_B"),
+      "_B_E",
+      "_E"
+    )) %>%
   dplyr::select(
-    sample = rowname,
+    sample,
     displayid,
     timepoint = any_other_relevant_information
   ) %>%
@@ -102,33 +107,6 @@ otu_table(bac_base_end) <- otu_table(
   microbiome::abundances(bac_base_end, "compositional"),
   taxa_are_rows = T
 )
-
-#slight modification to group Bacillota subgroups into one
-tax_table(bac_base_end) <- tax_df(bac_base_end) %>%
-  mutate(across(where(is.character), str_trim)) %>%
-  mutate(Phylum = str_remove(Phylum, "_[a-zA-Z]\\b")) %>%
-  mutate(Genus = str_remove(Genus, "_[a-zA-Z]\\b")) %>%
-  mutate(
-    Phylum = case_when(
-      Phylum == "" ~ "Unknown",
-      str_detect(Phylum, "\\d") ~ "Unclassified",
-      !str_detect(
-        Phylum,
-        "Actinobacteriota|Pseudomonadota|Bacteroidota|Verrucomicrobiota|Campylobacterota|Bacillota"
-      ) ~
-        "Other",
-      TRUE ~ Phylum
-    )
-  ) %>%
-  mutate(
-    Genus = case_when(
-      str_detect(Genus, "\\d") ~ "Unclassified",
-      Genus == "" ~ "Unknown",
-      TRUE ~ Genus
-    )
-  ) %>%
-  as.matrix()
-
 ```
 
 ##### Top Phyla at at between Baseline and Endpoint
@@ -364,7 +342,6 @@ dfB_E.stats %>%
 
 ```
 
-
 ##### Alpha Diveristy Summary Table
 
 ```{r}
@@ -418,11 +395,7 @@ mbTab <- bac_base_end_meta %>%
     ),
     as.numeric
   )
-vda <- function(data, variable, by, ...) {
-  # Compute VD.A
-  A <- effsize::VD.A(as.formula(glue::glue("`{variable}` ~ {by}")), data = data)
-  tibble(vda_estimate = A$estimate, vda_magnitude = A$magnitude)
-}
+
 (p <- bac_base_end_meta %>%
   dplyr::select(
     timepoint,
@@ -488,6 +461,85 @@ htmltools::save_html(
 )
 
 ```
+
+```{r}
+#| eval: true
+#| label: tbl-time-wilco
+#| fig-cap: NA
+#| tbl-cap: NA
+
+p <- bac_base_end_meta %>%
+  dplyr::select(
+    displayid,
+    timepoint,
+    arm,
+    observed,
+    chao1,
+    diversity_shannon,
+    evenness_pielou,
+    pd,
+    all_of(phyla_list),
+    all_of(top10_genera_list)
+  ) %>%
+  mutate_at(vars(everything()), type.convert, as.is = TRUE)
+
+pl <- p %>%
+  pivot_longer(
+    cols = !c(displayid, timepoint, arm),
+    names_to = "diversity_metric"
+  ) %>%
+  group_by(displayid)
+
+```
+
+```{r}
+#| fig-cap: Differences between Baseline and endpoint within intervention arm. Statistical tests werer performed with a paired Wilcoxon test and FDR = 0.05 p-value correction where appropriate.
+#| eval: true
+#| label: tbl-arm-wilcox
+
+#is there a significant difference between baseline and endpoint within treatment group?
+#paired within group comparisions: arm_base vs. arm_end & ctrl_base vs. ctrl_end
+pl %>%
+  group_by(arm, diversity_metric) %>%
+  pairwise_wilcox_test(
+    value ~ timepoint,
+    paired = TRUE,
+    p.adjust.method = "BH"
+  ) %>%
+  kable()
+```
+
+```{r}
+#| eval: true
+#| label: vda
+#| tbl-cap: VDA effect size estimates for differences between timepoints
+
+data.table::rbindlist(
+  lapply(colnames(p %>% select(!c(displayid, arm, timepoint))), function(x) {
+    vda(data = p, variable = x, by = "timepoint")
+  }),
+  idcol = "Taxon"
+) %>%
+  mutate(Taxon = colnames(p %>% select(!c(displayid, arm, timepoint)))) %>%
+  kable()
+```
+
+```{r}
+#| fig-cap: Differences between Baseline and Endpoint. Statistical tests werer performed with a paired Wilcoxon test and FDR = 0.05 p-value correction where appropriate.
+#| eval: true
+#| label: tbl-arm-wilcox
+
+pl %>%
+  group_by(diversity_metric) %>%
+  pairwise_wilcox_test(
+    value ~ timepoint,
+    paired = TRUE,
+    p.adjust.method = "BH"
+  ) %>%
+  # filter(p.adj <= 0.05) %>%
+  kable()
+```
+
 
 ```{r}
 #| eval: true
