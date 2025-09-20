@@ -30,3 +30,4 @@ Differential abundance analysis (DA) identifies microbial taxa that significantl
 - *ALDEx2:* Uses Bayesian approach with compositional data
 
 #TODO add citations
+#TODO add zero-inflated model info

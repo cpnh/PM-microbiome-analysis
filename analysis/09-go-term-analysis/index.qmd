@@ -1,1 +1,149 @@
 # Gene Ontology Enrichment
+
+```{r}
+#| echo: false
+#| eval: true
+#| label: setup
+
+# This initial code block loads custom utility functions and environment variables
+# These are stored in separate files to keep the main analysis clean and organized
+suppressWarnings(suppressMessages({
+  source(normalizePath("utils/r-utils.r"))
+  source(normalizePath("_environment.required"))
+  load(normalizePath("data/seqdata.RData"))
+
+  metadata <- read_delim(normalizePath(METADATA))
+
+  go2kegg <- read.delim(
+    file.path(REF, "WoL2-Woltka/function/go/idmaps/kegg.map"),
+    header = T
+  )
+
+  dir.create(
+    file.path(RESULTS, "KEGG-functional-analysis"),
+    showWarnings = FALSE,
+    recursive = TRUE
+  )
+}))
+```
+
+## Data preparation
+
+Preparation of data from Woltka output for use in R
+
+### Load data
+
+```{r}
+#| eval: true
+#| label: load data
+go <- read.delim(file.path(WOLTKA_OUT, "go/all.generic.tsv"), header = T) %>%
+  mutate_at(vars(everything()), str_trim, side = "both") %>%
+  pivot_longer(
+    cols = !c(Name, X.FeatureID),
+    names_to = "sample",
+    values_to = "count"
+  ) %>%
+  rename(Terms = Name, go_id = X.FeatureID) %>%
+  mutate(sample = str_remove(sample, "_filtered")) %>%
+  mutate(
+    sample = str_replace(
+      str_replace(str_remove(sample, "_G"), "_B_B", "_B"),
+      "_B_E",
+      "_E"
+    )
+  ) %>%
+  mutate_at(vars(everything()), type.convert, as.is = TRUE)
+```
+
+### Add additional metadata to data
+
+```{r}
+#| eval: true
+#| label: assign ontology to GO IDs
+go_onto <- clusterProfiler::go2ont(go$go_id)
+
+go <- go %>%
+  mutate(
+    timepoint = metadata$timepoint[match(.$sample, metadata$sample_names)],
+    trt = metadata$trt[match(.$sample, metadata$sample_names)],
+    kegg_rxn_id = go2kegg$kegg_rxn_id[match(.$go_id, go2kegg$go_id)],
+    arm = case_when(trt == 0 ~ "CPM", trt == 1 ~ "FeZnPM"),
+    ontology = go_onto$Ontology[match(go_id, go_onto$go_id)]
+  ) %>%
+  mutate(
+    ontology = case_when(
+      ontology == "MF" ~ "Molecular function",
+      ontology == "BP" ~ "Biological process",
+      ontology == "CC" ~ "Cellular component"
+    )
+  )
+
+onto_col <- assign_unique_colors(go$ontology)
+write.csv(
+  go,
+  file.path(WOLTKA_OUT, "go/processed-all.generic.csv"),
+  row.names = F
+)
+```
+
+#### GO subsets
+
+```{r}
+#| eval: true
+#| label: baseline-go
+#| fig-cap: NA
+#| tbl-cap: NA
+go_base <- go %>%
+  dplyr::filter(timepoint == "Baseline")
+
+write.csv(
+  go_base,
+  file.path(RESULTS, "baseline-go/baseline-annotated-go-terms.csv"),
+  row.names = F
+)
+```
+
+```{r}
+#| eval: true
+#| label: baseline-endpoint-go
+#| fig-cap: NA
+#| tbl-cap: NA
+go_be <- subset(
+  subset(go, sample %in% base_end_paired_samples$sample),
+  timepoint %in% c("Baseline", "Endpoint")
+)
+
+write.csv(
+  go_be,
+  file.path(RESULTS, "EvB-GO/EvB-annotated-go-terms.csv"),
+  row.names = F
+)
+```
+
+### Dataset filter
+
+Filtering GO database to contain only bacterial GO terms using [GO slim prokaryote](https://geneontology.org/docs/download-ontology/). *downloaded 08-Oct-24*
+
+```{bash}
+#| eval: false
+#| label: download GO slim
+
+wget -P ref/ https://current.geneontology.org/ontology/subsets/goslim_prokaryote.tsv
+```
+
+```{r}
+#| eval: true
+#| label: annotation with only bacterial GO terms
+
+annoBac <- read.delim(
+  file.path(REF, "gene-ontology", "goslim_prokaryote.tsv"),
+  col.names = c("go_id", "terms")
+) %>%
+  mutate(go_id = str_replace(str_extract(go_id, "GO_\\d*"), "_", ":"))
+
+write.csv(
+  annoBac,
+  file.path(REF, "gene-ontology/goslim_prokaryote-formatted.csv"),
+  row.names = F
+)
+```
