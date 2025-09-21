@@ -222,7 +222,7 @@ tmp <- list(
 permdisp_results <- lapply(
   tmp,
   function(x) {
-    permutest(x, pairwise = F, group = timepoint)
+    (permutest(x, pairwise = F, group = timepoint))$tab %>% as.data.frame()
   }
 )
 
