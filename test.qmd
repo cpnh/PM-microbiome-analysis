@@ -1,7 +1,0 @@
-```{r}
-#| eval: true
-#| label: test
-
-print("This is a test code block to ensure the setup is working correctly.")
-
-```
