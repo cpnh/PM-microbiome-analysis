@@ -8,20 +8,30 @@
 
 # This initial code block loads custom utility functions and environment variables
 # These are stored in separate files to keep the main analysis clean and organized
-source(normalizePath("utils/r-utils.r"))
-source(normalizePath("_environment.required"))
-load(normalizePath("data/seqdata.RData"))
+suppressWarnings(suppressMessages({
+  source(normalizePath("utils/r-utils.r"))
+  source(normalizePath("_environment.required"))
+  load(normalizePath("data/seqdata.RData"))
 
-metadata <- read_delim(normalizePath(METADATA))
-bac_base_end_meta <- readRDS(normalizePath("data/metadata/base-end-metadata.rds"))
-baseline_metadata <- readRDS(normalizePath("data/metadata/baseline-metadata.rds"))
+  metadata <- read_delim(normalizePath(METADATA))
+  bac_base_end_meta <- readRDS(normalizePath(
+    "data/metadata/base-end-metadata.rds"
+  ))
+  baseline_metadata <- readRDS(normalizePath(
+    "data/metadata/baseline-metadata.rds"
+  ))
 
-suppressPackageStartupMessages(library(emmeans))
-suppressPackageStartupMessages(library(nlme))
-suppressPackageStartupMessages(library(ggpubr))
-suppressPackageStartupMessages(library(gridExtra))
+  library(emmeans)
+  library(nlme)
+  library(ggpubr)
+  library(gridExtra)
 
-dir.create(file.path(RESULTS, "iron-status-subgroup-analysis"), showWarnings = FALSE, recursive = TRUE)
+  dir.create(
+    file.path(RESULTS, "iron-status-subgroup-analysis"),
+    showWarnings = FALSE,
+    recursive = TRUE
+  )
+}))
 ```
 
 ::: question
@@ -45,7 +55,11 @@ Recall that alpha diversity statistics have been previously calculated in [Secti
 alpha.bve <- microbiome::alpha(absAbund, index = "all")
 
 ## returns Faith's phylogenetic diversity (PD) and species richness (SR = observed = chao1)
-pd.bve <- picante::pd(samp = as.data.frame(t(otu_table(absAbund))), tree = phy_tree(absAbund), include.root = FALSE)
+pd.bve <- picante::pd(
+  samp = as.data.frame(t(otu_table(absAbund))),
+  tree = phy_tree(absAbund),
+  include.root = FALSE
+)
 ```
 
 ### Defining Iron Status and Anaemia
@@ -107,11 +121,27 @@ saveRDS(baseline_metadata, normalizePath("data/metadata/baseline-metadata.rds"))
 #| label: tbl-iron-base-arm
 #| tbl-cap: Comparison of iron status at baseline between intervention arms
 (p <- baseline_metadata %>%
-  dplyr::select(arm,`Anemia at Baseline` = anemia_base, baseline_iron_status, fer, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Entropy` = diversity_shannon, Evenness = evenness_pielou, `Faith's Phylogenetic Diversity` = pd) %>%
+  dplyr::select(
+    arm,
+    `Anemia at Baseline` = anemia_base,
+    baseline_iron_status,
+    fer,
+    `Observed features` = observed,
+    `Chao 1 Index` = chao1,
+    `Shannon Entropy` = diversity_shannon,
+    Evenness = evenness_pielou,
+    `Faith's Phylogenetic Diversity` = pd
+  ) %>%
   group_by(baseline_iron_status) %>%
   gt_strata(strata = "baseline_iron_status", by = "arm"))
 
-htmltools::save_html(gt::as_raw_html(p), file.path(RESULTS, "iron-status-subgroup-analysis/baseline-iron-status-summary.tbl"))
+htmltools::save_html(
+  gt::as_raw_html(p),
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/baseline-iron-status-summary.tbl"
+  )
+)
 
 ```
 
@@ -121,11 +151,27 @@ htmltools::save_html(gt::as_raw_html(p), file.path(RESULTS, "iron-status-subgrou
 #| label: tbl-iron-base
 #| tbl-cap: compare iron status at baseline
 (p <- baseline_metadata %>%
-  dplyr::select(arm,`Anemia at Baseline` = anemia_base, baseline_iron_status, fer, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Entropy` = diversity_shannon, Evenness = evenness_pielou, `Faith's Phylogenetic Diversity` = pd) %>%
-  dplyr::filter(str_detect(baseline_iron_status, "deficient|depleted|replete")) %>%
+  dplyr::select(
+    arm,
+    `Anemia at Baseline` = anemia_base,
+    baseline_iron_status,
+    fer,
+    `Observed features` = observed,
+    `Chao 1 Index` = chao1,
+    `Shannon Entropy` = diversity_shannon,
+    Evenness = evenness_pielou,
+    `Faith's Phylogenetic Diversity` = pd
+  ) %>%
+  dplyr::filter(str_detect(
+    baseline_iron_status,
+    "deficient|depleted|replete"
+  )) %>%
   gt_strata(strata = "arm", by = "baseline_iron_status", vda = FALSE))
 
-htmltools::save_html(gt::as_raw_html(p), file.path(RESULTS, "iron-status-subgroup-analysis/baseline-iron-status.tbl"))
+htmltools::save_html(
+  gt::as_raw_html(p),
+  file.path(RESULTS, "iron-status-subgroup-analysis/baseline-iron-status.tbl")
+)
 ```
 
 ```{r}
@@ -134,10 +180,26 @@ htmltools::save_html(gt::as_raw_html(p), file.path(RESULTS, "iron-status-subgrou
 #| label: tbl-ferritin-arm
 #| tbl-cap: ferritin differences
 (p <- baseline_metadata %>%
-  dplyr::select(arm,`Anemia at Baseline` = anemia_base, baseline_iron_status, fer, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Entropy` = diversity_shannon, Evenness = evenness_pielou, `Faith's Phylogenetic Diversity` = pd) %>%
+  dplyr::select(
+    arm,
+    `Anemia at Baseline` = anemia_base,
+    baseline_iron_status,
+    fer,
+    `Observed features` = observed,
+    `Chao 1 Index` = chao1,
+    `Shannon Entropy` = diversity_shannon,
+    Evenness = evenness_pielou,
+    `Faith's Phylogenetic Diversity` = pd
+  ) %>%
   gt_summary(by = "baseline_iron_status"))
 
-htmltools::save_html(gt::as_raw_html(p), file.path(RESULTS, "iron-status-subgroup-analysis/baseline-ferritin-differences-by-arm.tbl"))
+htmltools::save_html(
+  gt::as_raw_html(p),
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/baseline-ferritin-differences-by-arm.tbl"
+  )
+)
 
 ```
 
@@ -149,10 +211,26 @@ There is no difference between alpha diversity statistics depending on baseline 
 #| label: tbl-base-alpha-sex-iron
 #| tbl-cap: differences in alpha diversity by sex and iron status
 (p <- baseline_metadata %>%
-  dplyr::select(Sex = sex,`Anemia at Baseline` = anemia_base, baseline_iron_status, fer, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Entropy` = diversity_shannon, Evenness = evenness_pielou, `Faith's Phylogenetic Diversity` = pd) %>%
+  dplyr::select(
+    Sex = sex,
+    `Anemia at Baseline` = anemia_base,
+    baseline_iron_status,
+    fer,
+    `Observed features` = observed,
+    `Chao 1 Index` = chao1,
+    `Shannon Entropy` = diversity_shannon,
+    Evenness = evenness_pielou,
+    `Faith's Phylogenetic Diversity` = pd
+  ) %>%
   gt_strata(strata = "Sex", by = "baseline_iron_status", vda = FALSE))
 
-htmltools::save_html(gt::as_raw_html(p), file.path(RESULTS, "iron-status-subgroup-analysis/baseline-alpha-div-by-iron-status-sex.tbl"))
+htmltools::save_html(
+  gt::as_raw_html(p),
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/baseline-alpha-div-by-iron-status-sex.tbl"
+  )
+)
 
 ```
 
@@ -187,9 +265,30 @@ be_meta <- bac_base_end_meta %>%
     sex = case_when(
       sexf == 1 ~ "Female",
       sexf == 0 ~ "Male"
+    ),
+    Anemia = case_when(
+      hb < 7.0 ~ "Severe",
+      hb >= 7.0 & hb <= 9.9 ~ "Moderate",
+      hb >= 10.0 & hb <= 10.9 ~ "Mild",
+      hb >= 11.0 ~ "Normal",
+      TRUE ~ NA
     )
   )
 ```
+
+```{r}
+#| eval: true
+#| label: sum
+#| fig-cap: NA
+#| tbl-cap: NA
+be_meta %>%
+  filter(iron_status != "Unknown" & !is.na(Anemia)) %>%
+  group_by(sex, iron_status, Anemia, timepoint) %>%
+  summarise(n = n()) %>%
+  pivot_wider(names_from = timepoint, values_from = n, values_fill = 0) %>%
+  kable()
+```
+
 
 #### Basic Statistics
 
@@ -201,14 +300,37 @@ be_meta <- bac_base_end_meta %>%
 ## only 82 sample have matching baseline and endpoint samples
 dfB_E.stats <-
   be_meta %>%
-  dplyr::select(displayid, timepoint, arm, fer, hb, anemia_base, anyiron_def, observed, chao1, diversity_shannon, evenness_pielou, pd) %>%
-  pivot_longer(cols = !c(displayid, timepoint, arm, fer, hb, anemia_base, anyiron_def), names_to = "diversity_metric") %>%
+  dplyr::select(
+    displayid,
+    timepoint,
+    arm,
+    fer,
+    hb,
+    anemia_base,
+    anyiron_def,
+    observed,
+    chao1,
+    diversity_shannon,
+    evenness_pielou,
+    pd
+  ) %>%
+  pivot_longer(
+    cols = !c(displayid, timepoint, arm, fer, hb, anemia_base, anyiron_def),
+    names_to = "diversity_metric"
+  ) %>%
   group_by(displayid) %>%
   dplyr::filter(all(c("Baseline", "Endpoint") %in% timepoint)) %>%
   ungroup() %>%
   as.data.frame()
 
-write.csv(dfB_E.stats, file.path(RESULTS, "iron-status-subgroup-analysis/alpha-diveristy-by-iron-status.csv"), row.names = FALSE)
+write.csv(
+  dfB_E.stats,
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/alpha-diveristy-by-iron-status.csv"
+  ),
+  row.names = FALSE
+)
 ```
 
 ```{r}
@@ -225,10 +347,15 @@ dfB_E.stats %>%
 ```{r}
 #| eval: true
 #| label: tbl-norm-test
-#| tbl-cap: Shapiro-Wilks normality test results on alpha diversity statistics. 
+#| tbl-cap: Shapiro-Wilks normality test results on alpha diversity statistics.
 #| results: asis
 
-norm <- lapply(colnames(dfB_E.stats), norm_test, df = dfB_E.stats, format = "markdown")
+norm <- lapply(
+  colnames(dfB_E.stats),
+  norm_test,
+  df = dfB_E.stats,
+  format = "markdown"
+)
 
 do.call(rbind, norm)
 
@@ -242,7 +369,13 @@ do.call(rbind, norm)
   dplyr::select(timepoint, arm, fer, hb) %>%
   gt_strata(strata = "timepoint", by = "arm"))
 
-htmltools::save_html(gt::as_raw_html(p), file.path(RESULTS, "iron-status-subgroup-analysis/BvsE-ferritin-hemoglobin-between-arms.tbl"))
+htmltools::save_html(
+  gt::as_raw_html(p),
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/BvsE-ferritin-hemoglobin-between-arms.tbl"
+  )
+)
 ```
 
 ::: question
@@ -256,10 +389,28 @@ Do iron/haemoglobin levels differ significantly between timepoints?
 #| label: tbl-hb-fer-wilcox
 #| tbl-cap: hb and fer conc wilcoxon rank sign test
 (p <- be_meta %>%
-  dplyr::select(timepoint, arm, fer, hb,`Anemia at Baseline` = anemia_base, anyiron_def, observed_features = observed, chao1, diversity_shannon, evenness_pielou, pd) %>%
+  dplyr::select(
+    timepoint,
+    arm,
+    fer,
+    hb,
+    `Anemia at Baseline` = anemia_base,
+    anyiron_def,
+    observed_features = observed,
+    chao1,
+    diversity_shannon,
+    evenness_pielou,
+    pd
+  ) %>%
   gt_strata(strata = "arm", by = "timepoint", vda = FALSE))
 
-htmltools::save_html(gt::as_raw_html(p), file.path(RESULTS, "iron-status-subgroup-analysis/BvsE-ferritin-hemoglobin.tbl"))
+htmltools::save_html(
+  gt::as_raw_html(p),
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/BvsE-ferritin-hemoglobin.tbl"
+  )
+)
 
 ```
 
@@ -274,7 +425,10 @@ htmltools::save_html(gt::as_raw_html(p), file.path(RESULTS, "iron-status-subgrou
 unpaired_wilcox_endpoint <-
   dfB_E.stats %>%
   dplyr::select(timepoint, arm, fer, hb) %>%
-  reshape2::melt(id.vars = c("timepoint", "arm"), variable.name = "biomarker") %>%
+  reshape2::melt(
+    id.vars = c("timepoint", "arm"),
+    variable.name = "biomarker"
+  ) %>%
   group_by(timepoint, biomarker) %>%
   pairwise_wilcox_test(value ~ arm, paired = FALSE, p.adjust.method = "BH") %>%
   add_xy_position(x = "timepoint", step.increase = 0)
@@ -284,17 +438,31 @@ unpaired_wilcox_endpoint <-
 paired_wilcox_overtime <-
   dfB_E.stats %>%
   dplyr::select(timepoint, arm, fer, hb) %>%
-  reshape2::melt(id.vars = c("timepoint", "arm"), variable.name = "biomarker") %>%
+  reshape2::melt(
+    id.vars = c("timepoint", "arm"),
+    variable.name = "biomarker"
+  ) %>%
   group_by(arm, biomarker) %>%
-  pairwise_wilcox_test(value ~ timepoint, paired = TRUE, p.adjust.method = "BH") %>%
+  pairwise_wilcox_test(
+    value ~ timepoint,
+    paired = TRUE,
+    p.adjust.method = "BH"
+  ) %>%
   add_xy_position(x = "timepoint", step.increase = 0)
 
 overall_paired_wilcox_overtime <-
   dfB_E.stats %>%
   dplyr::select(timepoint, arm, fer, hb) %>%
-  reshape2::melt(id.vars = c("timepoint", "arm"), variable.name = "biomarker") %>%
+  reshape2::melt(
+    id.vars = c("timepoint", "arm"),
+    variable.name = "biomarker"
+  ) %>%
   group_by(biomarker) %>%
-  pairwise_wilcox_test(value ~ timepoint, paired = TRUE, p.adjust.method = "BH") %>%
+  pairwise_wilcox_test(
+    value ~ timepoint,
+    paired = TRUE,
+    p.adjust.method = "BH"
+  ) %>%
   add_xy_position(x = "timepoint", step.increase = 0)
 ```
 
@@ -305,10 +473,20 @@ overall_paired_wilcox_overtime <-
 ## visualise as boxplot
 dfB_E.stats %>%
   dplyr::select(timepoint, arm, fer, hb) %>%
-  reshape2::melt(id.vars = c("timepoint", "arm"), variable.name = "biomarker") %>%
+  reshape2::melt(
+    id.vars = c("timepoint", "arm"),
+    variable.name = "biomarker"
+  ) %>%
   ggplot(aes(x = timepoint, y = value)) +
-  geom_boxplot(aes(fill = arm), outlier.shape = NA, position = position_dodge(width = 1)) +
-  geom_point(aes(group = arm, fill = arm), position = position_jitterdodge(dodge.width = 1, jitter.width = 0.5)) +
+  geom_boxplot(
+    aes(fill = arm),
+    outlier.shape = NA,
+    position = position_dodge(width = 1)
+  ) +
+  geom_point(
+    aes(group = arm, fill = arm),
+    position = position_jitterdodge(dodge.width = 1, jitter.width = 0.5)
+  ) +
   facet_wrap(. ~ biomarker, scales = "free") +
   # stat_pvalue_manual(unpaired_wilcox_endpoint, label = "p = {p}", step.increase = 0.05, color = "timepoint") +
   # stat_pvalue_manual(paired_wilcox_overtime, label = "p = {p}", step.increase = 0.08, color = "arm") +
@@ -317,7 +495,10 @@ dfB_E.stats %>%
   ylab(NULL) +
   scale_fill_manual(values = armColours) +
   scale_x_discrete(labels = c("Baseline", "Endpoint")) +
-  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1), strip.text = element_text(size = 14, face = "bold", color = "black"))
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1),
+    strip.text = element_text(size = 14, face = "bold", color = "black")
+  )
 ```
 
 #### Bivariate analysis
@@ -341,7 +522,9 @@ Preliminary bivariate analyses (correlations) to identify variables that have a 
 #| label: define iron deficiency variable
 ## remove samples that do not have iron status data and redefine model variables to reflect this
 be_meta <- be_meta %>%
-  dplyr::filter(iron_status != "Unknown" & baseline_iron_status != "Unknown") %>%
+  dplyr::filter(
+    iron_status != "Unknown" & baseline_iron_status != "Unknown"
+  ) %>%
   group_by(displayid) %>%
   dplyr::filter(all(c("Baseline", "Endpoint") %in% timepoint)) %>%
   ungroup()
@@ -352,7 +535,12 @@ be_meta %>%
   count() %>%
   kable(caption = "Number of samples in each timepoint", format = "markdown")
 
-diversity_stats <- data.frame(chao = as.numeric(be_meta$chao1), shannon = as.numeric(be_meta$diversity_shannon), evenness = as.numeric(be_meta$evenness_pielou), pd = as.numeric(be_meta$pd))
+diversity_stats <- data.frame(
+  chao = as.numeric(be_meta$chao1),
+  shannon = as.numeric(be_meta$diversity_shannon),
+  evenness = as.numeric(be_meta$evenness_pielou),
+  pd = as.numeric(be_meta$pd)
+)
 
 subject <- be_meta$displayid # categorical
 arm_group <- as.factor(as.character(be_meta$arm)) # categorical factor
@@ -365,10 +553,12 @@ age_B_unscaled <- be_meta %>%
   group_by(displayid) %>%
   mutate(agedays_rounded = as.numeric(agedays_rounded)) %>%
   arrange(agedays_rounded, .by_group = TRUE) %>%
-  mutate(ageAtBaseline = case_when(
-    timepoint == "Baseline" ~ agedays_rounded,
-    FALSE ~ NA
-  )) %>%
+  mutate(
+    ageAtBaseline = case_when(
+      timepoint == "Baseline" ~ agedays_rounded,
+      FALSE ~ NA
+    )
+  ) %>%
   fill(ageAtBaseline) %>%
   ungroup() %>%
   dplyr::select(ageAtBaseline) %>%
@@ -391,7 +581,20 @@ iron_base25 <- as.factor(be_meta$fer_def25_base)
 #| fig-height: 15
 #| fig-width: 20
 tmp <- be_meta %>%
-  dplyr::select(`Anemia at Baseline` = anemia_base, fer_def12_base, fer_def25_base, fer_def12, fer_def25, fer, Sex = sex, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Entropy` = diversity_shannon, Evenness = evenness_pielou, `Faith's PD` = pd) %>%
+  dplyr::select(
+    `Anemia at Baseline` = anemia_base,
+    fer_def12_base,
+    fer_def25_base,
+    fer_def12,
+    fer_def25,
+    fer,
+    Sex = sex,
+    `Observed features` = observed,
+    `Chao 1 Index` = chao1,
+    `Shannon Entropy` = diversity_shannon,
+    Evenness = evenness_pielou,
+    `Faith's PD` = pd
+  ) %>%
   mutate_at(vars(everything()), as.numeric)
 
 corr <- tmp %>%
@@ -402,9 +605,10 @@ cor_test_matFer <- cor_test_mat[, 1:6]
 cor_test_matalpha <- cor_test_mat[, 7:ncol(cor_test_mat)]
 
 #for use with ggplot tile or ggcorrplot
-ggheatmap_palette <- c('#91bfdb','#ffffbf','#fc8d59')
+ggheatmap_palette <- c('#91bfdb', '#ffffbf', '#fc8d59')
 
-corrPlot <- ggcorrplot::ggcorrplot(corr,
+corrPlot <- ggcorrplot::ggcorrplot(
+  corr,
   p.mat = cor_test_mat,
   hc.order = FALSE,
   method = "square",
@@ -432,13 +636,15 @@ ggarrange(
       widths = 1,
       heights = NULL
     ),
-    top = text_grob("Correlation Coefficient P-values",
+    top = text_grob(
+      "Correlation Coefficient P-values",
       color = "black",
       face = "bold",
       size = 14,
       vjust = 3.5
     ),
-    bottom = text_grob("Circles represent correlations that are NOT significant",
+    bottom = text_grob(
+      "Circles represent correlations that are NOT significant",
       color = "black",
       face = "italic",
       size = 14,
@@ -480,12 +686,30 @@ The interaction between iron status at baseline and sex allows for the effect of
 #| eval: true
 #| label: alpha diversity LMM grouping by iron deficiency
 alpha_lmms_Fe <- list(
-  chao_lmm_iron = lme(log(chao) ~ arm_group * time + iron_base12 + iron_base25,
-    random = ~ 1 | subject, method = "REML", data = diversity_stats
+  chao_lmm_iron = lme(
+    log(chao) ~ arm_group * time + iron_base12 + iron_base25,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
   ),
-  shannon_lmm_iron = lme(shannon^2 ~ arm_group * time + iron_base12 + iron_base25, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  evenness_lmm_iron = lme(evenness^2 ~ arm_group * time + iron_base12 + iron_base25, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  pd_lmm_iron = lme(log(pd) ~ arm_group * time + iron_base12 + iron_base25, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+  shannon_lmm_iron = lme(
+    shannon^2 ~ arm_group * time + iron_base12 + iron_base25,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_iron = lme(
+    evenness^2 ~ arm_group * time + iron_base12 + iron_base25,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_iron = lme(
+    log(pd) ~ arm_group * time + iron_base12 + iron_base25,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  )
 )
 ```
 
@@ -496,7 +720,11 @@ One of the assumptions of random intercept/slope models is that the random error
 #| label: fig-assumptions
 #| fig-cap: Plots of model residuals and normality testing results
 for (i in seq_along(alpha_lmms_Fe)) {
-  residual_plots(model = alpha_lmms_Fe[[i]], model_name = names(alpha_lmms_Fe)[i], render = TRUE)
+  residual_plots(
+    model = alpha_lmms_Fe[[i]],
+    model_name = names(alpha_lmms_Fe)[i],
+    render = TRUE
+  )
 }
 ```
 
@@ -534,7 +762,7 @@ ANOVA determines if a term play a significant role in explaining the variance of
 #| results: asis
 for (i in seq_along(alpha_lmms_Fe)) {
   a <- anova(alpha_lmms_Fe[[i]])
-  kable(a, caption = paste0("ANOVA results for ",names(alpha_lmms_Fe)[i]))
+  kable(a, caption = paste0("ANOVA results for ", names(alpha_lmms_Fe)[i]))
 }
 ```
 
@@ -546,11 +774,30 @@ Based on goodness of fit estimates (log likelihood, AIC, BIC), all three models 
 #| eval: true
 #| label: iron status over time
 alpha_lmms_Fe2 <- list(
-  chao_lmm_iron2 = lme(log(chao) ~ arm_group * time + iron12 + iron25, random = ~ 1 | subject, method = "REML", data = diversity_stats
+  chao_lmm_iron2 = lme(
+    log(chao) ~ arm_group * time + iron12 + iron25,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
   ),
-  shannon_lmm_iron2 = lme(shannon^2 ~ arm_group * time + iron12 + iron25, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  evenness_lmm_iron2 = lme(evenness^2 ~ arm_group * time + iron12 + iron25, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  pd_lmm_iron2 = lme(log(pd) ~ arm_group * time + iron12 + iron25, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+  shannon_lmm_iron2 = lme(
+    shannon^2 ~ arm_group * time + iron12 + iron25,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_iron2 = lme(
+    evenness^2 ~ arm_group * time + iron12 + iron25,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_iron2 = lme(
+    log(pd) ~ arm_group * time + iron12 + iron25,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  )
 )
 ```
 
@@ -559,7 +806,7 @@ alpha_lmms_Fe2 <- list(
 #| label: tbl-model-stargazer
 #| tbl-cap: Comparison of random intercept models with or without baseline age (ageB) included as a fixed effect.
 #| results: asis
-stargazer::stargazer(alpha_lmms_Fe, alpha_lmms_Fe2, type="html")
+stargazer::stargazer(alpha_lmms_Fe, alpha_lmms_Fe2, type = "html")
 ```
 
 Using iron status over time rather than just at baseline appears to show that there is a difference in Chao index among the iron depleted group 
@@ -568,17 +815,57 @@ Using iron status over time rather than just at baseline appears to show that th
 #| eval: true
 #| label: alpha diversity LMM grouping by iron deficiency and sex
 alpha_lmms_Fe_sex <- list(
-  chao_lmm_iron_sex = lme(log(chao) ~ arm_group * time + iron_base12 + iron_base25 + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  shannon_lmm_iron_sex = lme(shannon^2 ~ arm_group * time + iron_base12 + iron_base25 + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  evenness_lmm_iron_sex = lme(evenness^2 ~ arm_group * time + iron_base12 + iron_base25 + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  pd_lmm_iron_sex = lme(log(pd) ~ arm_group * time + iron_base12 + iron_base25 + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+  chao_lmm_iron_sex = lme(
+    log(chao) ~ arm_group * time + iron_base12 + iron_base25 + sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  shannon_lmm_iron_sex = lme(
+    shannon^2 ~ arm_group * time + iron_base12 + iron_base25 + sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_iron_sex = lme(
+    evenness^2 ~ arm_group * time + iron_base12 + iron_base25 + sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_iron_sex = lme(
+    log(pd) ~ arm_group * time + iron_base12 + iron_base25 + sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  )
 )
 
 alpha_lmms_Fe_sex2 <- list(
-  chao_lmm_iron_sex2 = lme(log(chao) ~ arm_group * time + iron12 + iron25 + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  shannon_lmm_iron_sex2 = lme(shannon^2 ~ arm_group * time + iron12 + iron25 + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  evenness_lmm_iron_sex2 = lme(evenness^2 ~ arm_group * time + iron12 + iron25 + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  pd_lmm_iron_sex2 = lme(log(pd) ~ arm_group * time + iron12 + iron25 + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+  chao_lmm_iron_sex2 = lme(
+    log(chao) ~ arm_group * time + iron12 + iron25 + sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  shannon_lmm_iron_sex2 = lme(
+    shannon^2 ~ arm_group * time + iron12 + iron25 + sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_iron_sex2 = lme(
+    evenness^2 ~ arm_group * time + iron12 + iron25 + sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_iron_sex2 = lme(
+    log(pd) ~ arm_group * time + iron12 + iron25 + sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  )
 )
 ```
 
@@ -588,26 +875,42 @@ alpha_lmms_Fe_sex2 <- list(
 #| tbl-cap: Comparison of random intercept models with or without baseline age (ageB) included as a fixed effect.
 #| results: asis
 
-stargazer::stargazer(alpha_lmms_Fe, alpha_lmms_Fe_sex, alpha_lmms_Fe2, alpha_lmms_Fe_sex2, header = FALSE, type = "html", star.cutoffs = c(0.05, 0.001, 0.0001))
+stargazer::stargazer(
+  alpha_lmms_Fe,
+  alpha_lmms_Fe_sex,
+  alpha_lmms_Fe2,
+  alpha_lmms_Fe_sex2,
+  header = FALSE,
+  type = "html",
+  star.cutoffs = c(0.05, 0.001, 0.0001)
+)
 ```
 
 ```{r}
 #| eval: false
 #| label: tbl-anova-lmm-compare
 #| tbl-cap: anova summary comparison across nested models
-anova_results <- lapply(list(alpha_lmms_Fe, alpha_lmms_Fe_sex, alpha_lmms_Fe2, alpha_lmms_Fe_sex2), function(l) {
-  lapply(l, function(i) {
-    anova(i)
-  })
-})
+anova_results <- lapply(
+  list(alpha_lmms_Fe, alpha_lmms_Fe_sex, alpha_lmms_Fe2, alpha_lmms_Fe_sex2),
+  function(l) {
+    lapply(l, function(i) {
+      anova(i)
+    })
+  }
+)
 
-lapply(anova_results, function(x){
+lapply(anova_results, function(x) {
   df <- anova_pvalue(x) %>%
-  pivot_wider(id_cols = Terms, names_from = Model, values_from = P.value, values_fill = NA) %>%
-  kable(format = "markdown")
-  
+    pivot_wider(
+      id_cols = Terms,
+      names_from = Model,
+      values_from = P.value,
+      values_fill = NA
+    ) %>%
+    kable(format = "markdown")
+
   return(df)
-  })
+})
 ```
 
 #### Interaction between Sex and Baseline Iron Deficiency
@@ -618,10 +921,30 @@ I decided to run this interaction model because there was a significant (albeit 
 #| eval: true
 #| label: Interaction between Sex and Baseline Iron Deficiency
 alpha_lmms_iron_sex_int <- list(
-  chao_lmm_iron_sex_int = lme(log(chao) ~ arm_group * time + iron_base12 * sex + iron_base25, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  shannon_lmm_iron_sex_int = lme(shannon^2 ~ arm_group * time + iron_base12 * sex + iron_base25, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  evenness_lmm_iron_sex_int = lme(evenness^2 ~ arm_group * time + iron_base12 * sex + iron_base25, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  pd_lmm_iron_sex_int = lme(log(pd) ~ arm_group * time + iron_base12 * sex + iron_base25, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+  chao_lmm_iron_sex_int = lme(
+    log(chao) ~ arm_group * time + iron_base12 * sex + iron_base25,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  shannon_lmm_iron_sex_int = lme(
+    shannon^2 ~ arm_group * time + iron_base12 * sex + iron_base25,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_iron_sex_int = lme(
+    evenness^2 ~ arm_group * time + iron_base12 * sex + iron_base25,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_iron_sex_int = lme(
+    log(pd) ~ arm_group * time + iron_base12 * sex + iron_base25,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  )
 )
 ```
 
@@ -633,7 +956,12 @@ alpha_lmms_iron_sex_int <- list(
 tmp <- lapply(alpha_lmms_iron_sex_int, anova)
 
 anova_pvalue(tmp) %>%
-  pivot_wider(id_cols = Terms, names_from = Model, values_from = P.value, values_fill = NA) %>%
+  pivot_wider(
+    id_cols = Terms,
+    names_from = Model,
+    values_from = P.value,
+    values_fill = NA
+  ) %>%
   kable(format = "markdown")
 ```
 
@@ -647,10 +975,30 @@ Additionally, this happens when sex is added as a fixed term, suggesting that th
 #| eval: true
 #| label: Interaction between Sex and Baseline Iron Depletion
 alpha_lmms_iron_sex_int2 <- list(
-  chao_lmm_iron_sex_int2 = lme(log(chao) ~ arm_group * time + iron_base12 + iron_base25 * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  shannon_lmm_iron_sex_int2 = lme(shannon^2 ~ arm_group * time + iron_base12 + iron_base25 * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  evenness_lmm_iron_sex_int2 = lme(evenness^2 ~ arm_group * time + iron_base12 + iron_base25 * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  pd_lmm_iron_sex_int2 = lme(log(pd) ~ arm_group * time + iron_base12 + iron_base25 * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+  chao_lmm_iron_sex_int2 = lme(
+    log(chao) ~ arm_group * time + iron_base12 + iron_base25 * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  shannon_lmm_iron_sex_int2 = lme(
+    shannon^2 ~ arm_group * time + iron_base12 + iron_base25 * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_iron_sex_int2 = lme(
+    evenness^2 ~ arm_group * time + iron_base12 + iron_base25 * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_iron_sex_int2 = lme(
+    log(pd) ~ arm_group * time + iron_base12 + iron_base25 * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  )
 )
 ```
 
@@ -662,7 +1010,12 @@ alpha_lmms_iron_sex_int2 <- list(
 tmp <- lapply(alpha_lmms_iron_sex_int2, anova)
 
 anova_pvalue(tmp) %>%
-  pivot_wider(id_cols = Terms, names_from = Model, values_from = P.value, values_fill = NA) %>%
+  pivot_wider(
+    id_cols = Terms,
+    names_from = Model,
+    values_from = P.value,
+    values_fill = NA
+  ) %>%
   kable(format = "markdown")
 ```
 
@@ -678,10 +1031,30 @@ Q: Are changes in alpha diversity due to PM driven by iron status at baseline an
 ```{r}
 #| eval: true
 alpha_lmms_iron_sex_int3 <- list(
-  chao_lmm_iron_sex_int3 = lme(log(chao) ~ arm_group * time + iron_base12 * sex + iron_base25 * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  shannon_lmm_iron_sex_int3 = lme(shannon^2 ~ arm_group * time + iron_base12 * sex + iron_base25 * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  evenness_lmm_iron_sex_int3 = lme(evenness^2 ~ arm_group * time + iron_base12 * sex + iron_base25 * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  pd_lmm_iron_sex_int3 = lme(log(pd) ~ arm_group * time + iron_base12 * sex + iron_base25 * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+  chao_lmm_iron_sex_int3 = lme(
+    log(chao) ~ arm_group * time + iron_base12 * sex + iron_base25 * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  shannon_lmm_iron_sex_int3 = lme(
+    shannon^2 ~ arm_group * time + iron_base12 * sex + iron_base25 * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_iron_sex_int3 = lme(
+    evenness^2 ~ arm_group * time + iron_base12 * sex + iron_base25 * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_iron_sex_int3 = lme(
+    log(pd) ~ arm_group * time + iron_base12 * sex + iron_base25 * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  )
 )
 ```
 
@@ -691,7 +1064,14 @@ alpha_lmms_iron_sex_int3 <- list(
 #| tbl-cap: Model comparisons between several models using interaction term between iron status and sex
 #| results: asis
 
-stargazer::stargazer(alpha_lmms_iron_sex_int, alpha_lmms_iron_sex_int2, alpha_lmms_iron_sex_int3, star.cutoffs = c(0.05, 0.001, 0.0001), header = FALSE, type = "html")
+stargazer::stargazer(
+  alpha_lmms_iron_sex_int,
+  alpha_lmms_iron_sex_int2,
+  alpha_lmms_iron_sex_int3,
+  star.cutoffs = c(0.05, 0.001, 0.0001),
+  header = FALSE,
+  type = "html"
+)
 ```
 
 ```{r}
@@ -702,7 +1082,12 @@ stargazer::stargazer(alpha_lmms_iron_sex_int, alpha_lmms_iron_sex_int2, alpha_lm
 tmp <- lapply(alpha_lmms_iron_sex_int3, anova)
 
 anova_pvalue(tmp) %>%
-  pivot_wider(id_cols = Terms, names_from = Model, values_from = P.value, values_fill = NA) %>%
+  pivot_wider(
+    id_cols = Terms,
+    names_from = Model,
+    values_from = P.value,
+    values_fill = NA
+  ) %>%
   kable(format = "markdown")
 ```
 
@@ -742,7 +1127,12 @@ be_meta %>%
   group_by(timepoint) %>%
   count()
 
-diversity_stats <- data.frame(chao = as.numeric(be_meta$chao1), shannon = as.numeric(be_meta$diversity_shannon), evenness = as.numeric(be_meta$evenness_pielou), pd = as.numeric(be_meta$pd))
+diversity_stats <- data.frame(
+  chao = as.numeric(be_meta$chao1),
+  shannon = as.numeric(be_meta$diversity_shannon),
+  evenness = as.numeric(be_meta$evenness_pielou),
+  pd = as.numeric(be_meta$pd)
+)
 
 subject <- be_meta$displayid # categorical
 arm_group <- as.factor(as.character(be_meta$arm)) # categorical factor
@@ -755,10 +1145,12 @@ age_B_unscaled <- be_meta %>%
   group_by(displayid) %>%
   mutate(agedays_rounded = as.numeric(agedays_rounded)) %>%
   arrange(agedays_rounded, .by_group = TRUE) %>%
-  mutate(ageAtBaseline = case_when(
-    timepoint == "Baseline" ~ agedays_rounded,
-    FALSE ~ NA
-  )) %>%
+  mutate(
+    ageAtBaseline = case_when(
+      timepoint == "Baseline" ~ agedays_rounded,
+      FALSE ~ NA
+    )
+  ) %>%
   fill(ageAtBaseline) %>%
   ungroup() %>%
   dplyr::select(ageAtBaseline) %>%
@@ -779,7 +1171,22 @@ baseline_iron_status <- as.factor(be_meta$baseline_iron_status)
 #| fig.height: 10
 #| fig.width: 20
 tmp <- be_meta %>%
-  dplyr::select(`Anemia at Baseline` = anemia_base, fer_def12_base, fer_def25_base, fer_def12, fer_def25, fer, iron_status, baseline_iron_status, Sex = sex, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Entropy` = diversity_shannon, Evenness = evenness_pielou, `Faith's PD` = pd) %>%
+  dplyr::select(
+    `Anemia at Baseline` = anemia_base,
+    fer_def12_base,
+    fer_def25_base,
+    fer_def12,
+    fer_def25,
+    fer,
+    iron_status,
+    baseline_iron_status,
+    Sex = sex,
+    `Observed features` = observed,
+    `Chao 1 Index` = chao1,
+    `Shannon Entropy` = diversity_shannon,
+    Evenness = evenness_pielou,
+    `Faith's PD` = pd
+  ) %>%
   mutate_at(vars(everything()), as.numeric)
 
 
@@ -790,7 +1197,8 @@ cor_test_mat <- round(ggcorrplot::cor_pmat(tmp), 4)
 cor_test_matFer <- cor_test_mat[, 1:6]
 cor_test_matalpha <- cor_test_mat[, 7:ncol(cor_test_mat)]
 
-corrPlot <- ggcorrplot::ggcorrplot(corr,
+corrPlot <- ggcorrplot::ggcorrplot(
+  corr,
   p.mat = cor_test_mat,
   hc.order = FALSE,
   method = "square",
@@ -818,13 +1226,15 @@ ggarrange(
       widths = 1,
       heights = NULL
     ),
-    top = text_grob("Correlation Coefficient P-values",
+    top = text_grob(
+      "Correlation Coefficient P-values",
       color = "black",
       face = "bold",
       size = 14,
       vjust = 3.5
     ),
-    bottom = text_grob("Circles represent correlations that are NOT significant",
+    bottom = text_grob(
+      "Circles represent correlations that are NOT significant",
       color = "black",
       face = "italic",
       size = 14,
@@ -843,49 +1253,173 @@ ggarrange(
 #| eval: true
 #| label: LMMs with combined iron status
 alpha_lmms_iron_status <- list(
-
   # baseline iron status alone as fixed effect
-  chao_lmm_iron = lme(log(chao) ~ arm_group * time + baseline_iron_status, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  shannon_lmm_iron = lme(shannon^2 ~ arm_group * time + baseline_iron_status, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  evenness_lmm_iron = lme(evenness^2 ~ arm_group * time + baseline_iron_status, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  pd_lmm_iron = lme(log(pd) ~ arm_group * time + baseline_iron_status, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  chao_lmm_iron = lme(
+    log(chao) ~ arm_group * time + baseline_iron_status,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  shannon_lmm_iron = lme(
+    shannon^2 ~ arm_group * time + baseline_iron_status,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_iron = lme(
+    evenness^2 ~ arm_group * time + baseline_iron_status,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_iron = lme(
+    log(pd) ~ arm_group * time + baseline_iron_status,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
 
   # iron status at timepoint alone as fixed effect
-  chao_lmm_iron2 = lme(log(chao) ~ arm_group * time + iron_status, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  shannon_lmm_iron2 = lme(shannon^2 ~ arm_group * time + iron_status, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  evenness_lmm_iron2 = lme(evenness^2 ~ arm_group * time + iron_status, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  pd_lmm_iron2 = lme(log(pd) ~ arm_group * time + iron_status, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  chao_lmm_iron_sex = lme(log(chao) ~ arm_group * time + baseline_iron_status + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  chao_lmm_iron2 = lme(
+    log(chao) ~ arm_group * time + iron_status,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  shannon_lmm_iron2 = lme(
+    shannon^2 ~ arm_group * time + iron_status,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_iron2 = lme(
+    evenness^2 ~ arm_group * time + iron_status,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_iron2 = lme(
+    log(pd) ~ arm_group * time + iron_status,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  chao_lmm_iron_sex = lme(
+    log(chao) ~ arm_group * time + baseline_iron_status + sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
 
   # baseline iron status and sex as fixed effect
-  shannon_lmm_iron_sex = lme(shannon^2 ~ arm_group * time + baseline_iron_status + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  evenness_lmm_iron_sex = lme(evenness^2 ~ arm_group * time + baseline_iron_status + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  pd_lmm_iron_sex = lme(log(pd) ~ arm_group * time + baseline_iron_status + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  shannon_lmm_iron_sex = lme(
+    shannon^2 ~ arm_group * time + baseline_iron_status + sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_iron_sex = lme(
+    evenness^2 ~ arm_group * time + baseline_iron_status + sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_iron_sex = lme(
+    log(pd) ~ arm_group * time + baseline_iron_status + sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
 
   # iron status at timepoint and sex as fixed effect
-  chao_lmm_iron_sex2 = lme(log(chao) ~ arm_group * time + iron_status + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  shannon_lmm_iron_sex2 = lme(shannon^2 ~ arm_group * time + iron_status + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  evenness_lmm_iron_sex2 = lme(evenness^2 ~ arm_group * time + iron_status + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  pd_lmm_iron_sex2 = lme(log(pd) ~ arm_group * time + iron_status + sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  chao_lmm_iron_sex2 = lme(
+    log(chao) ~ arm_group * time + iron_status + sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  shannon_lmm_iron_sex2 = lme(
+    shannon^2 ~ arm_group * time + iron_status + sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_iron_sex2 = lme(
+    evenness^2 ~ arm_group * time + iron_status + sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_iron_sex2 = lme(
+    log(pd) ~ arm_group * time + iron_status + sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
 
   # interaction between baseline iron status and sex as fixed effect
-  chao_lmm_iron_sex_inter = lme(log(chao) ~ arm_group * time + baseline_iron_status * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  shannon_lmm_iron_sex_inter = lme(shannon^2 ~ arm_group * time + baseline_iron_status * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  evenness_lmm_iron_sex_inter = lme(evenness^2 ~ arm_group * time + baseline_iron_status * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  pd_lmm_iron_sex_inter = lme(log(pd) ~ arm_group * time + baseline_iron_status * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
+  chao_lmm_iron_sex_inter = lme(
+    log(chao) ~ arm_group * time + baseline_iron_status * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  shannon_lmm_iron_sex_inter = lme(
+    shannon^2 ~ arm_group * time + baseline_iron_status * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_iron_sex_inter = lme(
+    evenness^2 ~ arm_group * time + baseline_iron_status * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_iron_sex_inter = lme(
+    log(pd) ~ arm_group * time + baseline_iron_status * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
 
   # interaction between iron status at timepoint and sex as fixed effect
-  chao_lmm_iron_sex_inter2 = lme(log(chao) ~ arm_group * time + iron_status * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  shannon_lmm_iron_sex_inter2 = lme(shannon^2 ~ arm_group * time + iron_status * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  evenness_lmm_iron_sex_inter2 = lme(evenness^2 ~ arm_group * time + iron_status * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  pd_lmm_iron_sex_inter2 = lme(log(pd) ~ arm_group * time + iron_status * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+  chao_lmm_iron_sex_inter2 = lme(
+    log(chao) ~ arm_group * time + iron_status * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  shannon_lmm_iron_sex_inter2 = lme(
+    shannon^2 ~ arm_group * time + iron_status * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_iron_sex_inter2 = lme(
+    evenness^2 ~ arm_group * time + iron_status * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_iron_sex_inter2 = lme(
+    log(pd) ~ arm_group * time + iron_status * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  )
 )
 ```
 
 ```{r}
 #| eval: false
 #| results: asis
-stargazer::stargazer(alpha_lmms_iron_status[4:6], type = "html", star.cutoffs = c(0.05, 0.001, 0.0001), header = FALSE)
+stargazer::stargazer(
+  alpha_lmms_iron_status[4:6],
+  type = "html",
+  star.cutoffs = c(0.05, 0.001, 0.0001),
+  header = FALSE
+)
 ```
 
 The two models that look at iron status and its interaction with sex are the final models I think I will build on. In terms of goodness of fit, they perform well.
@@ -907,7 +1441,12 @@ kable(residual_norm_test(alpha_lmms_iron_status), format = "markdown")
 anova_results <- lapply(alpha_lmms_iron_status, anova)
 
 anova_pvalue(anova_results) %>%
-  pivot_wider(id_cols = Terms, names_from = Model, values_from = P.value, values_fill = NA) %>%
+  pivot_wider(
+    id_cols = Terms,
+    names_from = Model,
+    values_from = P.value,
+    values_fill = NA
+  ) %>%
   kable(format = "markdown")
 ```
 
@@ -923,32 +1462,35 @@ As of 2024, the WHO has released new haemoglobin cut offs to diagnose anaemia. K
 
 be_meta <- be_meta %>%
   mutate(
-    anemia_status_old =
-      case_when(
-        hb < 7.0 ~ 4, # severe
-        hb >= 7.0 & hb <= 9.9 ~ 3, # moderate
-        hb >= 10.0 & hb <= 10.9 ~ 2, # mild
-        hb >= 11.0 ~ 1, # no anemia
-        TRUE ~ 8
-      )
+    anemia_status_old = case_when(
+      hb < 7.0 ~ 4, # severe
+      hb >= 7.0 & hb <= 9.9 ~ 3, # moderate
+      hb >= 10.0 & hb <= 10.9 ~ 2, # mild
+      hb >= 11.0 ~ 1, # no anemia
+      TRUE ~ 8
+    )
   ) %>%
   mutate(
-    anemia_status_new =
-      case_when(
-        agemonths < 24 & hb < 7.0 ~ 4, # severe
-        agemonths < 24 & hb >= 7.0 & hb <= 9.4 ~ 3, # moderate
-        agemonths < 24 & hb >= 9.5 & hb <= 10.4 ~ 2, # mild
-        agemonths < 24 & hb >= 10.5 ~ 1, # no anemia
-        agemonths >= 24 & hb < 7.0 ~ 4, # severe
-        agemonths >= 24 & hb >= 7.0 & hb <= 9.9 ~ 3, # moderate
-        agemonths >= 24 & hb >= 10.0 & hb <= 10.9 ~ 2, # mild
-        agemonths >= 24 & hb >= 11.0 ~ 1, # no anemia
-        TRUE ~ 8 # cutoffs for >=24 mths of age is the same as previous cutoffs
-      )
+    anemia_status_new = case_when(
+      agemonths < 24 & hb < 7.0 ~ 4, # severe
+      agemonths < 24 & hb >= 7.0 & hb <= 9.4 ~ 3, # moderate
+      agemonths < 24 & hb >= 9.5 & hb <= 10.4 ~ 2, # mild
+      agemonths < 24 & hb >= 10.5 ~ 1, # no anemia
+      agemonths >= 24 & hb < 7.0 ~ 4, # severe
+      agemonths >= 24 & hb >= 7.0 & hb <= 9.9 ~ 3, # moderate
+      agemonths >= 24 & hb >= 10.0 & hb <= 10.9 ~ 2, # mild
+      agemonths >= 24 & hb >= 11.0 ~ 1, # no anemia
+      TRUE ~ 8 # cutoffs for >=24 mths of age is the same as previous cutoffs
+    )
   )
-  
+
 be_meta <- be_meta %>%
-  dplyr::filter(anemia_status_old != 8, anemia_status_new != 8, iron_status != 4, baseline_iron_status != 4) %>%
+  dplyr::filter(
+    anemia_status_old != 8,
+    anemia_status_new != 8,
+    iron_status != 4,
+    baseline_iron_status != 4
+  ) %>%
   group_by(displayid) %>%
   dplyr::filter(all(c("Baseline", "Endpoint") %in% timepoint)) %>%
   ungroup()
@@ -959,7 +1501,12 @@ be_meta %>%
   count()
 
 ## other variables need to be redefined to match the length of the heme variable
-diversity_stats <- data.frame(chao = as.numeric(be_meta$chao1), shannon = as.numeric(be_meta$diversity_shannon), evenness = as.numeric(be_meta$evenness_pielou), pd = as.numeric(be_meta$pd))
+diversity_stats <- data.frame(
+  chao = as.numeric(be_meta$chao1),
+  shannon = as.numeric(be_meta$diversity_shannon),
+  evenness = as.numeric(be_meta$evenness_pielou),
+  pd = as.numeric(be_meta$pd)
+)
 
 subject <- be_meta$displayid # categorical
 arm_group <- as.factor(as.character(be_meta$arm)) # categorical factor
@@ -985,7 +1532,19 @@ baseline_iron_status <- as.factor(be_meta$baseline_iron_status)
 #| fig.height: 10
 #| fig.width: 20
 tmp <- be_meta %>%
-  dplyr::select(`Anemia at Baseline` = anemia_base, anemia_status_old, anemia_status_new, iron_status, baseline_iron_status, Sex = sex, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Entropy` = diversity_shannon, Evenness = evenness_pielou, `Faith's PD` = pd) %>%
+  dplyr::select(
+    `Anemia at Baseline` = anemia_base,
+    anemia_status_old,
+    anemia_status_new,
+    iron_status,
+    baseline_iron_status,
+    Sex = sex,
+    `Observed features` = observed,
+    `Chao 1 Index` = chao1,
+    `Shannon Entropy` = diversity_shannon,
+    Evenness = evenness_pielou,
+    `Faith's PD` = pd
+  ) %>%
   mutate_at(vars(everything()), as.numeric)
 
 corr <- tmp %>%
@@ -995,7 +1554,8 @@ cor_test_mat <- round(ggcorrplot::cor_pmat(tmp), 4)
 cor_test_matFer <- cor_test_mat[, 1:6]
 cor_test_matalpha <- cor_test_mat[, 7:ncol(cor_test_mat)]
 
-corrPlot <- ggcorrplot::ggcorrplot(corr,
+corrPlot <- ggcorrplot::ggcorrplot(
+  corr,
   p.mat = cor_test_mat,
   hc.order = FALSE,
   method = "square",
@@ -1023,13 +1583,15 @@ ggarrange(
       widths = 1,
       heights = NULL
     ),
-    top = text_grob("Correlation Coefficient P-values",
+    top = text_grob(
+      "Correlation Coefficient P-values",
       color = "black",
       face = "bold",
       size = 14,
       vjust = 3.5
     ),
-    bottom = text_grob("Circles represent correlations that are NOT significant",
+    bottom = text_grob(
+      "Circles represent correlations that are NOT significant",
       color = "black",
       face = "italic",
       size = 14,
@@ -1069,10 +1631,30 @@ Q: Are there sex specific alpha diversity changes modulated by iron status and/o
 #| label: iron and anemia model Exp3
 #| error: true
 alpha_lmms_FeHb <- list(
-  chao_lmm_FeHb = lme(log(chao) ~ arm_group * time + iron_status * anemia_status_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  shannon_lmm_FeHb = lme(shannon^2 ~ arm_group * time + iron_status * anemia_status_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  evenness_lmm_FeHb = lme(evenness^2 ~ arm_group * time + iron_status * anemia_status_new * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  pd_lmm_FeHb = lme(log(pd) ~ arm_group * time + iron_status * anemia_status_new * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+  chao_lmm_FeHb = lme(
+    log(chao) ~ arm_group * time + iron_status * anemia_status_old * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  shannon_lmm_FeHb = lme(
+    shannon^2 ~ arm_group * time + iron_status * anemia_status_old * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_FeHb = lme(
+    evenness^2 ~ arm_group * time + iron_status * anemia_status_new * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_FeHb = lme(
+    log(pd) ~ arm_group * time + iron_status * anemia_status_new * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  )
 )
 ```
 
@@ -1100,14 +1682,43 @@ It is related to the `MEEM` (Multivariate Expectation-Maximization algorithm).
 #| eval: true
 #| label: increasing number of iterations
 #| error: true
-ctrl <- lmeControl(niterEM = 10000, msMaxIter = 10000, msMaxEval = 10000, maxIter = 10000)
+ctrl <- lmeControl(
+  niterEM = 10000,
+  msMaxIter = 10000,
+  msMaxEval = 10000,
+  maxIter = 10000
+)
 
 alpha_lmms_FeHb <- list(
   # interaction between iron status at timepoint and sex as fixed effect
-  chao_lmm_FeHb = lme(log(chao) ~ arm_group * time + iron_status * heme_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats, control = ctrl),
-  shannon_lmm_FeHb = lme(shannon^2 ~ arm_group * time + iron_status * heme_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats, control = ctrl),
-  evenness_lmm_FeHb = lme(evenness^2 ~ arm_group * time + iron_status * heme_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats, control = ctrl),
-  pd_lmm_FeHb = lme(log(pd) ~ arm_group * time + iron_status * heme_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats, control = ctrl)
+  chao_lmm_FeHb = lme(
+    log(chao) ~ arm_group * time + iron_status * heme_old * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats,
+    control = ctrl
+  ),
+  shannon_lmm_FeHb = lme(
+    shannon^2 ~ arm_group * time + iron_status * heme_old * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats,
+    control = ctrl
+  ),
+  evenness_lmm_FeHb = lme(
+    evenness^2 ~ arm_group * time + iron_status * heme_old * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats,
+    control = ctrl
+  ),
+  pd_lmm_FeHb = lme(
+    log(pd) ~ arm_group * time + iron_status * heme_old * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats,
+    control = ctrl
+  )
 )
 ```
 
@@ -1132,86 +1743,117 @@ alpha_lmms_FeHb <- list(
 tmp <- be_meta %>%
   dplyr::select(hb, fer) %>%
   mutate_at(vars(everything()), as.numeric)
-      
+
 print("Correlation coefficients")
- kable(tmp %>%
-   cor(method = "spearman", use = "pairwise.complete.obs"))
+kable(
+  tmp %>%
+    cor(method = "spearman", use = "pairwise.complete.obs")
+)
 
 print("Correlation coefficients p-values")
 kable(round(cor_test(tmp), 4))
-```
+``
+`
   
 Positive correlation between serum iron and haemoglobin concentrations ($\rho$ = 0.5879, p < 0.0001), may indicate multicolinearity. If you look at the Spearman correlation plot you can also see that a number of Iron and anaemia variables have correlation coefficients greater than |0.4|.
 
 If there are any colinearity concerns:
   - consider combining them into one variable
 
-```{r}
+`
+``
+{
+  r
+}
 #| eval: true
 #| results: hide
 #| label: Combining iron and anemia status variables
 be_meta <- be_meta %>%
-  mutate(iron_anemia_def_old = case_when(
-        hb >= 11.0 & fer >= 25 ~ 1, # no anemia, iron replete
-        hb >= 11.0 & fer >= 12 & fer < 25 ~ 2, # no anemia, iron depleted
-        hb >= 11.0 & fer < 12 ~ 3, # no anemia, iron deficient
-        
-        hb >= 10.0 & hb <= 10.9 & fer >= 25 ~ 4, # mild anemia, iron replete
-        hb >= 10.0 & hb <= 10.9 & fer >= 12 & fer < 25 ~ 5, # mild anemia, iron depleted
-        hb >= 10.0 & hb <= 10.9 & fer < 12 ~ 6, # mild anemia, iron deficient
-        
-        hb >= 7.0 & hb <= 9.9 & fer >= 25 ~ 7, # moderate anemia, iron replete
-        hb >= 7.0 & hb <= 9.9 & fer >= 12 & fer < 25 ~ 8, # moderate anemia, iron depleted
-        hb >= 7.0 & hb <= 9.9 & fer < 12 ~ 9, # moderate anemia, iron deficient
-        
-        hb < 7.0 & fer >= 25 ~ 10, # severe anemia, iron replete
-        hb < 7.0 & fer >= 12 & fer < 25 ~ 11, # severe anemia, iron depleted
-        hb < 7.0 & fer < 12 ~ 12 # severe anemia, iron deficient
-  )) %>%
-  mutate(iron_anemia_def_new = case_when(
-        agemonths < 24 & hb >= 11.0 & fer >= 25 ~ 1, # no anemia, iron replete
-        agemonths < 24 & hb >= 11.0 & fer >= 12 & fer < 25 ~ 2, # no anemia, iron depleted
-        agemonths < 24 & hb >= 11.0 & fer < 12 ~ 3, # no anemia, iron deficient
-        
-        agemonths < 24 & hb >= 10.0 & hb <= 10.9 & fer >= 25 ~ 4, # mild anemia, iron replete
-        agemonths < 24 & hb >= 10.0 & hb <= 10.9 & fer >= 12 & fer < 25 ~ 5, # mild anemia, iron depleted
-        agemonths < 24 & hb >= 10.0 & hb <= 10.9 & fer < 12 ~ 6, # mild anemia, iron deficient
-        
-        agemonths < 24 & hb >= 7.0 & hb <= 9.9 & fer >= 25 ~ 7, # moderate anemia, iron replete
-        agemonths < 24 & hb >= 7.0 & hb <= 9.9 & fer >= 12 & fer < 25 ~ 8, # moderate anemia, iron depleted
-        agemonths < 24 & hb >= 7.0 & hb <= 9.9 & fer < 12 ~ 9, # moderate anemia, iron deficient
-        
-        agemonths < 24 & hb < 7.0 & fer >= 25 ~ 10, # severe anemia, iron replete
-        agemonths < 24 & hb < 7.0 & fer >= 12 & fer < 25 ~ 11, # severe anemia, iron depleted
-        agemonths < 24 & hb < 7.0 & fer < 12 ~ 12, # severe anemia, iron deficient
+  mutate(
+    iron_anemia_def_old = case_when(
+      hb >= 11.0 & fer >= 25 ~ 1, # no anemia, iron replete
+      hb >= 11.0 & fer >= 12 & fer < 25 ~ 2, # no anemia, iron depleted
+      hb >= 11.0 & fer < 12 ~ 3, # no anemia, iron deficient
 
-        agemonths >= 24 & hb >= 11.0 & fer >= 25 ~ 1, # no anemia, iron replete
-        agemonths >= 24 & hb >= 11.0 & fer >= 12 & fer < 25 ~ 2, # no anemia, iron depleted
-        agemonths >= 24 & hb >= 11.0 & fer < 12 ~ 3, # no anemia, iron deficient
-        
-        agemonths >= 24 & hb >= 10.0 & hb <= 10.9 & fer >= 25 ~ 4, # mild anemia, iron replete
-        agemonths >= 24 & hb >= 10.0 & hb <= 10.9 & fer >= 12 & fer < 25 ~ 5, # mild anemia, iron depleted
-        agemonths >= 24 & hb >= 10.0 & hb <= 10.9 & fer < 12 ~ 6, # mild anemia, iron deficient
-        
-        agemonths >= 24 & hb >= 7.0 & hb <= 9.9 & fer >= 25 ~ 7, # moderate anemia, iron replete
-        agemonths >= 24 & hb >= 7.0 & hb <= 9.9 & fer >= 12 & fer < 25 ~ 8, # moderate anemia, iron depleted
-        agemonths >= 24 & hb >= 7.0 & hb <= 9.9 & fer < 12 ~ 9, # moderate anemia, iron deficient
-        
-        agemonths >= 24 & hb < 7.0 & fer >= 25 ~ 10, # severe anemia, iron replete
-        agemonths >= 24 & hb < 7.0 & fer >= 12 & fer < 25 ~ 11, # severe anemia, iron depleted
-        agemonths >= 24 & hb < 7.0 & fer < 12 ~ 12 # severe anemia, iron deficient
-  ))
+      hb >= 10.0 & hb <= 10.9 & fer >= 25 ~ 4, # mild anemia, iron replete
+      hb >= 10.0 & hb <= 10.9 & fer >= 12 & fer < 25 ~ 5, # mild anemia, iron depleted
+      hb >= 10.0 & hb <= 10.9 & fer < 12 ~ 6, # mild anemia, iron deficient
+
+      hb >= 7.0 & hb <= 9.9 & fer >= 25 ~ 7, # moderate anemia, iron replete
+      hb >= 7.0 & hb <= 9.9 & fer >= 12 & fer < 25 ~ 8, # moderate anemia, iron depleted
+      hb >= 7.0 & hb <= 9.9 & fer < 12 ~ 9, # moderate anemia, iron deficient
+
+      hb < 7.0 & fer >= 25 ~ 10, # severe anemia, iron replete
+      hb < 7.0 & fer >= 12 & fer < 25 ~ 11, # severe anemia, iron depleted
+      hb < 7.0 & fer < 12 ~ 12 # severe anemia, iron deficient
+    )
+  ) %>%
+  mutate(
+    iron_anemia_def_new = case_when(
+      agemonths < 24 & hb >= 11.0 & fer >= 25 ~ 1, # no anemia, iron replete
+      agemonths < 24 & hb >= 11.0 & fer >= 12 & fer < 25 ~ 2, # no anemia, iron depleted
+      agemonths < 24 & hb >= 11.0 & fer < 12 ~ 3, # no anemia, iron deficient
+
+      agemonths < 24 & hb >= 10.0 & hb <= 10.9 & fer >= 25 ~ 4, # mild anemia, iron replete
+      agemonths < 24 & hb >= 10.0 & hb <= 10.9 & fer >= 12 & fer < 25 ~ 5, # mild anemia, iron depleted
+      agemonths < 24 & hb >= 10.0 & hb <= 10.9 & fer < 12 ~ 6, # mild anemia, iron deficient
+
+      agemonths < 24 & hb >= 7.0 & hb <= 9.9 & fer >= 25 ~ 7, # moderate anemia, iron replete
+      agemonths < 24 & hb >= 7.0 & hb <= 9.9 & fer >= 12 & fer < 25 ~ 8, # moderate anemia, iron depleted
+      agemonths < 24 & hb >= 7.0 & hb <= 9.9 & fer < 12 ~ 9, # moderate anemia, iron deficient
+
+      agemonths < 24 & hb < 7.0 & fer >= 25 ~ 10, # severe anemia, iron replete
+      agemonths < 24 & hb < 7.0 & fer >= 12 & fer < 25 ~ 11, # severe anemia, iron depleted
+      agemonths < 24 & hb < 7.0 & fer < 12 ~ 12, # severe anemia, iron deficient
+
+      agemonths >= 24 & hb >= 11.0 & fer >= 25 ~ 1, # no anemia, iron replete
+      agemonths >= 24 & hb >= 11.0 & fer >= 12 & fer < 25 ~ 2, # no anemia, iron depleted
+      agemonths >= 24 & hb >= 11.0 & fer < 12 ~ 3, # no anemia, iron deficient
+
+      agemonths >= 24 & hb >= 10.0 & hb <= 10.9 & fer >= 25 ~ 4, # mild anemia, iron replete
+      agemonths >= 24 & hb >= 10.0 & hb <= 10.9 & fer >= 12 & fer < 25 ~ 5, # mild anemia, iron depleted
+      agemonths >= 24 & hb >= 10.0 & hb <= 10.9 & fer < 12 ~ 6, # mild anemia, iron deficient
+
+      agemonths >= 24 & hb >= 7.0 & hb <= 9.9 & fer >= 25 ~ 7, # moderate anemia, iron replete
+      agemonths >= 24 & hb >= 7.0 & hb <= 9.9 & fer >= 12 & fer < 25 ~ 8, # moderate anemia, iron depleted
+      agemonths >= 24 & hb >= 7.0 & hb <= 9.9 & fer < 12 ~ 9, # moderate anemia, iron deficient
+
+      agemonths >= 24 & hb < 7.0 & fer >= 25 ~ 10, # severe anemia, iron replete
+      agemonths >= 24 & hb < 7.0 & fer >= 12 & fer < 25 ~ 11, # severe anemia, iron depleted
+      agemonths >= 24 & hb < 7.0 & fer < 12 ~ 12 # severe anemia, iron deficient
+    )
+  )
 
 iron_anemia_def_old <- as.factor(be_meta$iron_anemia_def_old)
 iron_anemia_def_new <- as.factor(be_meta$iron_anemia_def_new)
 
 alpha_lmms_FeHb <- list(
-    # interaction between iron status at timepoint and sex as fixed effect
- chao_lmm_FeHb = lme(log(chao) ~ arm_group * time + iron_anemia_def_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
- shannon_lmm_FeHb = lme(shannon^2 ~ arm_group * time + iron_anemia_def_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
- evenness_lmm_FeHb = lme(evenness^2 ~ arm_group * time + iron_anemia_def_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
- pd_lmm_FeHb = lme(log(pd) ~ arm_group * time + iron_anemia_def_old * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats)
-    )
+  # interaction between iron status at timepoint and sex as fixed effect
+  chao_lmm_FeHb = lme(
+    log(chao) ~ arm_group * time + iron_anemia_def_old * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  shannon_lmm_FeHb = lme(
+    shannon^2 ~ arm_group * time + iron_anemia_def_old * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_FeHb = lme(
+    evenness^2 ~ arm_group * time + iron_anemia_def_old * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_FeHb = lme(
+    log(pd) ~ arm_group * time + iron_anemia_def_old * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  )
+)
 ```
 
 ```{r}
@@ -1219,7 +1861,12 @@ alpha_lmms_FeHb <- list(
 #| label: tbl-star-iron-hemo
 #| tbl-cap: Iron and hemoglobin as categorical variables model summary statistics
 
-stargazer::stargazer(alpha_lmms_FeHb, type = "html", star.cutoffs = c(0.05, 0.001, 0.0001), header = FALSE)
+stargazer::stargazer(
+  alpha_lmms_FeHb,
+  type = "html",
+  star.cutoffs = c(0.05, 0.001, 0.0001),
+  header = FALSE
+)
 ```
 
   - scale variables
@@ -1238,10 +1885,30 @@ hb_conc <- be_meta$hb
 
 alpha_lmms_FeHb_conc <- list(
   # interaction between iron status at timepoint and sex as fixed effect
-  chao_lmm_FeHb = lme(log(chao) ~ arm_group * time + fe_conc * hb_conc * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  shannon_lmm_FeHb = lme(shannon^2 ~ arm_group * time + fe_conc * hb_conc * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  evenness_lmm_FeHb = lme(evenness^2 ~ arm_group * time + fe_conc * hb_conc * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats),
-  pd_lmm_FeHb = lme(log(pd) ~ arm_group * time + fe_conc * hb_conc * sex, random = ~ 1 | subject, method = "REML", data = diversity_stats)
+  chao_lmm_FeHb = lme(
+    log(chao) ~ arm_group * time + fe_conc * hb_conc * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  shannon_lmm_FeHb = lme(
+    shannon^2 ~ arm_group * time + fe_conc * hb_conc * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  evenness_lmm_FeHb = lme(
+    evenness^2 ~ arm_group * time + fe_conc * hb_conc * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  ),
+  pd_lmm_FeHb = lme(
+    log(pd) ~ arm_group * time + fe_conc * hb_conc * sex,
+    random = ~ 1 | subject,
+    method = "REML",
+    data = diversity_stats
+  )
 )
 ```
 
@@ -1250,7 +1917,12 @@ alpha_lmms_FeHb_conc <- list(
 #| label: tbl-star-iron-hemo-2
 #| tbl-cap: Iron and hemoglobin as continuous variables model summary statistics
 
-stargazer::stargazer(alpha_lmms_FeHb_conc, type = "html", star.cutoffs = c(0.05, 0.001, 0.0001), header = FALSE)
+stargazer::stargazer(
+  alpha_lmms_FeHb_conc,
+  type = "html",
+  star.cutoffs = c(0.05, 0.001, 0.0001),
+  header = FALSE
+)
 ```
 
 ```{r}
@@ -1269,7 +1941,7 @@ The precision of the correlation parameter estimation by the `alpha_lmms_FeHb_co
 #| error: true
 lapply(alpha_lmms_FeHb_conc, intervals, which = "fixed")
 
-lapply(alpha_lmms_FeHb_conc, function(x){
+lapply(alpha_lmms_FeHb_conc, function(x) {
   print(x$apVar)
 })
 ```
@@ -1287,14 +1959,20 @@ kable(anova_pvalue(tmp), format = "markdown")
 #| eval: true
 #| label: fig-res-diagnostics
 #| fig-cap: Residual diagnostic plots for continuous FeHb LMMs
-mapply(residual_plots, model = alpha_lmms_FeHb_conc, model_name = names(alpha_lmms_FeHb_conc), render = TRUE, chol =T)
+mapply(
+  residual_plots,
+  model = alpha_lmms_FeHb_conc,
+  model_name = names(alpha_lmms_FeHb_conc),
+  render = TRUE,
+  chol = T
+)
 ```
 
 
 ```{r}
 #| eval: true
 #| label: variance correlation
-lapply(alpha_lmms_FeHb_conc, function(x){
+lapply(alpha_lmms_FeHb_conc, function(x) {
   kable(VarCorr(x))
 })
 ```
@@ -1305,7 +1983,7 @@ A p-value < 0.05 indicates non-constant variance (heteroskedasticity)
 #| eval: true
 #| label: tbl-heteroske-test
 #| tbl-cap: Breusch-Pagan test for Heteroskedasticity
-lapply(alpha_lmms_FeHb_conc, function(x){
+lapply(alpha_lmms_FeHb_conc, function(x) {
   kable(performance::check_heteroskedasticity(x), format = "markdown")
 })
 ```
@@ -1318,15 +1996,18 @@ The normalized RMSE is the proportion of the RMSE related to the range of the re
 #| eval: true
 #| label: tbl-rmse
 #| tbl-cap: Alpha diversity FeHb model raw and normalized RMSE results.
-roc <- lapply(alpha_lmms_FeHb_conc, function(x){
+roc <- lapply(alpha_lmms_FeHb_conc, function(x) {
   performance::performance_rmse(x, normalized = FALSE)
 })
 
-roc_norm <- lapply(alpha_lmms_FeHb_conc, function(x){
+roc_norm <- lapply(alpha_lmms_FeHb_conc, function(x) {
   performance::performance_rmse(x, normalized = TRUE)
 })
 
-kable(data.frame(RMSE=do.call(rbind, roc), RMSE_normalized=do.call(rbind, roc_norm)))
+kable(data.frame(
+  RMSE = do.call(rbind, roc),
+  RMSE_normalized = do.call(rbind, roc_norm)
+))
 
 ```
 
@@ -1341,21 +2022,40 @@ The default correlation structure is assumed to be unstructured, that is, there 
 #| eval: true
 #| label: Step1
 tmp <- be_meta %>%
-  dplyr::select(timepoint, `Observed features` = observed, `Chao 1 Index` = chao1, `Shannon Entropy` = diversity_shannon, Evenness = evenness_pielou, `Faith's PD` = pd) %>%
-  mutate_at(vars(!timepoint), as.numeric) %>% 
+  dplyr::select(
+    timepoint,
+    `
+Observed
+features
+` = observed,
+    `
+Chao
+1
+Index
+` = chao1,
+    `
+Shannon
+Entropy
+` = diversity_shannon,
+    Evenness = evenness_pielou,
+    `
+Faith
+'s PD` = pd
+  ) %>%
+  mutate_at(vars(!timepoint), as.numeric) %>%
   group_by(timepoint) %>%
   mutate(row_id = row_number()) %>%
   ungroup() %>%
   pivot_longer(cols = !c(timepoint, row_id)) %>%
   group_by(row_id) %>%
-  pivot_wider(names_from = timepoint, values_from =  value)
+  pivot_wider(names_from = timepoint, values_from = value)
 
 tmp %>%
-  ggplot(aes(x = `Baseline`, y = `Endpoint`)) + 
-    geom_point() +
-    geom_smooth(method = "lm") +
-    stat_cor(position = "dodge") +
-    facet_wrap(~name, scale = "free")
+  ggplot(aes(x = `Baseline`, y = `Endpoint`)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor(position = "dodge") +
+  facet_wrap(~name, scale = "free")
 
 ```
 
@@ -1368,7 +2068,7 @@ tmp %>%
 fm2 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corCompSymm()) #compound symmetry
 fm3 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corAR1())
 #fm4 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corARMA()) #depreceated
-fm5 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corExp()) 
+fm5 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corExp())
 fm6 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corCAR1())
 fm7 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corGaus())
 fm8 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corLin())
@@ -1376,7 +2076,7 @@ fm9 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corRatio())
 fm10 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corSpher())
 fm11 <- lapply(alpha_lmms_FeHb_conc, update, correlation = corSymm())
 
-fm <- c(alpha_lmms_FeHb_conc, fm2, fm3, fm5,fm6,fm7,fm8,fm9,fm10,fm11)
+fm <- c(alpha_lmms_FeHb_conc, fm2, fm3, fm5, fm6, fm7, fm8, fm9, fm10, fm11)
 fm_split <- split(fm, names(fm))
 ```
 
@@ -1392,14 +2092,20 @@ Each updated models are nested within the original model. Therefore they can be 
 ## Iterate over each list of models
 for (i in 1:length(fm_split)) {
   models <- fm_split[[i]]
-  
+
   # Compare each model with the others using anova()
-for (j in 1:length(models)) {
-  if (j > 1) {
-    anova_result <- anova(models[[1]], models[[j]])
-    cat("Comparison between model 1 and model", j, "in list", names(fm_split)[i], ":\n")
-    print(anova_result)
-    cat("\n")
+  for (j in 1:length(models)) {
+    if (j > 1) {
+      anova_result <- anova(models[[1]], models[[j]])
+      cat(
+        "Comparison between model 1 and model",
+        j,
+        "in list",
+        names(fm_split)[i],
+        ":\n"
+      )
+      print(anova_result)
+      cat("\n")
     }
   }
 }
@@ -1421,7 +2127,12 @@ There was a moderate improvement for Faith's phylogenetic diversity index, based
 #| eval: true
 #| label: evaluating the effect of covaraince stucture change on PD
 #| error: true
-tmp <- c(fm_split$pd_lmm_FeHb[1], fm_split$pd_lmm_FeHb[2], fm_split$pd_lmm_FeHb[3], fm_split$pd_lmm_FeHb[10])
+tmp <- c(
+  fm_split$pd_lmm_FeHb[1],
+  fm_split$pd_lmm_FeHb[2],
+  fm_split$pd_lmm_FeHb[3],
+  fm_split$pd_lmm_FeHb[10]
+)
 ```
 
 ```{r}
@@ -1429,15 +2140,26 @@ tmp <- c(fm_split$pd_lmm_FeHb[1], fm_split$pd_lmm_FeHb[2], fm_split$pd_lmm_FeHb[
 #| label: tbl-star-pd-covariance
 #| tbl-cap: evaluating the effect of covaraince stucture change on PD
 #| error: true
-stargazer::stargazer(tmp, type = "html", star.cutoffs = c(0.05, 0.001, 0.0001), header = FALSE)
+stargazer::stargazer(
+  tmp,
+  type = "html",
+  star.cutoffs = c(0.05, 0.001, 0.0001),
+  header = FALSE
+)
 ```
 
 ```{r}
 #| eval: true
 #| label: fig-pd-res
-#| fig-cap: PD residual plots 
+#| fig-cap: PD residual plots
 #| error: true
-mapply(residual_plots, model = tmp, model_name = paste0(names(tmp), seq_along(1:4)), render = TRUE, chol = TRUE)
+mapply(
+  residual_plots,
+  model = tmp,
+  model_name = paste0(names(tmp), seq_along(1:4)),
+  render = TRUE,
+  chol = TRUE
+)
 ```
 
 The improvement to the PD models by changing the covaraiance structure results negatively effects the distribution of residuals. While still normally distributed, they have become a little bit more skewed. I think sticking with an unstructured covariance structure is the best case for all alpha diversity statistics.
@@ -1448,7 +2170,11 @@ The improvement to the PD models by changing the covaraiance structure results n
 #| eval: true
 #| label: tbl-res-febh-int
 #| tbl-cap: Residual normality test results using continuous Fe and Hb variables with time interaction
-alpha_lmms_FeHb_conc_time <- lapply(alpha_lmms_FeHb_conc, update, fixed = varFixed(~ arm_group * time * fe_conc * hb_conc * sex))
+alpha_lmms_FeHb_conc_time <- lapply(
+  alpha_lmms_FeHb_conc,
+  update,
+  fixed = varFixed(~ arm_group * time * fe_conc * hb_conc * sex)
+)
 
 residual_norm_test(alpha_lmms_FeHb_conc_time)
 ```
@@ -1458,7 +2184,12 @@ residual_norm_test(alpha_lmms_FeHb_conc_time)
 #| label: tbl-res-febh-star
 #| tbl-cap: Model summary results using continuous Fe and Hb variables with time interaction
 
-stargazer::stargazer(alpha_lmms_FeHb_conc_time, type = "html", star.cutoffs = c(0.05, 0.001, 0.0001), header = FALSE)
+stargazer::stargazer(
+  alpha_lmms_FeHb_conc_time,
+  type = "html",
+  star.cutoffs = c(0.05, 0.001, 0.0001),
+  header = FALSE
+)
 ```
 
 ```{r}
@@ -1472,7 +2203,7 @@ kable(anova_pvalue(tmp), format = "markdown")
 
 print("Terms with p <0.05")
 anova_pvalue(tmp) %>%
-  dplyr::filter(P.value <=0.05) %>%
+  dplyr::filter(P.value <= 0.05) %>%
   kable(format = "markdown")
 ```
 
@@ -1481,7 +2212,7 @@ anova_pvalue(tmp) %>%
 #| label: tbl-res-febh-int-heteroske
 #| tbl-cap: Breusch-Pagan test for Heteroskedasticity using continuous Fe and Hb variables with time interaction
 
-lapply(alpha_lmms_FeHb_conc_time, function(x){
+lapply(alpha_lmms_FeHb_conc_time, function(x) {
   kable(VarCorr(x))
 })
 
@@ -1491,18 +2222,24 @@ lapply(alpha_lmms_FeHb_conc_time, function(x){
 #| eval: true
 #| label: compare time interaction to alpha_lmms_FeHb_conc
 tmp <- c(alpha_lmms_FeHb_conc, alpha_lmms_FeHb_conc_time)
-tmp <- split (tmp, names(tmp))
+tmp <- split(tmp, names(tmp))
 
 for (i in 1:length(tmp)) {
   models <- tmp[[i]]
-  
+
   # Compare each model with the others using anova()
   for (j in 1:length(models)) {
-      if (j > 1) {
-        anova_result <- anova(models[[1]], models[[j]])
-        cat("Comparison between model 1 and model", j, "in list", names(tmp)[i], ":\n")
-        print(anova_result)
-        cat("\n")
+    if (j > 1) {
+      anova_result <- anova(models[[1]], models[[j]])
+      cat(
+        "Comparison between model 1 and model",
+        j,
+        "in list",
+        names(tmp)[i],
+        ":\n"
+      )
+      print(anova_result)
+      cat("\n")
     }
   }
 }
@@ -1516,12 +2253,12 @@ There is a significant improvement of the model when time is included as an inte
 #| error: true
 lapply(alpha_lmms_FeHb_conc, intervals, which = "fixed")
 
-lapply(alpha_lmms_FeHb_conc, function(x){
+lapply(alpha_lmms_FeHb_conc, function(x) {
   print(x$apVar)
 })
 
 lapply(alpha_lmms_FeHb_conc_time, intervals, which = "fixed") #generates error
-lapply(alpha_lmms_FeHb_conc_time, function(x){
+lapply(alpha_lmms_FeHb_conc_time, function(x) {
   print(x$apVar)
 })
 rm(alpha_lmms_FeHb_conc_time)
@@ -1548,7 +2285,7 @@ The formula `fe_conc * hb_conc * sex ~ time` specifies that you want to examine 
 
 ### Estimated Marginal Means
 
-Back transformation is possible by including the transformation on the response variable in the model formula, and using `type = "response"` to return results on the original scale.
+Back transformation is possible by including the transformation on the response variable in the model formula, and using `type = "scale"` to return results on the original scale.
 
 The `time` variable is on a continuous scale between 0 and 1. As we are interested in the difference between baseline and endpoint, the estimated marginal means can be calculated at T0 and T1 (`at = list(time = c(0, 1))`). Weights are sent to as `proportional` (weight in proportion to the frequencies (in the original data) of the factor combinations that are averaged over) to adjust for any imbalances in the data. Our data is unbalanced and therefore each categorical predictor variable should not be weighted equally. For example, the iron status at baseline is unbalanced towards being deficient:
 
@@ -1569,8 +2306,16 @@ be_meta %>%
 #| tbl-cap: Alpha diversity marginal mean estimates for continuous fer/hb model
 #| results: asis
 
-emm <- lapply(alpha_lmms_FeHb_conc, function(x){
-  emmeans(x, ~ arm_group * time + fe_conc * hb_conc * sex, at = list(time = c(0, 1)), type = "response", adjust = "sidak", weights = "proportional")
+emm <- lapply(alpha_lmms_FeHb_conc, function(x) {
+  emm <- emmeans(
+    x,
+    ~ arm_group * time + fe_conc * hb_conc * sex,
+    at = list(time = c(0, 1)),
+    type = "scale",
+    weights = "proportional"
+  )
+  levels(emm)$time <- c("Baseline", "Endpoint")
+  return(emm)
 })
 
 lapply(emm, kable)
@@ -1580,42 +2325,101 @@ The value in the iron and haemoglobin concentration columns are the estimated ma
 
 #### Contrast testing using estimated marginal means (EMMs)
 
-##### 1. *Iron Effect Within Groups*
+##### 1. *Iron Effect Within Groups at Baseline and Endpoint*
+
+```{r}
+#| eval: true
+#| label: tbl-fe-arm
+#| tbl-cap: Estimated marginal means within each arm at each timepoint
+#| #| results: asis
+
+fe_arm <- lapply(alpha_lmms_FeHb_conc, function(x) {
+  emm <- emmeans(
+    x,
+    ~ arm_group + fe_conc | time,
+    at = list(time = c(0, 1), fe_conc = c(min(fe_conc), max(fe_conc))),
+    type = "scale",
+    weights = "proportional"
+  )
+
+  levels(emm)$time <- c("Baseline", "Endpoint")
+  levels(emm)$fe_conc <- c("Low", "High")
+
+  return(emm)
+})
+
+lapply(fe_arm, kable)
+
+```
 
 ::: question
 
-Does alpha diversity differ within each treatment group independently due to vitamin iron status?
-Given discrete values, are there differences in alpha diveristy due to vitamin iron status within each intervention arm?
+Does alpha diversity differ within each treatment group independently due to vitamin iron status, i.e given discrete values (low vs high iron), are there differences in alpha diveristy?
 
 :::
 
 ::: h0
 
-$$ H_{0a}: \mu_{Fe\_high\_CPM} - \mu_{Fe\_low\_CPM} = 0 $$
-$$ H_{0b}: \mu_{Fe\_high\_FeZnPM} - \mu_{Fe\_low\_FeZnPM} = 0 $$
+At both Baseline and Endpoint independently:
+
+$$ 
+H_{0a}: \mu_{Fe\_high\_CPM} - \mu_{Fe\_low\_CPM} = 0 
+$$
+
+$$ 
+H_{0b}: \mu_{Fe\_high\_FeZnPM} - \mu_{Fe\_low\_FeZnPM} = 0 
+$$
 
 :::
 
 ```{r}
 #| eval: true
-#| label: tbl-vitFe-arm
-#| tbl-cap: Marginal mean estimates (EMMs) for alpha diversity indicies within intervention arm at baseline and endpoint among individuals who had vitamin iron and haemoglobin measurements available (n = 76 paired samples)
+#| label: tbl-fe-arm-cont
+#| tbl-cap: Contrast results comparing EMMs
 #| results: asis
 
-emm2 <- lapply(alpha_lmms_FeHb_conc, function(x){
-  emmeans(x, ~ arm_group | time, at = list(time = c(0, 1)), type = "response", adjust = "sidak", weights = "proportional")
-})
-
-lapply(emm2, kable)
+# Test differences
+lapply(
+  fe_arm_cont <- lapply(fe_arm, function(x) {
+    contrast(
+      x,
+      method = "revpairwise",
+      ref = c("FeZnPM", "High", "Endpoint"),
+      by = c("time", "arm_group"),
+      adjust = "fdr"
+    )
+  }),
+  kable
+)
 ```
 
-<placeholder contrast test>
+```{r}
+#| eval: true
+#| label: export
+#| fig-cap: NA
+#| tbl-cap: NA
+fe_arm_cont_tbl <- data.table::rbindlist(
+  lapply(fe_arm_cont, as.data.frame),
+  idcol = "Metric",
+  fill = TRUE
+)
 
-##### 2. *Average Iron Effect Across Intervention Arms:* 
+write.csv(
+  fe_arm_cont_tbl,
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/bac-base-iron-arm-B-and-E-EMMs.csv"
+  ),
+  row.names = FALSE
+)
+```
+
+
+##### 2. *Average Iron Effect Across Intervention Arms at Baseline and Endpoint:* 
 
 ::: question
 
-What is the overall effect of iron status across both treatment groups?
+What is the overall effect of iron status at each timepoint (irrespective of intervention arm)?
 
 :::
 
@@ -1625,11 +2429,77 @@ What is the overall effect of iron status across both treatment groups?
 
 ::: h0
 
-$$ H_{0c}: \frac{(\mu_{Fe\_high\_CPM} + \mu_{Fe\_high\_FeZnPM})}{2} - \frac{(\mu_{Fe\_low\_CPM} + \mu_{Fe\_low\_FeZnPM})}{2} = 0 $$
+$$
+H_{0c}: \frac{(\mu_{Fe\_high\_CPM} + \mu_{Fe\_high\_FeZnPM})}{2} - \frac{(\mu_{Fe\_low\_CPM} + \mu_{Fe\_low\_FeZnPM})}{2} = 0
+$$
 
 :::
 
-<placeholder>
+```{r}
+#| eval: true
+#| label: tbl-Fe-arm-time
+#| tbl-cap: Marginal mean estimates (EMMs) for alpha diversity indicies within intervention arm at baseline and endpoint among individuals who had vitamin iron and haemoglobin measurements available (n = 76 paired samples)
+#| results: asis
+
+fe_time <- lapply(alpha_lmms_FeHb_conc, function(x) {
+  emm <- emmeans(
+    x,
+    ~ fe_conc | time,
+    at = list(time = c(0, 1), fe_conc = c(min(fe_conc), max(fe_conc))),
+    type = "scale",
+    weights = "proportional"
+  )
+
+  levels(emm)$time <- c("Baseline", "Endpoint")
+  levels(emm)$fe_conc <- c("Low", "High")
+
+  return(emm)
+})
+
+lapply(fe_time, kable)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-iron-effect
+#| tbl-cap: Contrast results comparing EMMs
+#| results: asis
+# Test differences
+
+lapply(
+  fe_time_cont <- lapply(fe_time, function(x) {
+    contrast(
+      x,
+      method = "revpairwise",
+      ref = c("FeZnPM", "Endpoint"),
+      by = c("time"),
+      adjust = "fdr"
+    )
+  }),
+  kable
+)
+```
+
+```{r}
+#| eval: true
+#| label: export
+#| fig-cap: NA
+#| tbl-cap: NA
+fe_time_cont_tbl <- data.table::rbindlist(
+  lapply(fe_time_cont, as.data.frame),
+  idcol = "Metric",
+  fill = TRUE
+)
+
+write.csv(
+  fe_time_cont_tbl,
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/bac-base-iron-B-and-E-EMMs.csv"
+  ),
+  row.names = FALSE
+)
+```
 
 ##### 3. *Iron Status by Treatment Interaction* 
 
@@ -1648,13 +2518,65 @@ $$ H_{0d}: (\mu_{Fe\_high\_CPM} - \mu_{Fe\_low\_CPM}) - (\mu_{Fe\_high\_FeZnPM} 
 
 ```{r}
 #| eval: true
-#| label: tbl-arm-emm
-#| tbl-cap: treatment vs control comparsion
+#| label: tbl-Fe-arm-time
+#| tbl-cap: Marginal mean estimates (EMMs) for alpha diversity indicies within intervention arm at baseline and endpoint among individuals who had vitamin iron and haemoglobin measurements available (n = 76 paired samples)
 #| results: asis
 
-lapply(lapply(emm2, function(x) {
-  contrast(x, method = "trt.vs.ctrl")
-}), kable)
+fe_arm <- lapply(alpha_lmms_FeHb_conc, function(x) {
+  emm <- emmeans(
+    x,
+    ~ fe_conc | arm_group,
+    at = list(fe_conc = c(min(fe_conc), max(fe_conc))),
+    type = "scale",
+    weights = "proportional"
+  )
+
+  levels(emm)$fe_conc <- c("Low", "High")
+
+  return(emm)
+})
+
+lapply(fe_arm, kable)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-iron-effect
+#| tbl-cap: Contrast results comparing EMMs
+#| results: asis
+# Test differences
+
+lapply(
+  fe_arm_cont <- lapply(fe_arm, function(x) {
+    contrast(
+      x,
+      method = "revpairwise",
+      adjust = "fdr"
+    )
+  }),
+  kable
+)
+```
+
+```{r}
+#| eval: true
+#| label: export
+#| fig-cap: NA
+#| tbl-cap: NA
+fe_arm_cont_tbl <- data.table::rbindlist(
+  lapply(fe_time_cont, as.data.frame),
+  idcol = "Metric",
+  fill = TRUE
+)
+
+write.csv(
+  fe_arm_cont_tbl,
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/bac-base-iron-CPMvsFeZnPM-B-and-E-EMMs.csv"
+  ),
+  row.names = FALSE
+)
 ```
 
 ##### 4. *Iron Effect Within Intervention Arm Over Time*
@@ -1665,8 +2587,14 @@ lapply(lapply(emm2, function(x) {
 #| tbl-cap: Changes in alpha diversity marginal mean estimates over time within intervention arm
 #| results: asis
 
-trend <- lapply(alpha_lmms_FeHb_conc, function(x){
-  emtrends(x, ~ arm_group | time, var ="time")
+trend <- lapply(alpha_lmms_FeHb_conc, function(x) {
+  emtrends(
+    x,
+    ~arm_group,
+    var = "time",
+    type = "scale",
+    weights = "proportional"
+  )
 })
 
 lapply(trend, kable)
@@ -1679,11 +2607,38 @@ lapply(trend, kable)
 #| tbl-cap: Comparison of alpha diversity marginal mean estimates over time between intervention arm. Trends in how alpha diversity statistics change from baseline to endpoint within each intervention arm are not statistically different.
 #| results: asis
 
-slopes <- lapply(trend, function(x){
-  pairs(x)
+slopes <- lapply(trend, function(x) {
+  pairs(
+    x,
+    reverse = TRUE,
+    type = "scale",
+    weights = "proportional",
+    adjust = "fdr"
+  )
 })
 
 lapply(slopes, kable)
+```
+
+```{r}
+#| eval: true
+#| label: export
+#| fig-cap: NA
+#| tbl-cap: NA
+slopes_tbl <- data.table::rbindlist(
+  lapply(slopes, as.data.frame),
+  idcol = "Metric",
+  fill = TRUE
+)
+
+write.csv(
+  slopes_tbl,
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/bac-base-iron-CPMvsFeZnPM-slopes-EMMs.csv"
+  ),
+  row.names = FALSE
+)
 ```
 
 ##### 5. *Time Effect Within Iron Status Groups*
@@ -1710,6 +2665,47 @@ H_{0f}: \mu_{Fe\_low\_end} - \mu_{Fe\_low\_base} = 0
 $$
 :::
 
+```{r}
+#| eval: true
+#| label: fe-within-arm
+#| tbl-cap: EMMs for iron effect across arms
+#| results: asis
+# Calculate EMMs for iron effect across arms
+fe_over_time <- lapply(alpha_lmms_FeHb_conc, function(x) {
+  emm <- emtrends(
+    x,
+    ~fe_conc,
+    var = "time",
+    at = list(fe_conc = c(min(fe_conc), max(fe_conc))),
+    type = "scale",
+    weights = "proportional"
+  )
+  levels(emm)$fe_conc <- c("Low", "High")
+  return(emm)
+})
+
+lapply(fe_over_time, kable)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-iron-effect
+#| tbl-cap: Contrast results comparing EMMs
+#| results: asis
+# Test differences
+slopes <- lapply(fe_over_time, function(x) {
+  pairs(
+    x,
+    reverse = TRUE,
+    type = "scale",
+    weights = "proportional",
+    adjust = "fdr"
+  )
+})
+
+lapply(slopes, kable)
+```
+
 ##### 6. *Cross-sectional Fe Effects*
 
 ::: question
@@ -1733,6 +2729,8 @@ $$
 H_{0h}: \mu_{Fe\_high\_end} - \mu_{Fe\_low\_end} = 0
 $$
 :::
+
+Same as Q2
 
 ##### 7. *Time by Fe Interaction*
 
@@ -1781,9 +2779,8 @@ $$
 :::
 
 
-##### TODO REVIEW
 
-##### 9. *Sex differences in Alpha Diversity*
+##### 9. *Sex differences within Intervention arm*
 
 ::: question
 
@@ -1798,68 +2795,48 @@ $$ H_{0b}: \mu_{female_FeZnPM} - \mu_{male_FeZnPM} = 0 $$
 
 :::
 
-<placeholder>
-
-##### 10. *Sex Effect Over Time*
-
-::: question
-
-Are alpha diveristy rates of changes different between males and females i.e does `time` has a different effect depending on `sex`?
-
-:::
-
 ```{r}
 #| eval: true
-#| label: fig-emm-trends-sex
-#| fig-cap: emmeans trends- sex differences
+#| label: tbl-sex-effect
+#| tbl-cap: EMMs for sex differences within each arm
 #| results: asis
-
-lapply(alpha_lmms_FeHb_conc, function(x){
-  trend <- emtrends(x, ~ sex, var = "time")
-  print(kable(trend, format = "markdown"))
-  print(kable(pairs(trend), format = "markdown"))
+sex_arm_emm <- lapply(alpha_lmms_FeHb_conc, function(x) {
+  emm <- emmeans(
+    x,
+    specs = ~ sex | arm_group + time,
+    at = list(time = c(0, 1)),
+    type = "scale",
+    weights = "proportional"
+  )
+  levels(emm)$time <- c("Baseline", "Endpoint")
+  return(emm)
 })
+
+lapply(sex_arm_emm, kable)
 ```
 
 ```{r}
 #| eval: true
-#| label: fig-emm-sex
-#| fig-cap: emmeans plots- sex differences
-## Create an empty list to store plots
-plot_list <- list()
-
-## Loop through each item in the list
-for (i in names(emm)) {
-  # Create a plot for each item (replace with your actual plot creation code)
-  plot <- emmip(emm[[i]], fe_conc * hb_conc * sex ~ time, CIs = TRUE) + ggtitle(paste(str_extract(i, "^[^_]*"))) + theme(legend.position = "bottom", plot.title = element_text(size = 10, face = "bold"))
-
-  # Add the plot to the list
-  plot_list[[i]] <- plot
-}
-
-## Arrange and display the plots using ggarrange
-ggpubr::annotate_figure(ggpubr::ggarrange(plotlist = plot_list, ncol = 2, nrow = 2, common.legend = TRUE), top = "Change in diversity statistics")
-```
-
-From the resulting graph, we can conclude that there is no/little difference between alpha diversity changes in males and females.
-
-##### 11. *Effect of Sex and Iron Status*
-
-::: question
-
-Are there differences between alpha diversity statistics at baseline or endpoint when iron status and sex are taken into account?
-:::
-
-```{r}
-#| eval: true
-#| label: tbl-emm-iron-sex
-#| tbl-cap: emmeans for iron and sex
+#| label: tbl-sex-effect
+#| tbl-cap: Contrast results comparing EMMs
 #| results: asis
-lapply(lapply(emm, function(x) {
-  contrast(x, method = "pairwise")
-}), kable)
+# Test sex differences within arms
+sex_arm_contrasts <- lapply(sex_arm_emm, function(x) {
+  contrast(
+    x,
+    method = "pairwise",
+    ref = c("Female"),
+    by = c("arm_group", "time"),
+    type = "scale",
+    weights = "proportional"
+  )
+})
+
+# View results
+lapply(sex_arm_contrasts, kable)
 ```
 
+##### 10. *Overall sex differences*
 
 ::: question
 
@@ -1885,7 +2862,13 @@ $$
 #| results: asis
 
 emmeans <- lapply(alpha_lmms_FeHb_conc, function(x) {
-  emmeans(x, ~ arm_group * time + fe_conc * hb_conc * sex, at = list(time = c(0, 1), fe_conc = c(12, 25, max(fe_conc))), type = "response", adjust = "sidak", weights = "proportional")
+  emmeans(
+    x,
+    ~ arm_group * time + fe_conc * hb_conc * sex,
+    at = list(time = c(0, 1), fe_conc = c(12, 25, max(fe_conc))),
+    type = "scale",
+    weights = "proportional"
+  )
 })
 
 lapply(emmeans, kable, format = "markdown")
@@ -1898,9 +2881,13 @@ lapply(emmeans, kable, format = "markdown")
 #| results: asis
 
 #pairwise comparision
-lapply(lapply(emmeans, function(x) {
-  contrast(x, interaction = "pairwise", by = c("time", "arm_group"))
-}), kable, format = "markdown")
+lapply(
+  lapply(emmeans, function(x) {
+    contrast(x, "pairwise")
+  }),
+  kable,
+  format = "markdown"
+)
 ```
 
 ```{r}
@@ -1914,9 +2901,13 @@ EF <- c(0, 0.5, rep(0, 2))
 BM <- c(0, 0, 0.5, 0)
 EM <- c(rep(0, 3), 0.5)
 
-lapply(lapply(emmeans, function(x) {
-  contrast(x, method = list(EF - BF - EM + BM))
-}), kable, format = "markdown")
+lapply(
+  lapply(emmeans, function(x) {
+    contrast(x, method = list(EF - BF - EM + BM))
+  }),
+  kable,
+  format = "markdown"
+)
 
 ```
 
@@ -1930,15 +2921,28 @@ plot_list <- list()
 
 ## Loop through each item in the list
 for (i in names(emmeans)) {
-  # Create a plot for each item (replace with your actual plot creation code)
-  plot <- emmip(emmeans[[i]], fe_conc * hb_conc * sex ~ time, CIs = TRUE) + ggtitle(paste(str_extract(i, "^[^_]*"))) + theme(legend.position = "bottom", plot.title = element_text(size = 10, face = "bold"))
+  # Create a plot for each item
+  plot <- emmip(emmeans[[i]], fe_conc * hb_conc * sex ~ time, CIs = TRUE) +
+    ggtitle(paste(str_extract(i, "^[^_]*"))) +
+    theme(
+      legend.position = "bottom",
+      plot.title = element_text(size = 10, face = "bold")
+    )
 
   # Add the plot to the list
   plot_list[[i]] <- plot
 }
 
 ## Arrange and display the plots using ggarrange
-ggpubr::annotate_figure(ggpubr::ggarrange(plotlist = plot_list, ncol = 2, nrow = 2, common.legend = TRUE), top = "Change in diversity statistics")
+ggpubr::annotate_figure(
+  ggpubr::ggarrange(
+    plotlist = plot_list,
+    ncol = 2,
+    nrow = 2,
+    common.legend = TRUE
+  ),
+  top = "Change in diversity statistics"
+)
 ```
 
 ::: question
@@ -1953,13 +2957,926 @@ $$
 \end{aligned}
 $$ 
 
-### Prevalence of Anemia and Poor Iron Status
+##### 11. *Sex Effect Over Time*
 
 ::: question
-How does negative iron status and anemia change in the population over time?
+
+Are alpha diveristy rates of changes different between males and females i.e does `time` has a different effect depending on `sex`?
+
 :::
 
 ```{r}
+#| eval: true
+#| label: fig-emm-trends-sex
+#| fig-cap: emmeans trends- sex differences
+#| results: asis
+
+sex_trend <- lapply(alpha_lmms_FeHb_conc, function(x) {
+  trend <- emtrends(
+    x,
+    ~sex,
+    var = "time",
+    type = "scale",
+    weights = "proportional"
+  )
+})
+
+lapply(sex_trend, kable)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-sex-trends-pairwise
+#| tbl-cap: Pairwise comparisons
+#| results: asis
+
+#pairwise comparision
+lapply(
+  lapply(sex_trend, function(x) {
+    contrast(x, "pairwise")
+  }),
+  kable
+)
+```
+
+##### 12. *Effect of Sex and Iron Status on Intervention arm Differences*
+
+::: question
+
+Does sex and iron status impact the difference between intervention arm at baseline or endpoint?
+:::
+
+```{r}
+#| eval: true
+#| label: fe-levels
+
+# Define specific values for iron and hemoglobin that represent clinical categories
+fe_levels <- list(
+  deficient = 12, # Iron deficient
+  depleted = 25,
+  sufficient = round(max(fe_conc), 0) # Normal iron status (or use max value)
+)
+
+hb_levels <- list(
+  severe = 7, # Anemic
+  moderate = 9,
+  mild = 10,
+  normal = round(max(hb_conc), 0) # Normal Hb (or use max value)
+)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-sex-effect
+#| results: asis
+#| tbl-cap: EMMs for sex differences within each arm
+sex_fe_arm_emm <- lapply(alpha_lmms_FeHb_conc, function(x) {
+  emm <- emmeans(
+    x,
+    specs = ~ sex | fe_conc + arm_group + time,
+    at = list(time = c(0, 1), fe_conc = unlist(fe_levels)),
+    type = "scale",
+    weights = "proportional"
+  )
+  levels(emm)$time <- c("Baseline", "Endpoint")
+  levels(emm)$fe_conc <- names(fe_levels)
+
+  return(emm)
+})
+
+lapply(sex_fe_arm_emm, kable)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-emm-iron-sex
+#| tbl-cap: emmeans for iron and sex
+#| results: asis
+lapply(
+  sex_fe_arm_cont <- lapply(sex_fe_arm_emm, function(x) {
+    pairs(
+      x,
+      by = c("fe_conc", "time", "sex"),
+      type = "scale",
+      weights = "proportional",
+      adjust = "fdr"
+    )
+  }),
+  kable
+)
+```
+
+```{r}
+#| eval: true
+#| label: export
+#| fig-cap: NA
+#| tbl-cap: NA
+sex_fe_arm_cont_tbl <- data.table::rbindlist(
+  lapply(sex_fe_arm_cont, as.data.frame),
+  idcol = "Metric",
+  fill = TRUE
+)
+
+write.csv(
+  sex_fe_arm_cont_tbl,
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/bac-base-iron-sex-CPMvsFeZnPM-B-and-E-EMMs.csv"
+  ),
+  row.names = FALSE
+)
+```
+
+###### Time trend
+
+```{r}
+#| eval: true
+#| label: tbl-sex-effect
+#| results: asis
+#| tbl-cap: EMMs for sex differences within each arm
+sex_fe_trend <- lapply(alpha_lmms_FeHb_conc, function(x) {
+  emm <- emtrends(
+    x,
+    specs = ~ sex + fe_conc,
+    at = list(fe_conc = unlist(fe_levels)),
+    var = "time",
+    type = "scale",
+    weights = "proportional"
+  )
+  levels(emm)$fe_conc <- names(fe_levels)
+
+  return(emm)
+})
+
+lapply(sex_fe_trend, kable)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-emm-iron-sex
+#| tbl-cap: emmeans for iron and sex
+#| results: asis
+lapply(
+  lapply(sex_fe_trend, function(x) {
+    pairs(
+      x,
+      by = c("fe_conc"),
+      type = "scale",
+      weights = "proportional"
+    )
+  }),
+  kable
+)
+```
+
+##### 13. *Effect of Sex and Iron Status*
+
+::: question
+
+Are there differences between alpha diversity statistics at baseline or endpoint when iron status and sex are taken into account?
+:::
+
+```{r}
+#| eval: true
+#| label: tbl-sex-effect
+#| tbl-cap: EMMs for sex differences within each arm
+#| results: asis
+sex_fe_emm <- lapply(alpha_lmms_FeHb_conc, function(x) {
+  emm <- emmeans(
+    x,
+    specs = ~ sex | fe_conc + time,
+    at = list(time = c(0, 1), fe_conc = unlist(fe_levels)),
+    type = "scale",
+    weights = "proportional"
+  )
+  levels(emm)$time <- c("Baseline", "Endpoint")
+  levels(emm)$fe_conc <- names(fe_levels)
+
+  return(emm)
+})
+
+lapply(sex_fe_emm, kable)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-emm-iron-sex
+#| tbl-cap: emmeans for iron and sex
+#| results: asis
+lapply(
+  lapply(sex_fe_emm, function(x) {
+    pairs(
+      x,
+      by = c("fe_conc", "time"),
+      type = "scale",
+      weights = "proportional",
+      adjust = "fdr"
+    )
+  }),
+  kable
+)
+```
+
+##### 14. *Effect of Sex, Iron and Anemia Status within timepoint*
+
+::: question
+
+Are there differences between alpha diversity statistics at baseline or endpoint when iron status, anemia status, and sex are taken into account?
+:::
+
+::: h0
+$$
+\begin{aligned}
+&\frac{EF}{2} - \frac{BF}{2} = \frac{EM}{2} - \frac{BM}{2} \small{(x2)}\\
+\Rightarrow& EF - BF = EM - BM\\
+\Rightarrow& EF - BF - EM + BM = 0
+\end{aligned}
+$$
+
+:::
+
+```{r}
+#| eval: true
+#| label: tbl-emm-iron-sex-contrasts
+#| tbl-cap: emmeans for iron and sex contrasts
+#| results: asis
+
+emmFeHbSex <- lapply(alpha_lmms_FeHb_conc, function(x) {
+  emm <- emmeans(
+    x,
+    specs = ~ time + fe_conc + hb_conc + sex,
+    at = list(
+      time = c(0, 1),
+      fe_conc = unlist(fe_levels),
+      hb_conc = unlist(hb_levels)
+    ),
+    type = "scale",
+    weights = "proportional"
+  )
+  levels(emm)$time <- c("Baseline", "Endpoint")
+  levels(emm)$fe_conc <- names(fe_levels)
+  levels(emm)$hb_conc <- names(hb_levels)
+
+  return(emm)
+})
+
+lapply(emmFeHbSex, kable)
+
+emmFeHbSex_tbl <- data.table::rbindlist(
+  lapply(emmFeHbSex, as.data.frame),
+  idcol = "Metric",
+  fill = TRUE
+) %>%
+  mutate_at(vars(everything()), type.convert, as.is = T) %>%
+  mutate_at(vars(c(Metric, time, fe_conc, hb_conc, sex)), capwords) %>%
+  mutate(
+    Metric = str_remove_all(Metric, "_lmm_FeHb"),
+  )
+```
+
+```{r}
+#| eval: true
+#| label: tbl-emm-iron-sex-contrasts
+#| tbl-cap: emmeans for iron and sex contrasts
+#| results: asis
+emmFeHbSex_cont <- lapply(emmFeHbSex, function(x) {
+  contrast(
+    x,
+    "pairwise",
+    ref = c("Female"),
+    by = c("time", "hb_conc"),
+    reverse = TRUE,
+    type = "scale",
+    weights = "proportional",
+    adjust = "fdr"
+  )
+})
+
+emmFeHbSex_cont <- data.table::rbindlist(
+  lapply(emmFeHbSex_cont, as.data.frame),
+  idcol = "Metric",
+  fill = TRUE
+) %>%
+  mutate_at(vars(everything()), type.convert, as.is = T) %>%
+  mutate(
+    Metric = str_remove_all(Metric, "_lmm_FeHb"),
+    contrast = capwords(contrast)
+  )
+
+write.csv(
+  emmFeHbSex_cont,
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/bac-base-end-iron-anemia-sex-subgroup-EMMs.csv"
+  ),
+  row.names = FALSE
+)
+```
+
+```{r}
+#| eval: true
+#| label: fig-emm-iron
+#| fig-cap: emmeans plots- iron level differences
+
+# Create an empty list to store plots
+plot_list <- list()
+
+## Loop through each item in the list
+for (i in names(emmFeHbSex)) {
+  # Create a plot for each item
+  emmip <- emmip(
+    emmFeHbSex[[i]],
+    sex + hb_conc + fe_conc ~ time,
+    CIs = TRUE,
+    plotit = FALSE
+  )
+  plot <- ggplot(emmip, aes(x = xvar, y = yvar, color = sex, group = tvar)) +
+    geom_point() +
+    geom_line() +
+    geom_linerange(aes(ymin = LCL, ymax = UCL)) +
+    xlab(NULL) +
+    ylab(capwords(paste(str_extract(i, "^[^_]*"), "Diversity Index"))) +
+    theme(
+      legend.position = "bottom",
+      axis.text.x = element_text(size = 8)
+    ) +
+    facet_grid(fe_conc ~ hb_conc)
+
+  # Add the plot to the list
+  plot_list[[i]] <- plot
+}
+
+# Arrange and display the plots using ggarrange
+ggpubr::annotate_figure(
+  ggpubr::ggarrange(
+    plotlist = plot_list,
+    ncol = 2,
+    nrow = 2,
+    common.legend = T,
+    labels = "AUTO"
+  )
+)
+```
+
+##### 15. *Effect of Sex, Iron and Anemia Status over time*
+
+```{r}
+#| eval: true
+#| label: tbl-emm-iron-sex-contrasts
+#| tbl-cap: emmeans for iron and sex contrasts
+#| results: asis
+lapply(
+  emmFeHbSex_trend <- lapply(alpha_lmms_FeHb_conc, function(x) {
+    emm <- emtrends(
+      x,
+      ~ fe_conc + hb_conc + sex,
+      at = list(
+        fe_conc = unlist(fe_levels),
+        hb_conc = unlist(hb_levels)
+      ),
+      var = "time",
+      reverse = TRUE,
+      type = "scale",
+      weights = "proportional"
+    )
+
+    levels(emm)$fe_conc <- names(fe_levels)
+    levels(emm)$hb_conc <- names(hb_levels)
+
+    return(emm)
+  }),
+  kable
+)
+```
+
+```{r}
+#| eval: false
+#| label: tbl-emmFeHbSex-slopes
+#| tbl-cap: NA
+
+slopes <- lapply(emmFeHbSex_trend, function(x) {
+  contrast(
+    x,
+    method = "pairwise",
+    type = "scale",
+    weights = "proportional"
+  )
+})
+
+lapply(slopes, kable)
+```
+
+##### 16. *Differences between baseline and endpoint with reference to Sex, Iron and Anemia status*
+
+Relevant contrasts (n = 84):
+
+###### A) Sex Differences Within Same Timepoint/Iron/Anemia (24 contrasts)
+
+Baseline Deficient Severe Male - Baseline Deficient Severe Female
+Baseline Deficient Moderate Male - Baseline Deficient Moderate Female
+Baseline Deficient Mild Male - Baseline Deficient Mild Female
+Baseline Deficient Normal Male - Baseline Deficient Normal Female
+
+Baseline Depleted Severe Male - Baseline Depleted Severe Female
+Baseline Depleted Moderate Male - Baseline Depleted Moderate Female
+Baseline Depleted Mild Male - Baseline Depleted Mild Female
+Baseline Depleted Normal Male - Baseline Depleted Normal Female
+
+Baseline Sufficient Severe Male - Baseline Sufficient Severe Female
+Baseline Sufficient Moderate Male - Baseline Sufficient Moderate Female
+Baseline Sufficient Mild Male - Baseline Sufficient Mild Female
+Baseline Sufficient Normal Male - Baseline Sufficient Normal Female
+
+Endpoint Deficient Severe Male - Endpoint Deficient Severe Female
+Endpoint Deficient Moderate Male - Endpoint Deficient Moderate Female
+Endpoint Deficient Mild Male - Endpoint Deficient Mild Female
+Endpoint Deficient Normal Male - Endpoint Deficient Normal Female
+
+Endpoint Depleted Severe Male - Endpoint Depleted Severe Female
+Endpoint Depleted Moderate Male - Endpoint Depleted Moderate Female
+Endpoint Depleted Mild Male - Endpoint Depleted Mild Female
+Endpoint Depleted Normal Male - Endpoint Depleted Normal Female
+
+Endpoint Sufficient Severe Male - Endpoint Sufficient Severe Female
+Endpoint Sufficient Moderate Male - Endpoint Sufficient Moderate Female
+Endpoint Sufficient Mild Male - Endpoint Sufficient Mild Female
+Endpoint Sufficient Normal Male - Endpoint Sufficient Normal Female
+
+###### B) Iron Status Comparisons Within Same Timepoint/Anemia/Sex (48 contrasts)
+
+Endpoint Sufficient Severe Female - Endpoint Deficient Severe Female
+Endpoint Sufficient Severe Female - Endpoint Depleted Severe Female
+Endpoint Depleted Severe Female - Endpoint Deficient Severe Female
+
+Endpoint Sufficient Severe Male - Endpoint Deficient Severe Male
+Endpoint Sufficient Severe Male - Endpoint Depleted Severe Male
+Endpoint Depleted Severe Male - Endpoint Deficient Severe Male
+
+Endpoint Sufficient Moderate Female - Endpoint Deficient Moderate Female
+Endpoint Sufficient Moderate Female - Endpoint Depleted Moderate Female
+Endpoint Depleted Moderate Female - Endpoint Deficient Moderate Female
+
+Endpoint Sufficient Moderate Male - Endpoint Deficient Moderate Male
+Endpoint Sufficient Moderate Male - Endpoint Depleted Moderate Male
+Endpoint Depleted Moderate Male - Endpoint Deficient Moderate Male
+
+Endpoint Sufficient Mild Female - Endpoint Deficient Mild Female
+Endpoint Sufficient Mild Female - Endpoint Depleted Mild Female
+Endpoint Depleted Mild Female - Endpoint Deficient Mild Female
+
+Endpoint Sufficient Mild Male - Endpoint Deficient Mild Male
+Endpoint Sufficient Mild Male - Endpoint Depleted Mild Male
+Endpoint Depleted Mild Male - Endpoint Deficient Mild Male
+
+Endpoint Sufficient Normal Female - Endpoint Deficient Normal Female
+Endpoint Sufficient Normal Female - Endpoint Depleted Normal Female
+Endpoint Depleted Normal Female - Endpoint Deficient Normal Female
+
+Endpoint Sufficient Normal Male - Endpoint Deficient Normal Male
+Endpoint Sufficient Normal Male - Endpoint Depleted Normal Male
+Endpoint Depleted Normal Male - Endpoint Deficient Normal Male
+
+###### C) Anemia Severity Comparisons Within Same Timepoint/Iron/Sex (72 Contrasts)
+
+####### Normal vs Severe (12 contrasts)
+
+Endpoint Deficient Normal Female - Endpoint Deficient Severe Female
+Endpoint Deficient Normal Male - Endpoint Deficient Severe Male
+Endpoint Depleted Normal Female - Endpoint Depleted Severe Female
+Endpoint Depleted Normal Male - Endpoint Depleted Severe Male
+Endpoint Sufficient Normal Female - Endpoint Sufficient Severe Female
+Endpoint Sufficient Normal Male - Endpoint Sufficient Severe Male
+Baseline Deficient Normal Female - Baseline Deficient Severe Female
+Baseline Deficient Normal Male - Baseline Deficient Severe Male
+Baseline Depleted Normal Female - Baseline Depleted Severe Female
+Baseline Depleted Normal Male - Baseline Depleted Severe Male
+Baseline Sufficient Normal Female - Baseline Sufficient Severe Female
+Baseline Sufficient Normal Male - Baseline Sufficient Severe Male
+
+####### Normal vs Moderate (12 contrasts)
+
+Endpoint Deficient Normal Female - Endpoint Deficient Moderate Female
+Endpoint Deficient Normal Male - Endpoint Deficient Moderate Male
+Endpoint Depleted Normal Female - Endpoint Depleted Moderate Female
+Endpoint Depleted Normal Male - Endpoint Depleted Moderate Male
+Endpoint Sufficient Normal Female - Endpoint Sufficient Moderate Female
+Endpoint Sufficient Normal Male - Endpoint Sufficient Moderate Male
+Baseline Deficient Normal Female - Baseline Deficient Moderate Female
+Baseline Deficient Normal Male - Baseline Deficient Moderate Male
+Baseline Depleted Normal Female - Baseline Depleted Moderate Female
+Baseline Depleted Normal Male - Baseline Depleted Moderate Male
+Baseline Sufficient Normal Female - Baseline Sufficient Moderate Female
+Baseline Sufficient Normal Male - Baseline Sufficient Moderate Male
+
+####### Normal vs Mild (12 contrasts)
+
+Endpoint Deficient Normal Female - Endpoint Deficient Mild Female
+Endpoint Deficient Normal Male - Endpoint Deficient Mild Male
+Endpoint Depleted Normal Female - Endpoint Depleted Mild Female
+Endpoint Depleted Normal Male - Endpoint Depleted Mild Male
+Endpoint Sufficient Normal Female - Endpoint Sufficient Mild Female
+Endpoint Sufficient Normal Male - Endpoint Sufficient Mild Male
+Baseline Deficient Normal Female - Baseline Deficient Mild Female
+Baseline Deficient Normal Male - Baseline Deficient Mild Male
+Baseline Depleted Normal Female - Baseline Depleted Mild Female
+Baseline Depleted Normal Male - Baseline Depleted Mild Male
+Baseline Sufficient Normal Female - Baseline Sufficient Mild Female
+Baseline Sufficient Normal Male - Baseline Sufficient Mild Male
+
+####### Moderate vs Severe (12 contrasts)
+
+Endpoint Deficient Moderate Female - Endpoint Deficient Severe Female
+Endpoint Deficient Moderate Male - Endpoint Deficient Severe Male
+Endpoint Depleted Moderate Female - Endpoint Depleted Severe Female
+Endpoint Depleted Moderate Male - Endpoint Depleted Severe Male
+Endpoint Sufficient Moderate Female - Endpoint Sufficient Severe Female
+Endpoint Sufficient Moderate Male - Endpoint Sufficient Severe Male
+Baseline Deficient Moderate Female - Baseline Deficient Severe Female
+Baseline Deficient Moderate Male - Baseline Deficient Severe Male
+Baseline Depleted Moderate Female - Baseline Depleted Severe Female
+Baseline Depleted Moderate Male - Baseline Depleted Severe Male
+Baseline Sufficient Moderate Female - Baseline Sufficient Severe Female
+Baseline Sufficient Moderate Male - Baseline Sufficient Severe Male
+
+####### Mild vs Severe (12 contrasts)
+
+Endpoint Deficient Mild Female - Endpoint Deficient Severe Female
+Endpoint Deficient Mild Male - Endpoint Deficient Severe Male
+Endpoint Depleted Mild Female - Endpoint Depleted Severe Female
+Endpoint Depleted Mild Male - Endpoint Depleted Severe Male
+Endpoint Sufficient Mild Female - Endpoint Sufficient Severe Female
+Endpoint Sufficient Mild Male - Endpoint Sufficient Severe Male
+Baseline Deficient Mild Female - Baseline Deficient Severe Female
+Baseline Deficient Mild Male - Baseline Deficient Severe Male
+Baseline Depleted Mild Female - Baseline Depleted Severe Female
+Baseline Depleted Mild Male - Baseline Depleted Severe Male
+Baseline Sufficient Mild Female - Baseline Sufficient Severe Female
+Baseline Sufficient Mild Male - Baseline Sufficient Severe Male
+
+####### Mild vs Moderate (12 contrasts)
+
+Endpoint Deficient Mild Female - Endpoint Deficient Moderate Female
+Endpoint Deficient Mild Male - Endpoint Deficient Moderate Male
+Endpoint Depleted Mild Female - Endpoint Depleted Moderate Female
+Endpoint Depleted Mild Male - Endpoint Depleted Moderate Male
+Endpoint Sufficient Mild Female - Endpoint Sufficient Moderate Female
+Endpoint Sufficient Mild Male - Endpoint Sufficient Moderate Male
+Baseline Deficient Mild Female - Baseline Deficient Moderate Female
+Baseline Deficient Mild Male - Baseline Deficient Moderate Male
+Baseline Depleted Mild Female - Baseline Depleted Moderate Female
+Baseline Depleted Mild Male - Baseline Depleted Moderate Male
+Baseline Sufficient Mild Female - Baseline Sufficient Moderate Female
+Baseline Sufficient Mild Male - Baseline Sufficient Moderate Male
+
+###### D) Temporal Changes Within Groups (n = 24)
+
+Endpoint Deficient Severe Female - Baseline Deficient Severe Female
+Endpoint Deficient Severe Male - Baseline Deficient Severe Male
+Endpoint Deficient Moderate Female - Baseline Deficient Moderate Female
+Endpoint Deficient Moderate Male - Baseline Deficient Moderate Male
+Endpoint Deficient Mild Female - Baseline Deficient Mild Female
+Endpoint Deficient Mild Male - Baseline Deficient Mild Male
+Endpoint Deficient Normal Female - Baseline Deficient Normal Female
+Endpoint Deficient Normal Male - Baseline Deficient Normal Male
+
+Endpoint Depleted Severe Female - Baseline Depleted Severe Female
+Endpoint Depleted Severe Male - Baseline Depleted Severe Male
+Endpoint Depleted Moderate Female - Baseline Depleted Moderate Female
+Endpoint Depleted Moderate Male - Baseline Depleted Moderate Male
+Endpoint Depleted Mild Female - Baseline Depleted Mild Female
+Endpoint Depleted Mild Male - Baseline Depleted Mild Male
+Endpoint Depleted Normal Female - Baseline Depleted Normal Female
+Endpoint Depleted Normal Male - Baseline Depleted Normal Male
+
+Endpoint Sufficient Severe Female - Baseline Sufficient Severe Female
+Endpoint Sufficient Severe Male - Baseline Sufficient Severe Male
+Endpoint Sufficient Moderate Female - Baseline Sufficient Moderate Female
+Endpoint Sufficient Moderate Male - Baseline Sufficient Moderate Male
+Endpoint Sufficient Mild Female - Baseline Sufficient Mild Female
+Endpoint Sufficient Mild Male - Baseline Sufficient Mild Male
+Endpoint Sufficient Normal Female - Baseline Sufficient Normal Female
+Endpoint Sufficient Normal Male - Baseline Sufficient Normal Male
+
+###### Contrast testing
+
+```{r}
+#| eval: false
+#| label: tbl-emmFeHbSex-slopes
+#| tbl-cap: NA
+
+emmFeHbSexTime <- lapply(emmFeHbSex, function(x) {
+  contrast(
+    x,
+    method = "revpairwise",
+    type = "scale",
+    weights = "proportional",
+    adjust = "fdr"
+  )
+})
+
+emmFeHbSexTime_tbl <- data.table::rbindlist(
+  lapply(emmFeHbSexTime, as.data.frame),
+  idcol = "Metric",
+  fill = TRUE
+) %>%
+  mutate_at(vars(everything()), type.convert, as.is = T) %>%
+  mutate(
+    Metric = capwords(str_remove_all(Metric, "_lmm_FeHb")),
+    contrast = capwords(contrast)
+  )
+
+write.csv(
+  emmFeHbSexTime_tbl,
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/bac-base-end-iron-anemia-sex-EvsB-EMMs.csv"
+  ),
+  row.names = FALSE
+)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-cont
+#| tbl-cap: Sex Differences Within Same Timepoint/Iron/Anemia (24 contrasts)
+
+kable(
+  sex_contrasts <- emmFeHbSexTime_tbl %>%
+    filter(str_detect(
+      contrast,
+      str_c("\\b(", str_c(A, collapse = "|"), ")\\b")
+    ))
+)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-cont
+#| tbl-cap: Iron Status Comparisons Within Same Timepoint/Anemia/Sex (48 contrasts)
+
+kable(
+  iron_contrasts <- emmFeHbSexTime_tbl %>%
+    filter(str_detect(
+      contrast,
+      str_c("\\b(", str_c(B, collapse = "|"), ")\\b")
+    ))
+)
+
+```
+
+```{r}
+#| eval: true
+#| label: tbl-cont
+#| tbl-cap: Anemia Severity Comparisons Within Same Timepoint/Iron/Sex (72 Contrasts)
+
+kable(
+  anemia_contrasts <- emmFeHbSexTime_tbl %>%
+    filter(str_detect(
+      contrast,
+      str_c("\\b(", str_c(C, collapse = "|"), ")\\b")
+    ))
+)
+
+```
+
+```{r}
+#| eval: true
+#| #| label: tbl-cont
+#| #| tbl-cap: Temporal Changes Within Groups (n = 24)
+
+kable(
+  temporal_contrasts <- emmFeHbSexTime_tbl %>%
+    filter(str_detect(
+      contrast,
+      str_c("\\b(", str_c(D, collapse = "|"), ")\\b")
+    ))
+)
+
+```
+
+```{r}
+#| eval: true
+#| label: save-csv
+#| fig-cap: NA
+#| tbl-cap: NA
+# Convert to data frames and save
+
+write.csv(
+  as.data.frame(sex_contrasts),
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/sex_differences_within_timepoint_iron_anemia_conditions.csv"
+  ),
+  row.names = FALSE
+)
+
+write.csv(
+  as.data.frame(iron_contrasts),
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/iron_status_contrasts_within_timepoint_anemia_sex.csv"
+  ),
+  row.names = FALSE
+)
+
+write.csv(
+  as.data.frame(anemia_contrasts),
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/anemia_severity_contrasts_within_timepoint_iron_sex.csv"
+  ),
+  row.names = FALSE
+)
+
+write.csv(
+  as.data.frame(temporal_contrasts),
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/temporal_changes_within_groups_endpoint_vs_baseline.csv"
+  ),
+  row.names = FALSE
+)
+```
+
+###### Iron-deficient Males
+
+```{r}
+#| eval: true
+#| label: iron-def-males
+#| fig-cap: NA
+#| tbl-cap: NA
+
+defM <- bac_base_end_meta %>%
+  filter(sex_catchar == "Male" & fer < 12 & !is.na(fer) & !is.na(hb)) %>%
+  mutate(
+    Anemia = case_when(
+      hb < 7.0 ~ "Severe",
+      hb >= 7.0 & hb <= 9.9 ~ "Moderate",
+      hb >= 10.0 & hb <= 10.9 ~ "Mild",
+      hb >= 11.0 ~ "Normal",
+      TRUE ~ NA
+    )
+  )
+
+defM$Anemia <- factor(
+  defM$Anemia,
+  levels = c("Normal", "Mild", "Moderate", "Severe")
+)
+
+(p <- defM %>%
+  ggplot(aes(x = timepoint, y = diversity_shannon, color = Anemia)) +
+  geom_point(size = 3, alpha = 0.7) +
+  geom_line(aes(group = displayid), alpha = 0.3) + # Individual trajectories
+  stat_summary(aes(group = Anemia), fun = mean, geom = "line", size = 2) +
+  scale_color_manual(values = c("#66C2A5", "#FC8D62", "#8DA0CB")) +
+  labs(
+    title = "Shannon Diversity Progression by Anemia Severity",
+    subtitle = "Iron-Deficient Males Only - Showing Significant Gradient Effect",
+    x = "timepoint",
+    y = "Shannon Diversity Index"
+  ))
+
+p +
+  facet_wrap(~Anemia)
+```
+
+```{r}
+#| eval: true
+#| label: evenness
+#| fig-cap: NA
+#| tbl-cap: NA
+(p <- defM %>%
+  ggplot(aes(x = timepoint, y = evenness_pielou, color = Anemia)) +
+  geom_point(size = 3, alpha = 0.7) +
+  geom_line(aes(group = displayid), alpha = 0.3) + # Individual trajectories
+  stat_summary(aes(group = Anemia), fun = mean, geom = "line", size = 2) +
+  scale_color_manual(values = c("#66C2A5", "#FC8D62", "#8DA0CB")) +
+  labs(
+    title = "Progression of Pielou's Evenness by Anemia Severity",
+    subtitle = "Iron-Deficient Males Only - Showing Significant Gradient Effect",
+    x = "timepoint",
+    y = "Pielou's Evenness"
+  ))
+
+p +
+  facet_wrap(~Anemia)
+```
+
+  
+##### 17. *Differences between iron status groups in the intervention arm*
+
+```{r}
+#| eval: true
+#| label: tbl-sex-effect
+#| results: asis
+#| tbl-cap: EMMs for sex differences within each arm
+fe_trt <- lapply(alpha_lmms_FeHb_conc, function(x) {
+  emm <- emmeans(
+    x,
+    specs = ~ fe_conc + arm_group + time,
+    at = list(time = c(0, 1), fe_conc = unlist(fe_levels)),
+    type = "scale",
+    weights = "proportional"
+  )
+  levels(emm)$time <- c("Baseline", "Endpoint")
+  levels(emm)$fe_conc <- names(fe_levels)
+
+  return(emm)
+})
+
+lapply(fe_trt, kable)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-emm-iron-sex
+#| tbl-cap: emmeans for iron and sex
+#| results: asis
+lapply(
+  fe_trt_cont <- lapply(fe_trt, function(x) {
+    pairs(
+      x,
+      by = c("arm_group", "time"),
+      type = "scale",
+      weights = "proportional",
+      adjust = "fdr"
+    )
+  }),
+  kable
+)
+```
+
+```{r}
+#| eval: true
+#| label: export
+#| fig-cap: NA
+#| tbl-cap: NA
+fe_trt_tbl <- data.table::rbindlist(
+  lapply(fe_trt_cont, as.data.frame),
+  idcol = "Metric",
+  fill = TRUE
+)
+
+write.csv(
+  fe_trt_tbl,
+  file.path(
+    RESULTS,
+    "iron-status-subgroup-analysis/bac-base-iron-vs-FeZnPM-B-and-E-EMMs.csv"
+  ),
+  row.names = FALSE
+)
+```
+
+###### Time trend
+
+```{r}
+#| eval: true
+#| label: tbl-sex-effect
+#| results: asis
+#| tbl-cap: EMMs for sex differences within each arm
+fe_trt_trend <- lapply(alpha_lmms_FeHb_conc, function(x) {
+  emm <- emtrends(
+    x,
+    specs = ~ fe_conc + arm_group,
+    at = list(fe_conc = unlist(fe_levels)),
+    var = "time",
+    type = "scale",
+    weights = "proportional"
+  )
+  levels(emm)$fe_conc <- names(fe_levels)
+
+  return(emm)
+})
+
+lapply(fe_trt_trend, kable)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-emm-iron-sex
+#| tbl-cap: emmeans for iron and sex
+#| results: asis
+lapply(
+  lapply(fe_trt_trend, function(x) {
+    pairs(
+      x,
+      by = c("arm_group"),
+      type = "scale",
+      weights = "proportional",
+      adjust = "fdr"
+    )
+  }),
+  kable
+)
+```
+
+### Prevalence of Anemia and Poor Iron Status
+  
+::: question
+How does negative iron status and anemia change in the population over time?
+:::
+  
+  ```{r}
 #| eval: true
 #| label: prevalence of iron deficiency/depletion at endpoint compared to baseline
 #| fig-cap: prevalence of iron deficiency/depletion at endpoint compared to baseline
@@ -1985,4 +3902,302 @@ be_meta %>%
   mutate(proportion = count / sum(count)) %>%
   ggplot(aes(x = name, fill = timepoint)) +
   geom_bar(aes(y = count), stat = "identity", position = "fill")
+```
+
+## Appendix
+
+```{r}
+#| eval: false
+#| label: fig-iron-effect
+#| fig-cap: Contrast results comparing EMMs
+# Visualize iron effect
+iron_effect_plots <- lapply(names(alpha_lmms_FeHb_conc), function(metric) {
+  emmip(iron_effect_emm[[metric]], fe_conc ~ time, CIs = TRUE) +
+    ggtitle(paste("Iron Effect -", metric)) +
+    theme_bw() +
+    ylab("Estimated Marginal Mean") +
+    xlab("Time")
+})
+
+# Arrange plots
+gridExtra::grid.arrange(grobs = iron_effect_plots, ncol = 2)
+```
+
+```{r}
+#| eval: false
+#| label: fig-sex-effect
+#| fig-cap: Contrast results comparing EMMs
+# Visualize sex differences by arm
+sex_diff_plots <- lapply(names(alpha_lmms_FeHb_conc), function(metric) {
+  emmip(sex_arm_emm[[metric]], sex ~ arm_group, CIs = TRUE) +
+    ggtitle(paste("Sex Differences -", metric)) +
+    theme_bw() +
+    ylab("Estimated Marginal Mean") +
+    xlab("Intervention Arm")
+})
+
+# Arrange plots
+gridExtra::grid.arrange(grobs = sex_diff_plots, ncol = 2)
+```
+
+```{r}
+#| eval: false
+#| label: fig-sex-time-effect
+#| tbl-cap: Contrast results comparing EMMs
+# Time interaction with sex
+sex_time_emm <- lapply(alpha_lmms_FeHb_conc, function(x) {
+  emmeans(
+    x,
+    specs = ~ sex | time,
+    at = list(time = c(0, 1)),
+    type = "scale",
+    weights = "proportional"
+  )
+})
+```
+
+```{r}
+#| eval: false
+#| label: fig-iron-effect
+#| tbl-cap: Contrast results comparing EMMs
+# Test sex by time interaction
+sex_time_contrasts <- lapply(sex_time_emm, function(x) {
+  contrast(x, method = "pairwise", by = "time", adjust = "none")
+})
+
+# View results
+lapply(sex_time_contrasts, kable)
+```
+
+```{r}
+#| eval: false
+#| label: fig-iron-effect
+#| tbl-cap: Contrast results comparing EMMs
+# Create interaction plots
+sex_time_plots <- lapply(names(alpha_lmms_FeHb_conc), function(metric) {
+  emmip(sex_time_emm[[metric]], sex ~ time, CIs = TRUE) +
+    ggtitle(paste("Sex by Time Interaction -", metric)) +
+    theme_bw() +
+    ylab("Estimated Marginal Mean") +
+    xlab("Time")
+})
+
+# Arrange plots
+gridExtra::grid.arrange(grobs = sex_time_plots, ncol = 2)
+```
+
+### Contast filters
+
+```{r}
+#| eval: true
+#| label: sex-within-same
+#| fig-cap: NA
+#| tbl-cap: NA
+A <- c(
+  "Baseline Deficient Severe Male - Baseline Deficient Severe Female",
+  "Baseline Deficient Moderate Male - Baseline Deficient Moderate Female",
+  "Baseline Deficient Mild Male - Baseline Deficient Mild Female",
+  "Baseline Deficient Normal Male - Baseline Deficient Normal Female",
+  "Baseline Depleted Severe Male - Baseline Depleted Severe Female",
+  "Baseline Depleted Moderate Male - Baseline Depleted Moderate Female",
+  "Baseline Depleted Mild Male - Baseline Depleted Mild Female",
+  "Baseline Depleted Normal Male - Baseline Depleted Normal Female",
+  "Baseline Sufficient Severe Male - Baseline Sufficient Severe Female",
+  "Baseline Sufficient Moderate Male - Baseline Sufficient Moderate Female",
+  "Baseline Sufficient Mild Male - Baseline Sufficient Mild Female",
+  "Baseline Sufficient Normal Male - Baseline Sufficient Normal Female",
+
+  "Endpoint Deficient Severe Male - Endpoint Deficient Severe Female",
+  "Endpoint Deficient Moderate Male - Endpoint Deficient Moderate Female",
+  "Endpoint Deficient Mild Male - Endpoint Deficient Mild Female",
+  "Endpoint Deficient Normal Male - Endpoint Deficient Normal Female",
+  "Endpoint Depleted Severe Male - Endpoint Depleted Severe Female",
+  "Endpoint Depleted Moderate Male - Endpoint Depleted Moderate Female",
+  "Endpoint Depleted Mild Male - Endpoint Depleted Mild Female",
+  "Endpoint Depleted Normal Male - Endpoint Depleted Normal Female",
+  "Endpoint Sufficient Severe Male - Endpoint Sufficient Severe Female",
+  "Endpoint Sufficient Moderate Male - Endpoint Sufficient Moderate Female",
+  "Endpoint Sufficient Mild Male - Endpoint Sufficient Mild Female",
+  "Endpoint Sufficient Normal Male - Endpoint Sufficient Normal Female"
+)
+```
+
+```{r}
+#| eval: true
+#| label:
+#| fig-cap: NA
+#| tbl-cap: NA
+B <- c(
+  "Baseline Sufficient Severe Female - Baseline Deficient Severe Female",
+  "Baseline Sufficient Severe Female - Baseline Depleted Severe Female",
+  "Baseline Depleted Severe Female - Baseline Deficient Severe Female",
+  "Baseline Sufficient Severe Male - Baseline Deficient Severe Male",
+  "Baseline Sufficient Severe Male - Baseline Depleted Severe Male",
+  "Baseline Depleted Severe Male - Baseline Deficient Severe Male",
+  "Baseline Sufficient Moderate Female - Baseline Deficient Moderate Female",
+  "Baseline Sufficient Moderate Female - Baseline Depleted Moderate Female",
+  "Baseline Depleted Moderate Female - Baseline Deficient Moderate Female",
+  "Baseline Sufficient Moderate Male - Baseline Deficient Moderate Male",
+  "Baseline Sufficient Moderate Male - Baseline Depleted Moderate Male",
+  "Baseline Depleted Moderate Male - Baseline Deficient Moderate Male",
+  "Baseline Sufficient Mild Female - Baseline Deficient Mild Female",
+  "Baseline Sufficient Mild Female - Baseline Depleted Mild Female",
+  "Baseline Depleted Mild Female - Baseline Deficient Mild Female",
+  "Baseline Sufficient Mild Male - Baseline Deficient Mild Male",
+  "Baseline Sufficient Mild Male - Baseline Depleted Mild Male",
+  "Baseline Depleted Mild Male - Baseline Deficient Mild Male",
+  "Baseline Sufficient Normal Female - Baseline Deficient Normal Female",
+  "Baseline Sufficient Normal Female - Baseline Depleted Normal Female",
+  "Baseline Depleted Normal Female - Baseline Deficient Normal Female",
+  "Baseline Sufficient Normal Male - Baseline Deficient Normal Male",
+  "Baseline Sufficient Normal Male - Baseline Depleted Normal Male",
+  "Baseline Depleted Normal Male - Baseline Deficient Normal Male",
+
+  "Endpoint Sufficient Severe Female - Endpoint Deficient Severe Female",
+  "Endpoint Sufficient Severe Female - Endpoint Depleted Severe Female",
+  "Endpoint Depleted Severe Female - Endpoint Deficient Severe Female",
+
+  "Endpoint Sufficient Severe Male - Endpoint Deficient Severe Male",
+  "Endpoint Sufficient Severe Male - Endpoint Depleted Severe Male",
+  "Endpoint Depleted Severe Male - Endpoint Deficient Severe Male",
+
+  "Endpoint Sufficient Moderate Female - Endpoint Deficient Moderate Female",
+  "Endpoint Sufficient Moderate Female - Endpoint Depleted Moderate Female",
+  "Endpoint Depleted Moderate Female - Endpoint Deficient Moderate Female",
+
+  "Endpoint Sufficient Moderate Male - Endpoint Deficient Moderate Male",
+  "Endpoint Sufficient Moderate Male - Endpoint Depleted Moderate Male",
+  "Endpoint Depleted Moderate Male - Endpoint Deficient Moderate Male",
+
+  "Endpoint Sufficient Mild Female - Endpoint Deficient Mild Female",
+  "Endpoint Sufficient Mild Female - Endpoint Depleted Mild Female",
+  "Endpoint Depleted Mild Female - Endpoint Deficient Mild Female",
+
+  "Endpoint Sufficient Mild Male - Endpoint Deficient Mild Male",
+  "Endpoint Sufficient Mild Male - Endpoint Depleted Mild Male",
+  "Endpoint Depleted Mild Male - Endpoint Deficient Mild Male",
+
+  "Endpoint Sufficient Normal Female - Endpoint Deficient Normal Female",
+  "Endpoint Sufficient Normal Female - Endpoint Depleted Normal Female",
+  "Endpoint Depleted Normal Female - Endpoint Deficient Normal Female",
+
+  "Endpoint Sufficient Normal Male - Endpoint Deficient Normal Male",
+  "Endpoint Sufficient Normal Male - Endpoint Depleted Normal Male",
+  "Endpoint Depleted Normal Male - Endpoint Deficient Normal Male"
+)
+```
+
+```{r}
+#| eval: true
+#| label: C
+#| fig-cap: NA
+#| tbl-cap: NA
+
+C <- c(
+  "Endpoint Deficient Normal Female - Endpoint Deficient Severe Female",
+  "Endpoint Deficient Normal Male - Endpoint Deficient Severe Male",
+  "Endpoint Depleted Normal Female - Endpoint Depleted Severe Female",
+  "Endpoint Depleted Normal Male - Endpoint Depleted Severe Male",
+  "Endpoint Sufficient Normal Female - Endpoint Sufficient Severe Female",
+  "Endpoint Sufficient Normal Male - Endpoint Sufficient Severe Male",
+  "Baseline Deficient Normal Female - Baseline Deficient Severe Female",
+  "Baseline Deficient Normal Male - Baseline Deficient Severe Male",
+  "Baseline Depleted Normal Female - Baseline Depleted Severe Female",
+  "Baseline Depleted Normal Male - Baseline Depleted Severe Male",
+  "Baseline Sufficient Normal Female - Baseline Sufficient Severe Female",
+  "Baseline Sufficient Normal Male - Baseline Sufficient Severe Male",
+  "Endpoint Deficient Normal Female - Endpoint Deficient Moderate Female",
+  "Endpoint Deficient Normal Male - Endpoint Deficient Moderate Male",
+  "Endpoint Depleted Normal Female - Endpoint Depleted Moderate Female",
+  "Endpoint Depleted Normal Male - Endpoint Depleted Moderate Male",
+  "Endpoint Sufficient Normal Female - Endpoint Sufficient Moderate Female",
+  "Endpoint Sufficient Normal Male - Endpoint Sufficient Moderate Male",
+  "Baseline Deficient Normal Female - Baseline Deficient Moderate Female",
+  "Baseline Deficient Normal Male - Baseline Deficient Moderate Male",
+  "Baseline Depleted Normal Female - Baseline Depleted Moderate Female",
+  "Baseline Depleted Normal Male - Baseline Depleted Moderate Male",
+  "Baseline Sufficient Normal Female - Baseline Sufficient Moderate Female",
+  "Baseline Sufficient Normal Male - Baseline Sufficient Moderate Male",
+  "Endpoint Deficient Normal Female - Endpoint Deficient Mild Female",
+  "Endpoint Deficient Normal Male - Endpoint Deficient Mild Male",
+  "Endpoint Depleted Normal Female - Endpoint Depleted Mild Female",
+  "Endpoint Depleted Normal Male - Endpoint Depleted Mild Male",
+  "Endpoint Sufficient Normal Female - Endpoint Sufficient Mild Female",
+  "Endpoint Sufficient Normal Male - Endpoint Sufficient Mild Male",
+  "Baseline Deficient Normal Female - Baseline Deficient Mild Female",
+  "Baseline Deficient Normal Male - Baseline Deficient Mild Male",
+  "Baseline Depleted Normal Female - Baseline Depleted Mild Female",
+  "Baseline Depleted Normal Male - Baseline Depleted Mild Male",
+  "Baseline Sufficient Normal Female - Baseline Sufficient Mild Female",
+  "Baseline Sufficient Normal Male - Baseline Sufficient Mild Male",
+  "Endpoint Deficient Moderate Female - Endpoint Deficient Severe Female",
+  "Endpoint Deficient Moderate Male - Endpoint Deficient Severe Male",
+  "Endpoint Depleted Moderate Female - Endpoint Depleted Severe Female",
+  "Endpoint Depleted Moderate Male - Endpoint Depleted Severe Male",
+  "Endpoint Sufficient Moderate Female - Endpoint Sufficient Severe Female",
+  "Endpoint Sufficient Moderate Male - Endpoint Sufficient Severe Male",
+  "Baseline Deficient Moderate Female - Baseline Deficient Severe Female",
+  "Baseline Deficient Moderate Male - Baseline Deficient Severe Male",
+  "Baseline Depleted Moderate Female - Baseline Depleted Severe Female",
+  "Baseline Depleted Moderate Male - Baseline Depleted Severe Male",
+  "Baseline Sufficient Moderate Female - Baseline Sufficient Severe Female",
+  "Baseline Sufficient Moderate Male - Baseline Sufficient Severe Male",
+  "Endpoint Deficient Mild Female - Endpoint Deficient Severe Female",
+  "Endpoint Deficient Mild Male - Endpoint Deficient Severe Male",
+  "Endpoint Depleted Mild Female - Endpoint Depleted Severe Female",
+  "Endpoint Depleted Mild Male - Endpoint Depleted Severe Male",
+  "Endpoint Sufficient Mild Female - Endpoint Sufficient Severe Female",
+  "Endpoint Sufficient Mild Male - Endpoint Sufficient Severe Male",
+  "Baseline Deficient Mild Female - Baseline Deficient Severe Female",
+  "Baseline Deficient Mild Male - Baseline Deficient Severe Male",
+  "Baseline Depleted Mild Female - Baseline Depleted Severe Female",
+  "Baseline Depleted Mild Male - Baseline Depleted Severe Male",
+  "Baseline Sufficient Mild Female - Baseline Sufficient Severe Female",
+  "Baseline Sufficient Mild Male - Baseline Sufficient Severe Male",
+  "Endpoint Deficient Mild Female - Endpoint Deficient Moderate Female",
+  "Endpoint Deficient Mild Male - Endpoint Deficient Moderate Male",
+  "Endpoint Depleted Mild Female - Endpoint Depleted Moderate Female",
+  "Endpoint Depleted Mild Male - Endpoint Depleted Moderate Male",
+  "Endpoint Sufficient Mild Female - Endpoint Sufficient Moderate Female",
+  "Endpoint Sufficient Mild Male - Endpoint Sufficient Moderate Male",
+  "Baseline Deficient Mild Female - Baseline Deficient Moderate Female",
+  "Baseline Deficient Mild Male - Baseline Deficient Moderate Male",
+  "Baseline Depleted Mild Female - Baseline Depleted Moderate Female",
+  "Baseline Depleted Mild Male - Baseline Depleted Moderate Male",
+  "Baseline Sufficient Mild Female - Baseline Sufficient Moderate Female",
+  "Baseline Sufficient Mild Male - Baseline Sufficient Moderate Male"
+)
+```
+
+```{r}
+#| eval: true
+#| label: temporal
+#| fig-cap: NA
+#| tbl-cap: NA
+D <- c(
+  "Endpoint Deficient Severe Female - Baseline Deficient Severe Female",
+  "Endpoint Deficient Severe Male - Baseline Deficient Severe Male",
+  "Endpoint Deficient Moderate Female - Baseline Deficient Moderate Female",
+  "Endpoint Deficient Moderate Male - Baseline Deficient Moderate Male",
+  "Endpoint Deficient Mild Female - Baseline Deficient Mild Female",
+  "Endpoint Deficient Mild Male - Baseline Deficient Mild Male",
+  "Endpoint Deficient Normal Female - Baseline Deficient Normal Female",
+  "Endpoint Deficient Normal Male - Baseline Deficient Normal Male",
+  "Endpoint Depleted Severe Female - Baseline Depleted Severe Female",
+  "Endpoint Depleted Severe Male - Baseline Depleted Severe Male",
+  "Endpoint Depleted Moderate Female - Baseline Depleted Moderate Female",
+  "Endpoint Depleted Moderate Male - Baseline Depleted Moderate Male",
+  "Endpoint Depleted Mild Female - Baseline Depleted Mild Female",
+  "Endpoint Depleted Mild Male - Baseline Depleted Mild Male",
+  "Endpoint Depleted Normal Female - Baseline Depleted Normal Female",
+  "Endpoint Depleted Normal Male - Baseline Depleted Normal Male",
+  "Endpoint Sufficient Severe Female - Baseline Sufficient Severe Female",
+  "Endpoint Sufficient Severe Male - Baseline Sufficient Severe Male",
+  "Endpoint Sufficient Moderate Female - Baseline Sufficient Moderate Female",
+  "Endpoint Sufficient Moderate Male - Baseline Sufficient Moderate Male",
+  "Endpoint Sufficient Mild Female - Baseline Sufficient Mild Female",
+  "Endpoint Sufficient Mild Male - Baseline Sufficient Mild Male",
+  "Endpoint Sufficient Normal Female - Baseline Sufficient Normal Female",
+  "Endpoint Sufficient Normal Male - Baseline Sufficient Normal Male"
+)
 ```

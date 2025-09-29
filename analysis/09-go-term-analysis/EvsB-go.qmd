@@ -1,0 +1,875 @@
+# Baseline to Endpoint Functional Analysis
+
+```{r}
+#| echo: false
+#| eval: true
+#| label: setup
+
+# This initial code block loads custom utility functions and environment variables
+# These are stored in separate files to keep the main analysis clean and organized
+suppressWarnings(suppressMessages({
+  source(normalizePath("utils/r-utils.r"))
+  source(normalizePath("_environment.required"))
+  load(normalizePath("data/seqdata.RData"))
+
+  metadata <- read_delim(normalizePath(METADATA))
+
+  library(edgeR)
+  library(limma)
+  library(ComplexHeatmap)
+  library(pairwiseAdonis)
+  library(patchwork)
+
+  dir.create(
+    file.path(RESULTS, "EvB-GO"),
+    showWarnings = FALSE,
+    recursive = TRUE
+  )
+  annoBac <- read.csv(file.path(
+    REF,
+    "gene-ontology/goslim_prokaryote-formatted.csv"
+  ))
+
+  onto_col <- assign_unique_colors(go$ontology)
+}))
+```
+
+## Gene Ontology Enrichment
+
+### Load data
+
+```{r}
+#| eval: true
+#| label: load data
+#| fig-cap: NA
+#| tbl-cap: NA
+go_be <- read.csv(file.path(RESULTS, "EvB-GO/EvB-annotated-go-terms.csv"))
+```
+
+### GO term presence
+
+#### EvsB calculate percentage of samples with particular GO terms
+
+```{r}
+#| eval: true
+#| label: EvsB calculate percentage of samples with particular GO terms
+
+go_be <- go_be %>%
+  filter(go_id %in% annoBac$go_id & ontology != "Cellular Component") %>%
+  arrange(dplyr::desc(count)) %>%
+  group_by(go_id) %>%
+  mutate(n = 1) %>%
+  mutate(
+    percent_samples = sum(n) / length(unique(.$sample)) * 100
+  )
+
+tmp2 <- go_be %>%
+  group_by(Terms, arm, timepoint, ontology) %>%
+  summarise(term_presence = mean(percent_samples))
+```
+
+There are `r length(unique(go_be$Terms))` unique generic GO terms in the baseline-endpoint dataset.
+
+```{r}
+#| eval: true
+#| label: number-go-terms
+#| fig-cap: NA
+#| tbl-cap: NA
+go_be %>%
+  group_by(arm, timepoint) %>%
+  summarise(term_presence = n_distinct(go_id))
+```
+
+```{r}
+#| eval: true
+#| label: number-go-terms
+#| fig-cap: NA
+#| tbl-cap: NA
+go_be %>%
+  group_by(arm, timepoint, ontology) %>%
+  summarise(term_presence = n_distinct(go_id))
+```
+
+```{r}
+#| eval: true
+#| label: double checking the change in average counts of particular GO terms
+
+go_be %>%
+  group_by(go_id, timepoint) %>%
+  summarise(average_count = mean(count)) %>%
+  pivot_wider(
+    names_from = timepoint,
+    values_from = average_count,
+    values_fill = 0
+  ) %>%
+  mutate(EvsB = Endpoint - Baseline) %>%
+  mutate(
+    difference = case_when(
+      EvsB < 0 ~ "Decrease",
+      EvsB > 0 ~ "Increase",
+      EvsB == 0 ~ "None",
+      TRUE ~ NA
+    )
+  ) %>%
+  group_by(difference) %>%
+  summarise(total = n())
+```
+
+###### EvsB plot of percent samples with particular generic GO terms
+
+```{r}
+#| eval: true
+#| label: EvsB plot of percent samples with particular generic GO terms
+go_be %>%
+  dplyr::filter(ontology == "Biological process") %>%
+  ggplot(aes(
+    y = reorder(Terms, dplyr::desc(ontology)),
+    x = percent_samples,
+    fill = ontology
+  )) +
+  geom_col(position = "dodge") +
+  xlab("Percentage of Samples") +
+  ylab(NULL) +
+  scale_fill_manual(values = onto_col) +
+  theme(axis.text.y = element_text(size = 14, face = 'bold', color = 'black')) +
+  facet_wrap(~ timepoint + arm)
+
+go_be %>%
+  dplyr::filter(ontology == "Molecular function") %>%
+  ggplot(aes(
+    y = reorder(Terms, dplyr::desc(ontology)),
+    x = percent_samples,
+    fill = ontology
+  )) +
+  geom_col(position = "dodge") +
+  xlab("Percentage of Samples") +
+  ylab(NULL) +
+  scale_fill_manual(values = onto_col) +
+  theme(axis.text.y = element_text(size = 14, face = 'bold', color = 'black')) +
+  facet_wrap(~ timepoint + arm)
+
+tmp2 %>%
+  dplyr::filter(ontology != "Cellular component") %>%
+  mutate(
+    timepoint = case_when(
+      str_detect(timepoint, "Baseline") ~ "Baseline",
+      str_detect(timepoint, "Endpoint") ~ "Endpoint"
+    )
+  ) %>%
+  ggplot(aes(
+    y = reorder(Terms, dplyr::desc(ontology)),
+    x = term_presence,
+    fill = ontology
+  )) +
+  geom_col(position = "dodge") +
+  xlab("Percentage of Samples") +
+  ylab(NULL) +
+  scale_fill_manual(values = onto_col) +
+  theme(axis.text.y = element_text(size = 14, face = 'bold', color = 'black')) +
+  ggh4x::facet_nested_wrap(~ timepoint + arm)
+```
+
+There are `r length(unique(go_be$go_id))` unique GO terms among baseline-endpoint samples
+
+### Differential GO term analysis
+
+$H_0$: GO functional terms are not differentially abundant at endpoint compared to baseline
+$H_1$: There is a difference between GO functional terms pathway abundance at endpoint compared to baseline
+
+$H_0$: GO functional terms are not differentially abundant between intervention arms at either timepoint
+$H_1$: There is a difference between GO functional terms pathway abundance between intervention arm at either timepoints
+
+#### Cross-sectional comparisons
+
+```{r}
+base <- go_be %>% filter(timepoint == "Baseline")
+end <- go_be %>% filter(timepoint == "Endpoint")
+```
+
+##### Baseline arm differences
+
+###### Data preparation
+
+```{r}
+#| eval: true
+#| label: testing for de abundant pathways
+base_counts <- base %>%
+  dplyr::select(go_id, sample, count) %>%
+  pivot_wider(names_from = sample, values_from = count, values_fill = 0) %>%
+  as.data.frame()
+
+base_counts <- DGEList(as.data.frame(base_counts))
+
+base_counts$samples$arm <- as.factor(go_be$arm[match(
+  rownames(base_counts$samples),
+  go_be$sample
+)])
+
+base_counts$samples$group <- NULL
+
+base_counts$go_id <- go_be %>%
+  select(go_id, ontology, Terms) %>%
+  as.data.frame()
+
+base_counts.keep <- rowSums(base_counts$counts == 0) == ncol(base_counts$counts)
+base_counts <- base_counts[base_counts.keep == FALSE, ]
+
+base_counts <- normLibSizes(base_counts)
+```
+
+###### Contrast design
+
+:::h0
+
+$H_0$: go_be pathways are not differentially abundant between arms at baseline
+
+:::
+
+::: h1
+
+$H_1$: There is a difference between go_be pathway abundance between arms at baseline
+    $H_1a$: go_be pathway abundance *increases* between arms at baseline
+    $H_1b$: go_be pathway abundance *decreases* between arms at baseline
+
+:::
+
+```{r}
+#| eval: true
+#| label: go_be pathway differences between baseline and endpoint
+#Linear Model
+#Contrasts
+design <- stats::model.matrix(~arm, data = base_counts$samples)
+
+contrasts <- makeContrasts(
+  CPMvsFeZnPM = armFeZnPM,
+  levels = design
+)
+```
+
+###### Empirical Bayes Statistics for Differential Expression 
+
+```{r}
+#| eval: true
+#Transform raw count data to log2-base_counts per million (logCPM), estimate the mean-variance relationship and use this to compute appropriate observation-level weights. The data are then ready for linear modelling.
+
+#If the DGEList object has been scale-normalized in edgeR (or before), then leave normalize.method="none" in voom, i.e., the logCPM values should not usually be re-normalized in the voom call.
+#go_be abundance values have not been normalised
+# use updated edgeR voom procedure
+v <- voomLmFit(base_counts, design, normalize.method = "none")
+#v <- voom(base_counts, design, normalize.method="none") #Transforms count data to log2-base_counts per million
+#vfit <- lmFit(v, design)
+vfit <- contrasts.fit(v, contrasts = contrasts)
+efit <- eBayes(vfit) #estimation of QL dispersions
+```
+
+```{r}
+#| eval: true
+#| label: tbl-fdr5
+#| tbl-cap: OGUs that are significantly differentially abundant from zero for each contrast from a fit object (eBayes) containing p-values and test statistics. An FDR of 0.05 was used.
+
+knitr::kable(summary(
+  FDR5 <- decideTests(efit, adjust.method = "BH", p.value = 0.05, fc = 0)
+))
+
+write.fit(
+  fit = efit,
+  results = FDR5,
+  file = file.path(
+    RESULTS,
+    "EvB-GO/limma-write-fit-baseline-results-FDR5-eBayes.csv"
+  ),
+  row.names = F
+)
+```
+
+###### Ordination Analysis and PERMANOVA of differences between arms at baseline
+
+```{r}
+#| eval: true
+#| label: tbl-mds
+#| tbl-cap: Results of PERMANOVA test investigating abundance differences between arms at baseline in paired samples.
+#unsupervised learning: MDS plot
+group_colours <- base_counts$samples$arm
+levels(group_colours) <- c("CPM" = "#FC8D62", "FeZnPM" = "#8DA0CB")
+group_colours <- as.character(group_colours)
+df <- as.data.frame(t(base_counts$counts))
+df <- cbind(df, group = base_counts$samples$arm)
+
+#PERMANOVA testing differenital abundances between timepoints
+mds_stat <- pairwiseAdonis::pairwise.adonis2(
+  df[, 1:(ncol(df) - 1)] ~ group,
+  data = df,
+  method = 'eu'
+) #returns non-adjusted p-values
+
+#output table
+knitr::kable(mds_stat[2])
+```
+
+```{r}
+#| eval: true
+#| label: tbl-mds-sum
+#| tbl-cap: Results of PERMANOVA test investigating abundance differences between arms at baseline in paired samples.
+
+pv <- lapply(2:length(mds_stat), function(x) {
+  w <- mds_stat[[x]][1, 4]
+  y <- mds_stat[[x]][1, 5]
+  z <- names(mds_stat)[x]
+  data.frame(contrast = z, p = y, F.stat = w)
+})
+pv <- bind_rows(pv)
+knitr::kable(
+  pv %>%
+    mutate(p.adj = round(p.adjust(p, method = "BH"), 4)) %>%
+    mutate(
+      sig = case_when(
+        p.adj <= 0.0001 ~ "****",
+        p.adj <= 0.001 ~ "***",
+        p.adj <= 0.01 ~ "**",
+        p.adj <= 0.05 ~ "*",
+        p.adj > 0.05 ~ "ns"
+      )
+    )
+)
+```
+
+The p-value ($Pr(>F)$) for `r base_counts$samples$arm` is `r pv$p`, which is greater than the conventional significance level of 0.05. This suggests that we cannot reject the null hypothesis, implying that there is no significant overall difference in microbial pathway abundance between baseline and endpoint.
+
+The `plotMDS()` function accepts "any data object that can be coerced to a matrix of log-expression values, for example an ExpressionSet or an EList" [@Gentleman2025]. If the `edgeR::voomLmFit()` function was used the `EList` object can be obtained using `fit$EList`
+
+```{r}
+#| eval: true
+#| label: MDS plot comparing arms at baseline in paired samples.
+
+xmax = max(
+  plotMDS(
+    v$EList,
+    col = group_colours,
+    dim.plot = c(1, 2),
+    pch = 16,
+    gene.selection = "common"
+  )$x
+) -
+  0.05
+ymax = max(
+  plotMDS(
+    v$EList,
+    col = group_colours,
+    dim.plot = c(1, 2),
+    pch = 16,
+    gene.selection = "common"
+  )$y
+) -
+  0.05
+
+par(mar = c(7.1, 5.1, 5.1, 5.1), xpd = TRUE)
+plotMDS(
+  v$EList,
+  col = group_colours,
+  dim.plot = c(1, 2),
+  pch = 16,
+  gene.selection = "common"
+)
+legend(
+  "bottom",
+  pch = 16,
+  col = unique(group_colours),
+  legend = levels(v$targets$arm),
+  inset = c(0, -0.165),
+  bty = "n",
+  ncol = 2
+)
+text(
+  x = xmax - 0.05,
+  y = ymax,
+  labels = bquote(R^2 == .(round(as.data.frame(mds_stat[2])[1, 3], 3)))
+)
+text(
+  x = xmax - 0.05,
+  y = ymax - 0.12,
+  labels = bquote(p == .(round(as.data.frame(mds_stat[2])[1, 5], 3)))
+)
+```
+
+There are two obvious clusters that are not due to arm in the MDS graph.
+
+##### Endpoint arm differences
+
+###### Data preparation
+
+```{r}
+#| eval: true
+#| label: testing for de abundant pathways
+end_counts <- end %>%
+  dplyr::select(go_id, sample, count) %>%
+  pivot_wider(names_from = sample, values_from = count, values_fill = 0) %>%
+  as.data.frame()
+
+end_counts <- DGEList(as.data.frame(end_counts))
+
+end_counts$samples$arm <- as.factor(go_be$arm[match(
+  rownames(end_counts$samples),
+  go_be$sample
+)])
+
+end_counts$samples$group <- NULL
+
+end_counts$go_id <- go_be %>%
+  select(go_id, ontology, Terms) %>%
+  as.data.frame()
+
+end_counts.keep <- rowSums(end_counts$counts == 0) == ncol(end_counts$counts)
+end_counts <- end_counts[end_counts.keep == FALSE, ]
+
+end_counts <- normLibSizes(end_counts)
+```
+
+####### Contrast design
+
+:::h0
+
+$H_0$: go_be pathways are not differentially abundant between arms at endline
+
+:::
+
+::: h1
+
+$H_1$: There is a difference between go_be pathway abundance between arms at endline
+    $H_1a$: go_be pathway abundance *increases* between arms at endline
+    $H_1b$: go_be pathway abundance *decreases* between arms at endline
+
+:::
+
+```{r}
+#| eval: true
+#| label: go_be pathway differences between endline and endpoint
+#Linear Model
+#Contrasts
+design <- stats::model.matrix(~arm, data = end_counts$samples)
+
+contrasts <- makeContrasts(
+  CPMvsFeZnPM = armFeZnPM,
+  levels = design
+)
+```
+
+####### Empirical Bayes Statistics for Differential Expression 
+
+```{r}
+#| eval: true
+#Transform raw count data to log2-end_counts per million (logCPM), estimate the mean-variance relationship and use this to compute appropriate observation-level weights. The data are then ready for linear modelling.
+
+#If the DGEList object has been scale-normalized in edgeR (or before), then leave normalize.method="none" in voom, i.e., the logCPM values should not usually be re-normalized in the voom call.
+#go_be abundance values have not been normalised
+# use updated edgeR voom procedure
+v <- voomLmFit(end_counts, design, normalize.method = "none")
+#v <- voom(end_counts, design, normalize.method="none") #Transforms count data to log2-end_counts per million
+#vfit <- lmFit(v, design)
+vfit <- contrasts.fit(v, contrasts = contrasts)
+efit <- eBayes(vfit) #estimation of QL dispersions
+```
+
+```{r}
+#| eval: true
+#| label: tbl-fdr5
+#| tbl-cap: OGUs that are significantly differentially abundant from zero for each contrast from a fit object (eBayes) containing p-values and test statistics. An FDR of 0.05 was used.
+
+knitr::kable(summary(
+  FDR5 <- decideTests(efit, adjust.method = "BH", p.value = 0.05, fc = 0)
+))
+
+write.fit(
+  fit = efit,
+  results = FDR5,
+  file = file.path(
+    RESULTS,
+    "EvB-GO/limma-write-fit-endpoint-results-FDR5-eBayes.csv"
+  ),
+  row.names = F
+)
+```
+
+####### Ordination Analysis and PERMANOVA of differences between arms at endline
+
+```{r}
+#| eval: true
+#| label: tbl-mds
+#| tbl-cap: Results of PERMANOVA test investigating abundance differences between arms at endline in paired samples.
+#unsupervised learning: MDS plot
+group_colours <- v$targets$arm
+levels(group_colours) <- c("CPM" = "#FC8D62", "FeZnPM" = "#8DA0CB")
+group_colours <- as.character(group_colours)
+df <- as.data.frame(t(v$EList$E))
+df$group <- v$targets$arm[match(rownames(df), rownames(v$targets))]
+
+#PERMANOVA testing differenital abundances between arms
+mds_stat <- pairwiseAdonis::pairwise.adonis2(
+  df[, 1:(ncol(df) - 1)] ~ group,
+  data = df,
+  method = 'eu'
+) #returns non-adjusted p-values
+
+#output table
+knitr::kable(mds_stat[2])
+```
+
+```{r}
+#| eval: true
+#| label: tbl-mds-sum
+#| tbl-cap: Results of PERMANOVA test investigating abundance differences between arms at endline in paired samples.
+
+pv <- lapply(2:length(mds_stat), function(x) {
+  w <- mds_stat[[x]][1, 4]
+  y <- mds_stat[[x]][1, 5]
+  z <- names(mds_stat)[x]
+  data.frame(contrast = z, p = y, F.stat = w)
+})
+pv <- bind_rows(pv)
+knitr::kable(
+  pv %>%
+    mutate(p.adj = round(p.adjust(p, method = "BH"), 4)) %>%
+    mutate(
+      sig = case_when(
+        p.adj <= 0.0001 ~ "****",
+        p.adj <= 0.001 ~ "***",
+        p.adj <= 0.01 ~ "**",
+        p.adj <= 0.05 ~ "*",
+        p.adj > 0.05 ~ "ns"
+      )
+    )
+)
+```
+
+The p-value ($Pr(>F)$) for `r end_counts$samples$arm` is `r pv$p`, which is greater than the conventional significance level of 0.05. This suggests that we cannot reject the null hypothesis, implying that there is no significant overall difference in microbial pathway abundance between endline and endpoint.
+
+The `plotMDS()` function accepts "any data object that can be coerced to a matrix of log-expression values, for example an ExpressionSet or an EList" [@Gentleman2025]. If the `edgeR::voomLmFit()` function was used the `EList` object can be obtained using `fit$EList`
+
+```{r}
+#| eval: true
+#| label: MDS plot comparing arms at endline in paired samples.
+
+xmax = max(
+  plotMDS(
+    v$EList,
+    col = group_colours,
+    dim.plot = c(1, 2),
+    pch = 16,
+    gene.selection = "common"
+  )$x
+) -
+  0.05
+ymax = max(
+  plotMDS(
+    v$EList,
+    col = group_colours,
+    dim.plot = c(1, 2),
+    pch = 16,
+    gene.selection = "common"
+  )$y
+) -
+  0.05
+
+par(mar = c(7.1, 5.1, 5.1, 5.1), xpd = TRUE)
+plotMDS(
+  v$EList,
+  col = group_colours,
+  dim.plot = c(1, 2),
+  pch = 16,
+  gene.selection = "common"
+)
+legend(
+  "bottom",
+  pch = 16,
+  col = unique(group_colours),
+  legend = levels(v$targets$arm),
+  inset = c(0, -0.165),
+  bty = "n",
+  ncol = 2
+)
+text(
+  x = xmax - 0.05,
+  y = ymax,
+  labels = bquote(R^2 == .(round(as.data.frame(mds_stat[2])[1, 3], 3)))
+)
+text(
+  x = xmax - 0.05,
+  y = ymax - 0.12,
+  labels = bquote(p == .(round(as.data.frame(mds_stat[2])[1, 5], 3)))
+)
+```
+
+#### Change in abundances overtime (ignoring arm)
+
+```{r}
+#| eval: true
+counts <- go_be %>%
+  dplyr::filter(ontology != "Cellular component") %>%
+  dplyr::select(go_id, sample, count) %>%
+  pivot_wider(names_from = sample, values_from = count, values_fill = 0) %>%
+  as.data.frame()
+
+counts <- DGEList(as.data.frame(counts))
+
+counts$samples$arm <- as.factor(go_be$arm[match(
+  rownames(counts$samples),
+  go_be$sample
+)])
+counts$samples$timepoint <- go_be$timepoint[match(
+  rownames(counts$samples),
+  go_be$sample
+)]
+counts$samples$timepoint <- factor(
+  counts$samples$timepoint,
+  labels = c("Baseline", "Endpoint")
+)
+
+counts$genes <- go_be %>% select(go_id, Terms, ontology) %>% as.data.frame()
+
+counts.keep <- rowSums(counts$counts == 0) == ncol(counts$counts)
+counts <- counts[counts.keep == FALSE, ]
+
+counts <- normLibSizes(counts)
+counts <- estimateDisp(counts)
+```
+
+```{r}
+#| eval: true
+#| label: GO functional terms differences between treatment arms at baseline and endpoint
+#Linear Model
+#Contrasts
+design <- stats::model.matrix(~timepoint, data = counts$samples)
+
+colnames(design) <- c("Intercept", "Endpoint")
+
+contrasts <- makeContrasts(
+  EvsB = Endpoint,
+  levels = design
+)
+```
+
+```{r}
+#| eval: true
+#| label: glmQLfit
+#| fig-cap: NA
+#| tbl-cap: NA
+fit <- glmQLFit(counts, design)
+
+qlf <- glmQLFTest(fit, contrast = contrasts)
+glm_results <- topTags(qlf, n = Inf) %>%
+  as.data.frame()
+
+glm_results %>%
+  filter(abs(logFC) >= log2(2)) %>%
+  ggplot(aes(y = reorder(Terms, logFC), x = logFC)) +
+  geom_bar(
+    position = position_dodge(),
+    stat = "identity",
+    aes(fill = ontology)
+  ) +
+  xlab(bquote(bold("Fold change (" ~ Log[2] ~ "FC )"))) +
+  ylab(NULL) + #labels the y axis
+  scale_fill_manual(values = onto_col)
+```
+
+####### Empirical Bayes Statistics for Differential Expression 
+
+```{r}
+#| eval: true
+#| label: ebayes
+#| fig-cap: NA
+#| tbl-cap: NA
+
+#Transform raw count data to log2-counts per million (logCPM), estimate the mean-variance relationship and use this to compute appropriate observation-level weights. The data are then ready for linear modelling.
+
+#If the DGEList object has been scale-normalized in edgeR (or before), then leave normalize.method="none" in voom, i.e., the logCPM values should not usually be re-normalized in the voom call.
+#go_be abundance values have not been normalised, however initial normalization duing raw sequence QC will have accounted for differences in sequencing depth/library size. go_be counts should reflect these adjustments and further normalization should not be necessary.
+
+v <- voomLmFit(counts, design, normalize.method = "none") #Transforms count data to log2-counts per million
+vfit <- contrasts.fit(vfit, contrasts = contrasts)
+efit <- eBayes(vfit) #estimation of QL dispersions
+fc1.2 <- treat(vfit, fc = 1.2)
+fc2 <- treat(vfit, fc = 2)
+
+```
+
+```{r}
+#| eval: true
+#| label:
+#| fig-cap: NA
+#| tbl-cap: NA
+# top_efit <- as.data.frame(topTable(efit, n = Inf)) %>%
+#   select(
+#     ko,
+#     logFC.Endpoint = EvsB,
+#     logFC.FeZnPM = CPMvsFeZnPM,
+#     logFC.FeZnPM_Endpoint = CPMvsFeZnPM_overtime,
+#     PValue = P.Value,
+#     FDR = adj.P.Val
+#   )
+
+top_efit <- as.data.frame(topTable(efit, n = Inf)) %>%
+  select(
+    go_id,
+    EvsB = logFC,
+    PValue = P.Value,
+    FDR = adj.P.Val
+  )
+
+top_efit %>%
+  arrange(go_id) %>%
+  mutate(EvsB_FC = 2^abs(EvsB)) %>%
+  tibble()
+```
+
+```{r}
+#| eval: true
+#| label: tbl-fdr5
+#| tbl-cap: Number of GO terms that are significantly differentially expressed (p $\leq$ 0.05)
+# input = a fit object (eBayes) containing p-values and test statistics.
+
+knitr::kable(summary(
+  FDR5 <- decideTests(efit, adjust.method = "BH", p.value = 0.05, fc = 0)
+))
+
+```
+
+```{r}
+#| eval: true
+#| label: tbl-fdr5-fc1.2
+#| tbl-cap: Number of GO terms that are significantly differentially expressed (p $\leq$ 0.05) and have a fold change of 1.2 or more
+
+#FDR of 0.05 & FC > 1.2
+knitr::kable(summary(
+  FDR5.FC1.2 <- decideTests(fc1.2, adjust.method = "BH", p.value = 0.05)
+))
+
+write.fit(
+  fit = fc1.2,
+  results = FDR5.FC1.2,
+  file = file.path(RESULTS, "EvB-GO/limma-write-fit-results-FDR5-FC2.csv"),
+  row.names = F
+)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-fdr-fc2
+#| tbl-cap: Number of GO terms that are significantly differentially expressed (p $\leq$ 0.05) and have a fold change of 2 or more
+
+#FDR of 0.05 & FC > 2
+knitr::kable(summary(
+  FDR5.FC2 <- decideTests(fc2, adjust.method = "BH", p.value = 0.05)
+))
+
+write.fit(
+  fit = fc2,
+  results = FDR5.FC2,
+  file = file.path(RESULTS, "EvB-GO/limma-write-fit-results-FDR5-FC2.csv"),
+  row.names = F
+)
+```
+
+###### Unsupervised ordination: MDS plot og GO terms between timepoints
+
+```{r}
+#| eval: true
+#| label: MDS plot EvsB
+#unsupervised learning: MDS plot
+group_colours <- counts$samples$timepoint
+levels(group_colours) <- c("Baseline" = "#66C2A5", "Endpoint" = "#E78AC3")
+group_colours <- as.character(group_colours)
+df <- as.data.frame(t(counts$counts))
+df <- cbind(df, group = counts$samples$timepoint)
+
+#PERMANOVA testing differenital abundances between timepoints
+mds_stat <- pairwiseAdonis::pairwise.adonis2(
+  df[, 1:(ncol(df) - 1)] ~ group,
+  data = df,
+  method = 'eu'
+) #returns non-adjusted p-values
+
+#output table
+knitr::kable(mds_stat[2])
+```
+
+```{r}
+#| eval: true
+pv <- lapply(2:length(mds_stat), function(x) {
+  w <- mds_stat[[x]][1, 4]
+  y <- mds_stat[[x]][1, 5]
+  z <- names(mds_stat)[x]
+  data.frame(contrast = z, p = y, F.stat = w)
+})
+
+pv <- bind_rows(pv)
+knitr::kable(
+  pv %>%
+    mutate(p.adj = round(p.adjust(p, method = "BH"), 4)) %>%
+    mutate(
+      sig = case_when(
+        p.adj <= 0.0001 ~ "****",
+        p.adj <= 0.001 ~ "***",
+        p.adj <= 0.01 ~ "**",
+        p.adj <= 0.05 ~ "*",
+        p.adj > 0.05 ~ "ns"
+      )
+    )
+)
+```
+
+The p-value ($Pr(>F)$) for `r counts$samples$timepoint` is `r pv$p`, which is greater than the conventional significance level of 0.05. This suggests that we cannot reject the null hypothesis, implying that there is no significant overall difference in microbial pathway abundance between baseline and endpoint.
+
+```{r}
+#| eval: true
+#| label: fig-EvB-MDS
+#| fig-cap: MDS plot comparing timepoints
+
+xmax = max(
+  plotMDS(
+    v,
+    col = group_colours,
+    dim.plot = c(1, 2),
+    pch = 16,
+    gene.selection = "common"
+  )$x
+) -
+  0.05
+ymax = max(
+  plotMDS(
+    v,
+    col = group_colours,
+    dim.plot = c(1, 2),
+    pch = 16,
+    gene.selection = "common"
+  )$y
+) -
+  0.05
+
+par(mar = c(7.1, 5.1, 5.1, 5.1), xpd = TRUE)
+plotMDS(
+  v,
+  col = group_colours,
+  dim.plot = c(1, 2),
+  pch = 16,
+  gene.selection = "common"
+)
+legend(
+  "bottom",
+  pch = 16,
+  col = unique(group_colours),
+  legend = levels(counts$samples$arm),
+  inset = c(0, -0.2),
+  bty = "n",
+  ncol = 2
+)
+text(
+  x = xmax - 0.05,
+  y = ymax,
+  labels = bquote(R^2 == .(round(as.data.frame(mds_stat[2])[1, 3], 3)))
+)
+text(
+  x = xmax - 0.05,
+  y = ymax - 0.12,
+  labels = bquote(p == .(round(as.data.frame(mds_stat[2])[1, 5], 3)))
+)
+```

@@ -51,6 +51,10 @@ prepare_ogu_data <- function(
 
       # Apply prevalence filter if requested
       if (filter_prevalence) {
+        if (filter_prevalence <= 0) {
+          stop("Prevalence filter threshold must be greater than zero")
+        }
+        
         prevalence_index <- apply(ogu_data, 2, function(X) {
           sum(X > 0) > prevalence_cutoff * length(X)
         })
@@ -66,6 +70,10 @@ prepare_ogu_data <- function(
 
       # Apply abundance filter if requested
       if (filter_abundance) {
+        if (filter_abundance <= 0) {
+          stop("Abundance filter threshold must be greater than zero")
+        }
+
         abundance_index <- apply(ogu_data, 2, function(X) {
           quantile(X, abundance_quantile) > abundance_cutoff
         })
@@ -101,38 +109,37 @@ prepare_ogu_data <- function(
       }
 
       # Print filtering summary
-      cat("\nOGU Filtering Summary:\n")
-      cat("=====================\n")
+      cat("<br><h3>OGU Filtering Summary:</h3><br>")
       cat(
         "Original number of features:",
         filter_summary$original_features,
-        "\n"
+        "<br>"
       )
       cat(
         "Filters applied:",
         paste(filter_summary$filters_applied, collapse = ", "),
-        "\n"
+        "<br>"
       )
       if (filter_prevalence) {
         cat(
           "Features after prevalence filter:",
           filter_summary$features_after_prevalence,
-          "\n"
+          "<br>"
         )
       }
       if (filter_abundance) {
         cat(
           "Features after abundance filter:",
           filter_summary$features_after_abundance,
-          "\n"
+          "<br>"
         )
       }
-      cat("Final number of features:", filter_summary$filtered_features, "\n")
-      cat("Features removed:", filter_summary$features_removed, "\n")
+      cat("Final number of features:", filter_summary$filtered_features, "<br>")
+      cat("Features removed:", filter_summary$features_removed, "<br>")
       cat(
         "Proportion of features retained:",
         round(filter_summary$proportion_retained * 100, 2),
-        "%\n\n"
+        "%<br><br>"
       )
 
       return(list(
@@ -162,18 +169,17 @@ prepare_predictors <- function(meta_data) {
         mutate(agedays_rounded = as.numeric(agedays_rounded)) %>%
         arrange(agedays_rounded, .by_group = TRUE) %>%
         mutate(
-          age_B = case_when(
-            timepoint == "Baseline" ~ agedays_rounded,
+          age_B_unscaled = case_when(
+            str_detect(timepoint, "Baseline") ~ agedays_rounded,
             TRUE ~ NA # Changed FALSE to TRUE for proper case_when syntax
           )
         ) %>%
-        fill(age_B) %>%
+        fill(age_B_unscaled) %>%
         ungroup() %>%
         mutate(
-          age_B = scale_values(age_B),
+          age_B = scale_values(age_B_unscaled),
           arm = as.factor(arm),
           subject = str_remove(displayid, "-G|-B"),
-          timepoint = timepoint
         ) %>%
         column_to_rownames(var = "sample_names")
 
@@ -649,14 +655,19 @@ identify_significant_ogus <- function(
   significance_threshold = 0.05,
   include_intercept = FALSE
 ) {
+
+  colnames(gee_results)[which(str_detect(colnames(gee_results), "Intercept"))] <- "Intercept"
+
   if(include_intercept == FALSE){
+
     significant_ogus <- left_join(
       rownames_to_column(taxa_data, var = "rowname"),
       gee_results,
       by = c("rowname" = "outcome_id")
     ) %>%
+      select(!Intercept) %>%
       filter(if_any(
-        !`(Intercept)`,
+        everything(),
         ~ . <= significance_threshold
       ))
   } else {

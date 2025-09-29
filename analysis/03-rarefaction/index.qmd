@@ -2,4 +2,4 @@
 
 Before calculating $\alpha$ and $\beta$ diversity statistics, it is necessary to normalise library size across samples, as these metrics are heavily influenced by feature counts. Despite numerous debates, rarefaction is considered the primary method for controlling the effect of uneven sequencing effort [@Schloss2023].
 
-A recent paper was published [@Hong2022] that developed a method to estimate how efficient a particular level of rarefaction is at capturing sample diversity. In combination with rarefaction curves, this was used to choose a rarefaction depth that balances efficiency without needed to discard more samples than is necessary (See [Appendix 2](../100-Appendix/Appendix-2.qmd). 
+A recent paper was published [@Hong2022] that developed a method to estimate how efficient a particular level of rarefaction is at capturing sample diversity. In combination with rarefaction curves, this was used to choose a rarefaction depth that balances efficiency without needed to discard more samples than is necessary (See [Appendix 2](../100-Appendix/Appendix-2.qmd)). 

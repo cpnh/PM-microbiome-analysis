@@ -587,25 +587,28 @@ print_zinb_diagnostics <- function(diagnostic_results) {
 #' @param phyloseq_obj Input phyloseq object
 #' @param output_dir Directory for saving results
 #' @return List containing all analysis results
-run_zinb_analysis <- function(phyloseq_obj, output_dir) {
+run_zi_analysis <- function(
+  phyloseq_obj, 
+  output_dir = "ZI-analysis",
+  filter_prevalence = TRUE,
+  prevalence_cutoff = 0.4,
+  filter_abundance = FALSE,
+  formula_str = "time + age_B + age_B:time + (1 | subject)",
+  zi_formula = "~ age_B * time") {
   # Create output directory if it doesn't exist
   if (!dir.exists(output_dir)) {
-    dir.create(output_dir)
+    dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
   }
 
   # Prepare data
   prepared_data <- prepare_ogu_data(
-    absAbund,
-    filter_prevalence = TRUE,
-    prevalence_cutoff = 0.4,
-    filter_abundance = FALSE
+    phyloseq_obj,
+    filter_prevalence = filter_prevalence,
+    prevalence_cutoff = prevalence_cutoff,
+    filter_abundance = filter_abundance
   )
-  predictors <- prepare_predictors(prepared_data$meta_data)
 
-  # Store original data with sample names
-  predictor_data <- predictors %>%
-    rownames_to_column(var = "sample_names") %>%
-    as.data.frame()
+  predictors <- prepare_predictors(prepared_data$meta_data)
 
   # Run ZINB models
   model_results <- run_zinb_models(
@@ -2331,4 +2334,186 @@ check_convergence <- function(model) {
   }
   
   return(status)
+}
+
+prepare_data <- function(phyloseq_obj, 
+                           analysis_name = "ZI-analysis",
+                           filter_prevalence = TRUE,
+                           prevalence_cutoff = 0.4,
+                           filter_abundance = FALSE) {
+  
+  # Create results directory
+  results_dir <- file.path(RESULTS, paste0("yr2-OGU-ZIBR-", analysis_name))
+  dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
+  
+  # Data preparation
+  data <- prepare_ogu_data(
+    phyloseq_obj,
+    filter_prevalence = filter_prevalence,
+    prevalence_cutoff = prevalence_cutoff,
+    filter_abundance = filter_abundance
+  )
+
+  outcome <- data$ogu_data
+
+  meta <- prepare_predictors(data$meta_data)
+  predictors <- meta %>%
+  rownames_to_column(var = "sample") %>%
+  mutate(
+    baseline_sample = str_replace(sample, "_G_E|_B_E|_E|_G_B|_B_B", "_B"),
+    sample = str_remove(sample, "_G"),
+  ) %>%
+  mutate(sample = str_replace(sample, "_B_B", "_B")) %>%
+  mutate(sample = str_replace(sample, "_B_E", "_E")) %>%
+    select(
+      sample,
+      age_B,
+      timepoint,
+      time,
+      subject
+    )
+  
+  return(list(
+    outcome = outcome,
+    predictors = predictors,
+    taxa_data = data$taxa_data
+  ))
+}
+
+# Function to fit multiple distribution families
+fit_zi_distributions <- function(outcome, predictors, formula_str, zi_formula, results_dir, fit_models = TRUE) {
+  
+  families <- list(
+    nb2 = "nbinom2",
+    nb1 = "nbinom1", 
+    poi = "poisson",
+    gau = "gaussian",
+    lognorm = "lognormal"
+  )
+  
+  results <- list()
+  
+  if (fit_models) {
+    for (family_name in names(families)) {
+      cat("Fitting", family_name, "models...\n")
+      results[[family_name]] <- genZI(
+        outcome,
+        predictors,
+        formula = formula_str,
+        zi = zi_formula,
+        family = families[[family_name]]
+      )
+      
+      # Save results
+      saveRDS(
+        results[[family_name]],
+        file.path(results_dir, paste0("genZI-OGU-", family_name, "_results.rds"))
+      )
+    }
+  } else {
+    # Load existing results
+    for (family_name in names(families)) {
+      file_path <- file.path(results_dir, paste0("genZI-OGU-", family_name, "_results.rds"))
+      if (file.exists(file_path)) {
+        results[[family_name]] <- readRDS(file_path)
+      }
+    }
+  }
+  
+  return(results)
+}
+
+# Function to extract final models by distribution
+select_best_models <- function(results_list) {
+  
+  # Diagnose model fits
+  poor_fits <- lapply(1:length(results_list), function(x) {
+    d <- diagnoseZI(results_list[[x]]$all_models)
+    d$dist <- names(results_list)[x]
+    return(d)
+  })
+  
+  poor_fits <- data.table::rbindlist(poor_fits)
+  
+  # Compare model summaries
+  summaries <- lapply(names(results_list), function(name) {
+    if (!is.null(results_list[[name]]$model_summary)) {
+      summary_data <- results_list[[name]]$model_summary
+      summary_data$dist <- name
+      return(summary_data)
+    }
+    return(NULL)
+  })
+  
+  summaries <- data.table::rbindlist(summaries[!sapply(summaries, is.null)])
+  summaries <- left_join(summaries, poor_fits, by = c("outcome_id", "dist"))
+  
+  # Filter for models that pass diagnostics
+  summaries_filtered <- summaries %>%
+    filter(pass == TRUE) %>%
+    select(!c(error_message, message)) %>%
+    mutate(index = 1:nrow(.)) %>%
+    pivot_longer(
+      cols = !c(index, outcome_id, dist, pass),
+      names_to = "criterion",
+      values_to = "value"
+    )
+  
+  # Select best AIC and BIC
+  aic <- summaries_filtered %>%
+    filter(criterion == "AIC") %>%
+    group_by(criterion, outcome_id) %>%
+    arrange(value) %>%
+    slice(1) %>%
+    ungroup() %>%
+    select(index, outcome_id, minAIC = value, distAIC = dist)
+  
+  bic <- summaries_filtered %>%
+    filter(criterion == "BIC") %>%
+    group_by(criterion, outcome_id) %>%
+    arrange(value) %>%
+    slice(1) %>%
+    ungroup() %>%
+    select(index, outcome_id, minBIC = value, distBIC = dist)
+  
+  bestDist <- left_join(aic, bic) %>%
+    mutate(dist = ifelse(distAIC == distBIC, distAIC, "Undetermined"))
+  
+  # Check for p-value issues
+  pvals <- left_join(
+    bestDist,
+    summaries_filtered,
+    by = c("index", "outcome_id", "dist")
+  ) %>%
+    filter(str_detect(criterion, "Pvalue"), value <= 0.05) %>%
+    arrange(index)
+  
+  # Filter out problematic models
+  bestDist_filtered <- bestDist %>%
+    filter(!outcome_id %in% pvals$outcome_id)
+  
+  return(list(
+    bestDist = bestDist,
+    bestDist_filtered = bestDist_filtered,
+    summaries = summaries,
+    poor_fits = poor_fits
+  ))
+}
+
+# Function to extract final models by distribution
+extract_final_models <- function(results_list, bestDist_filtered) {
+  
+  final_models <- list()
+  
+  for (dist in unique(bestDist_filtered$dist)) {
+    if (dist != "Undetermined" && dist %in% names(results_list)) {
+      model_ids <- filter(bestDist_filtered, dist == !!dist)$outcome_id
+      final_models[[dist]] <- keep_at(
+        results_list[[dist]]$all_models,
+        model_ids
+      )
+    }
+  }
+  
+  return(final_models)
 }

@@ -33,17 +33,15 @@ suppressWarnings(suppressMessages({
     dplyr::mutate,
     base::load,
     base::attr,
-    stats::update
+    stats::update,
+    purrr::modify
   )
 }))
 
 options(max.print = 50, scipen = 999, max.width = 100, digits = 3, prType='html')
+set.seed(1234)
 
-str <- function(object, ...) {
-  str(object, give.attr = FALSE, max.level = 3, ...)
-}
-
-
+Sys.setlocale("LC_CTYPE", "en_GB.UTF-8")
 ##############################################################################
 #  #start GGplot Settings for theming                                             #
 ##############################################################################
@@ -66,6 +64,7 @@ theme_set(
         face = 'bold',
         color = 'black'
       ),
+
       axis.title.x = element_text(
         size = fontsize,
         face = 'bold',
@@ -76,12 +75,14 @@ theme_set(
         face = 'bold',
         color = 'black'
       ),
+
       plot.title = element_text(hjust = 0.5, face = "bold", size = 20),
+
       legend.title = element_blank(),
       legend.position = 'bottom',
       legend.location = "plot",
       legend.text = element_text(
-        size = fontsize,
+        size = rel(1),
         face = 'bold',
         color = 'black'
       ),
@@ -256,7 +257,7 @@ knit_print.formatted_pvalue <- function(x, ...) {
 gt_summary <- function(
   data,
   by,
-  continuous_stat = "{median} ({IQR}; {min}-{max})",
+  continuous_stat = "{median}  \n({IQR}; {min}-{max})",
   categorical_stat = "{n} / {N} ({p}%)",
   digits = 2,
   missing = "no",
@@ -1920,10 +1921,6 @@ pad_columns <- function(df) {
   return(padded_df)
 }
 
-#determine what fold change a coefficient estimates
-fc <- function(coef, log_scale = 2) {
-  coef^2
-}
 #determine the coefficient threshold for a particular fold change of interest
 coef <- function(desired_fold_change, log_scale = 2) {
   log(desired_fold_change, base = log_scale)
@@ -2127,8 +2124,9 @@ NULL
 #' @export
 otu_df <- function(x) {
   if (any(c("phyloseq", "otu_table") %in% is(x))) {
-    # Pick OTU matrix
-    otu <- microbiome::abundances(x)
+    require(microbiome)
+        # Pick OTU matrix
+    otu <- abundances(x)
   }
   otu_df <- otu %>%
     as.data.frame()
@@ -2155,10 +2153,11 @@ tax_df <- function(x, column.id = "FeatureID") {
 #' @rdname DfUtilites
 #' @aliases sample_df
 #' @export
-sample_df <- function(x, column.id = "SampleID") {
+sample_df <- function(x, column.id = "sample_names") {
   if (any(c("phyloseq", "sample_data") %in% is(x))) {
+    require(microbiome)
     # Pick OTU matrix
-    smd <- microbiome::meta(x)
+    smd <- meta(x)
     return(smd)
   } else {
     stop("Phyloseq object not supplied.")
@@ -2753,7 +2752,12 @@ plotPhylaEMMs <- function(df,
   df <- df %>%
     arrange(desc(Genus)) %>%
     mutate(
-      Species = paste0(Model, "; ", ifelse(Species != "", Species, Genus)),
+      Species = paste0(Model, "; ", 
+        case_when(
+          Species != "" ~ Species,
+          Genus == "" ~ Phylum,
+          TRUE ~ Genus
+        )),
       sig_level = case_when(
         p.value < 0.001 ~ "***",
         p.value < 0.01 ~ "**",
@@ -2762,27 +2766,28 @@ plotPhylaEMMs <- function(df,
       ),
       estimate = ifelse(is.na(estimate), ratio, estimate)
     )
+
   if(highlight_common == TRUE){
-  # Find common species
-  common_species <- df %>%
-    group_by(Species) %>%
-    summarize(n = n_distinct(timepoint)) %>%
-    filter(n > 1) %>%
-    pull(Species)
-  
+    # Find common species
+    common_species <- df %>%
+      group_by(Species) %>%
+      summarize(n = n_distinct(timepoint)) %>%
+      filter(n > 1) %>%
+      pull(Species)
   # Add colored labels
-  df <- df %>%
-    mutate(
-      Species_colored = case_when(
-        Species %in% common_species ~ 
-          sprintf("<span style='color:%s;font-weight:%s'>%s</span>",
-                 common_color, common_weight, Species),
-        TRUE ~ 
-          sprintf("<span style='color:%s;font-weight:%s'>%s</span>",
-                 other_color, other_weight, Species)
+    df <- df %>%
+      mutate(
+        Species_colored = case_when(
+          Species %in% common_species ~ 
+            sprintf("<span style='color:%s;font-weight:%s'>%s</span>",
+                  common_color, common_weight, Species),
+          TRUE ~ 
+            sprintf("<span style='color:%s;font-weight:%s'>%s</span>",
+                  other_color, other_weight, Species)
+        )
       )
-    )} else {
-    Species_colored = Species
+    } else {
+          df <- df %>% mutate(Species_colored = Species)
   }
   
   # Create plot
@@ -3810,7 +3815,7 @@ gt_strata <- function(
   data,
   strata,
   by,
-  continuous_stat = "{median} ({IQR}; {min}-{max})",
+  continuous_stat = "{median}  \n({IQR}; {min}-{max})",
   categorical_stat = "{n} / {N} ({p}%)",
   digits = 2,
   missing = "no",
@@ -5338,10 +5343,6 @@ pad_columns <- function(df) {
   return(padded_df)
 }
 
-#determine what fold change a coefficient estimates
-fc <- function(coef, log_scale = 2) {
-  coef^2
-}
 #determine the coefficient threshold for a particular fold change of interest
 #TODO change function name so not to conflict with stats package coef function
 coef <- function(desired_fold_change, log_scale = 2) {
@@ -7542,4 +7543,159 @@ print.distfit <- function(x, ...) {
   if (!is.null(x$plots)) {
     cat("\nPlots available in results$plots\n")
   }
+}
+
+#' Create a Volcano Plot for Differential Analysis
+#'
+#' This function creates a volcano plot to visualize the results of differential
+#' analysis, plotting log fold change against -log10 FDR p-values with
+#' customizable significance thresholds.
+#'
+#' @param df A data frame containing differential analysis results.
+#' @param title Character string. Optional title for the plot. Default is NULL.
+#' @param p.fdr Column name (unquoted) containing FDR-adjusted p-values.
+#'   Default is `p.adj.fdr`.
+#' @param lfc Column name (unquoted) containing log fold change values.
+#'   Default is `lfc`.
+#' @param p.threshold Numeric. FDR p-value threshold for significance.
+#'   Default is 0.05.
+#' @param lfc.threshold Numeric. Log fold change threshold for significance.
+#'   Default is log(2).
+#' @param point.size Numeric. Size of points in the plot. Default is 2.
+#' @param sig.color Character. Color for significant points. Default is "red".
+#' @param nonsig.color Character. Color for non-significant points. Default is "blue".
+#' @param width Numeric. Plot width in inches for output. Default is 8.
+#' @param height Numeric. Plot height in inches for output. Default is 6.
+#' @param dpi Numeric. Resolution for raster output. Default is 300.
+#'
+#' @return A ggplot2 object representing a volcano plot with proper theming
+#'   for both HTML and PDF output.
+#'
+#' @examples
+#' \dontrun{
+#' # Basic usage
+#' sample_data <- data.frame(
+#'   p.adj.fdr = runif(100, 0, 1),
+#'   lfc = rnorm(100, 0, 2)
+#' )
+#' plotDAvol(sample_data, title = "Differential Expression Analysis")
+#'
+#' # With custom thresholds
+#' plotDAvol(sample_data, 
+#'           title = "Custom Analysis", 
+#'           p.threshold = 0.01, 
+#'           lfc.threshold = log(1.5))
+#' }
+#'
+#' @import ggplot2
+#' @import dplyr
+#' @importFrom rlang enquo quo_name
+#' @export
+plotDAvol <- function(df, 
+                      title = NULL, 
+                      p.fdr = p.adj.fdr, 
+                      lfc = lfc,
+                      p.threshold = 0.05,
+                      lfc.threshold = log(2),
+                      point.size = 2,
+                      sig.color = "#2166AC",
+                      nonsig.color = "#B2182B",
+                      width = 8,
+                      height = 6,
+                      dpi = 300) {
+  
+  # Input validation
+  if (!is.data.frame(df)) {
+    stop("df must be a data frame")
+  }
+  
+  if (nrow(df) == 0) {
+    stop("df cannot be empty")
+  }
+  
+  # Capture column names using non-standard evaluation
+  p.fdr_col <- enquo(p.fdr)
+  lfc_col <- enquo(lfc)
+  
+  p.fdr_name <- quo_name(p.fdr_col)
+  lfc_name <- quo_name(lfc_col)
+  
+  # Check if required columns exist
+  if (!p.fdr_name %in% names(df)) {
+    stop(paste("Column", p.fdr_name, "not found in df"))
+  }
+  
+  if (!lfc_name %in% names(df)) {
+    stop(paste("Column", lfc_name, "not found in df"))
+  }
+  
+  # Validate numeric columns
+  if (!is.numeric(df[[p.fdr_name]])) {
+    stop(paste("Column", p.fdr_name, "must be numeric"))
+  }
+  
+  if (!is.numeric(df[[lfc_name]])) {
+    stop(paste("Column", lfc_name, "must be numeric"))
+  }
+  
+  # Check for valid p-values
+  if (any(df[[p.fdr_name]] < 0 | df[[p.fdr_name]] > 1, na.rm = TRUE)) {
+    warning("Some p-values are outside the range [0, 1]")
+  }
+  
+  # Validate parameters
+  if (!is.null(title) && !is.character(title)) {
+    stop("title must be a character string or NULL")
+  }
+  
+  if (!is.numeric(p.threshold) || p.threshold <= 0 || p.threshold > 1) {
+    stop("p.threshold must be a number between 0 and 1")
+  }
+  
+  if (!is.numeric(lfc.threshold) || lfc.threshold < 0) {
+    stop("lfc.threshold must be a positive number")
+  }
+  
+  # Create the plot with improved styling for Quarto output
+  p <- df %>%
+    mutate(
+      logP = -log10(!!p.fdr_col),
+      significance = case_when(
+        logP > -log10(p.threshold) & abs(!!lfc_col) > lfc.threshold ~ "Significant",
+        TRUE ~ "Not Significant"
+      )
+    ) %>%
+    ggplot(aes(x = !!lfc_col, y = logP, color = significance)) +
+    geom_point(size = point.size, alpha = 0.7) +
+    scale_color_manual(
+      values = c("Significant" = sig.color, "Not Significant" = nonsig.color),
+      name = "Significance"
+    ) +
+    labs(
+      x = bquote("Log Fold Change" ~ (log[e](FC))),
+      y = bquote("FDR" ~ (-log[10] ~ "P-value")),
+      title = title
+    ) +
+    geom_hline(yintercept = -log10(p.threshold), linetype = "dashed", alpha = 0.5) +
+    geom_vline(xintercept = c(-lfc.threshold, lfc.threshold), linetype = "dashed", alpha = 0.5) +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+      axis.title = element_text(size = 12),
+      axis.text = element_text(size = 10),
+      legend.position = "bottom",
+      legend.title = element_text(size = 11),
+      legend.text = element_text(size = 10),
+      panel.grid.minor = element_blank(),
+      # Ensure compatibility with both HTML and PDF output
+      text = element_text(family = "sans"),
+      plot.background = element_rect(fill = "white", color = NA),
+      panel.background = element_rect(fill = "white", color = NA)
+    )
+  
+  # Add attributes for Quarto compatibility
+  attr(p, "width") <- width
+  attr(p, "height") <- height
+  attr(p, "dpi") <- dpi
+  
+  return(p)
 }

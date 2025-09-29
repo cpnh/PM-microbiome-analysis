@@ -1,4 +1,4 @@
-# Investigating changes in OGU abundance during the second yearr of life using Zero-inflated Regression Models with Random Effects
+# Investigating changes in OGU abundance during the second year of life using Zero-inflated Regression Models with Random Effects
 
 The difference between this analysis and previous ZI model analysis is that here, *intervention arm is being completely ignored* so as to look at this cohort as a whole and try understand the effect of time on the microbiota in the context of a high burden of inflammation
 
@@ -28,11 +28,11 @@ suppressWarnings(suppressMessages({
 
   library(promicrobialTools)
 
-  dir.create(
-    file.path(RESULTS, "yr2-OGU-ZIBR"),
-    showWarnings = FALSE,
-    recursive = TRUE
-  )
+  # dir.create(
+  #   file.path(RESULTS, "yr2-OGU-ZIBR"),
+  #   showWarnings = FALSE,
+  #   recursive = TRUE
+  # )
 }))
 ```
 
@@ -47,9 +47,6 @@ data <- prepare_ogu_data(
   prevalence_cutoff = 0.4,
   filter_abundance = FALSE
 )
-
-data$taxa_data <- data$taxa_data %>%
-  mutate(Phylum = ifelse(str_detect(Phylum, "Bacillota"), "Bacillota", Phylum))
 
 outcome <- data$ogu_data
 rownames(outcome) <- str_replace(
@@ -88,7 +85,7 @@ The following distribution families were used to fit a zero-inflated model:
 
 ```{r fit}
 #| eval: false
-nb2_results <- genZI(
+nb2_EvsB <- genZI(
   outcome,
   predictors,
   formula = "time + age_B + age_B:time + (1 | subject)",
@@ -96,7 +93,7 @@ nb2_results <- genZI(
   family = "nbinom2"
 )
 
-nb1_results <- genZI(
+nb1_EvsB <- genZI(
   outcome,
   predictors,
   formula = "time + age_B + age_B:time + (1 | subject)",
@@ -104,7 +101,7 @@ nb1_results <- genZI(
   family = "nbinom1"
 )
 
-poi_results <- genZI(
+poi_EvsB <- genZI(
   outcome,
   predictors,
   formula = "time + age_B + age_B:time + (1 | subject)",
@@ -112,7 +109,7 @@ poi_results <- genZI(
   family = "poisson"
 )
 
-gau_results <- genZI(
+gau_EvsB <- genZI(
   outcome,
   predictors,
   formula = "time + age_B + age_B:time + (1 | subject)",
@@ -120,7 +117,7 @@ gau_results <- genZI(
   family = "gaussian"
 )
 
-lognorm_results <- genZI(
+lognorm_EvsB <- genZI(
   outcome,
   predictors,
   formula = "time + age_B + age_B:time + (1 | subject)",
@@ -133,62 +130,62 @@ lognorm_results <- genZI(
 #| eval: false
 #| echo: false
 saveRDS(
-  nb2_results,
-  file.path(RESULTS, "yr2-OGU-ZIBR", "genZI-OGU-nb2_results.rds")
+  nb2_EvsB,
+  file.path(RESULTS, "yr2-OGU-ZIBR", "EvsB-genZI-OGU-nb2_results.rds")
 )
 
 saveRDS(
-  nb1_results,
-  file.path(RESULTS, "yr2-OGU-ZIBR", "genZI-OGU-nb1_results.rds")
+  nb1_EvsB,
+  file.path(RESULTS, "yr2-OGU-ZIBR", "EvsB-genZI-OGU-nb1_results.rds")
 )
 
 saveRDS(
-  poi_results,
-  file.path(RESULTS, "yr2-OGU-ZIBR", "genZI-OGU-poi_results.rds")
+  poi_EvsB,
+  file.path(RESULTS, "yr2-OGU-ZIBR", "EvsB-genZI-OGU-poi_results.rds")
 )
 
 saveRDS(
-  gau_results,
-  file.path(RESULTS, "yr2-OGU-ZIBR", "genZI-OGU-gau_results.rds")
+  gau_EvsB,
+  file.path(RESULTS, "yr2-OGU-ZIBR", "EvsB-genZI-OGU-gau_results.rds")
 )
 
 saveRDS(
-  lognorm_results,
-  file.path(RESULTS, "yr2-OGU-ZIBR", "genZI-OGU-lognorm_results.rds")
+  lognorm_EvsB,
+  file.path(RESULTS, "yr2-OGU-ZIBR", "EvsB-genZI-OGU-lognorm_results.rds")
 )
 ```
 
 ```{r load}
 #| eval: true
 #| echo: false
-nb2_results <- readRDS(file.path(
+nb2_EvsB <- readRDS(file.path(
   RESULTS,
   "yr2-OGU-ZIBR",
-  "genZI-OGU-nb2_results.rds"
+  "EvsB-genZI-OGU-nb2_results.rds"
 ))
 
-nb1_results <- readRDS(file.path(
+nb1_EvsB <- readRDS(file.path(
   RESULTS,
   "yr2-OGU-ZIBR",
-  "genZI-OGU-nb1_results.rds"
+  "EvsB-genZI-OGU-nb1_results.rds"
 ))
 
-poi_results <- readRDS(file.path(
+poi_EvsB <- readRDS(file.path(
   RESULTS,
   "yr2-OGU-ZIBR",
-  "genZI-OGU-poi_results.rds"
+  "EvsB-genZI-OGU-poi_results.rds"
 ))
 
-gau_results <- readRDS(file.path(
+gau_EvsB <- readRDS(file.path(
   RESULTS,
   "yr2-OGU-ZIBR",
-  "genZI-OGU-gau_results.rds"
+  "EvsB-genZI-OGU-gau_results.rds"
 ))
 
-lognorm_results <- readRDS(file.path(
+lognorm_EvsB <- readRDS(file.path(
   RESULTS,
   "yr2-OGU-ZIBR",
-  "genZI-OGU-lognorm_results.rds"
+  "EvsB-genZI-OGU-lognorm_results.rds"
 ))
 ```
 
@@ -199,11 +196,11 @@ lognorm_results <- readRDS(file.path(
 #| label: list
 
 list <- list(
-  gau = gau_results,
-  lognorm = lognorm_results,
-  poi = poi_results,
-  nb1 = nb1_results,
-  nb2 = nb2_results
+  gau = gau_EvsB,
+  lognorm = lognorm_EvsB,
+  poi = poi_EvsB,
+  nb1 = nb1_EvsB,
+  nb2 = nb2_EvsB
 )
 ```
 
@@ -229,11 +226,11 @@ poor_fits <- data.table::rbindlist(poor_fits)
 #| label: summaries
 
 summaries <- list(
-  gau = gau_results$model_summary,
-  lognorm = lognorm_results$model_summary,
-  poi = poi_results$model_summary,
-  nb1 = nb1_results$model_summary,
-  nb2 = nb2_results$model_summary
+  gau = gau_EvsB$model_summary,
+  lognorm = lognorm_EvsB$model_summary,
+  poi = poi_EvsB$model_summary,
+  nb1 = nb1_EvsB$model_summary,
+  nb2 = nb2_EvsB$model_summary
 )
 
 summaries <- data.table::rbindlist(summaries, idcol = "dist")
@@ -247,6 +244,8 @@ summaries <- left_join(summaries, poor_fits, by = c("outcome_id", "dist"))
 
 if (any(summaries$error_message != "")) {
   print("Some models returned an error message")
+  ind <- which(summaries$error_message != "")
+  kable(summaries[ind, ])
 }
 
 ```
@@ -362,37 +361,43 @@ bestDist_filtered <- bestDist %>%
 #| label: nbinom1 models
 
 nb1_models <- keep_at(
-  nb1_results$all_models,
+  nb1_EvsB$all_models,
   filter(bestDist_filtered, dist == "nb1")$outcome_id
 )
 
-nb1_unfit <- diagnoseZI(nb1_models)
 ```
-
-Are there any models that fail diagnostics: `r any(nb1_unfit$pass == FALSE)`
 
 ```{r}
 #| eval: true
 #| label: nb1-summary
 
-nb1_summary <- data.frame(
-  outcome_id = names(nb1_models),
-  continuous_distribution = "nbinom1",
-  continuous_link = "log",
-  covaraince_structure = "unstructured",
-  zero_distribution = "binary",
-  zero_link = "logit",
-  optimizer = "nlminb"
-)
+if (exists("nb1_models") && length(nb1_models) > 0) {
+  nb1_unfit <- diagnoseZI(nb1_models)
+  nb1_summary <- data.frame(
+    outcome_id = names(nb1_models),
+    continuous_distribution = "nbinom1",
+    continuous_link = "log",
+    covaraince_structure = "unstructured",
+    zero_distribution = "binary",
+    zero_link = "logit",
+    optimizer = "nlminb"
+  )
+  nb1_ogu_models <- nb1_EvsB$adj_results %>%
+    filter(outcome_id %in% names(nb1_models))
+}
 ```
+
+Are there any models that fail diagnostics: `r if (exists("nb1_models") && length(nb1_models) > 0) {any(nb1_unfit$pass == FALSE)} else {paste("NA- no models generated by this fit")}`
 
 ```{r}
 #| eval: true
 #| label: dharma-results
 #| tbl-cap: Summary of Dharma residual tests for nbinom1
-nb1_dharma_results <- process_dharma_results(nb1_models)
+if (exists("nb1_models") && length(nb1_models) > 0) {
+  nb1_dharma_results <- process_dharma_results(nb1_models)
 
-kable(nb1_dharma_results$summary)
+  kable(nb1_dharma_results$summary)
+}
 
 ```
 
@@ -403,38 +408,44 @@ kable(nb1_dharma_results$summary)
 #| label: nbinom2 models
 
 nb2_models <- keep_at(
-  nb2_results$all_models,
+  nb2_EvsB$all_models,
   filter(bestDist_filtered, dist == "nb2")$outcome_id
 )
 
-nb2_unfit <- diagnoseZI(nb2_models)
 ```
 
-Are there any models that fail diagnostics: `r any(nb2_unfit$pass == FALSE)`
 
 ```{r}
 #| eval: true
 #| label: nb2-summary
+if (exists("nb2_models") && length(nb2_models) > 0) {
+  nb2_unfit <- diagnoseZI(nb2_models)
 
-nb2_summary <- data.frame(
-  outcome_id = names(nb2_models),
-  continuous_distribution = "nbinom2",
-  continuous_link = "log",
-  covaraince_structure = "unstructured",
-  zero_distribution = "binary",
-  zero_link = "logit",
-  optimizer = "nlminb"
-)
+  nb2_summary <- data.frame(
+    outcome_id = names(nb2_models),
+    continuous_distribution = "nbinom2",
+    continuous_link = "log",
+    covaraince_structure = "unstructured",
+    zero_distribution = "binary",
+    zero_link = "logit",
+    optimizer = "nlminb"
+  )
+  nb2_ogu_models <- nb2_EvsB$adj_results %>%
+    filter(outcome_id %in% names(nb2_models))
+}
 ```
+
+Are there any models that fail diagnostics: `r if (exists("nb2_models") && length(nb2_models) > 0) {any(nb2_unfit$pass == FALSE)} else {paste("NA- no models generated by this fit")}`
 
 ```{r}
 #| eval: true
 #| label: dharma-results
 #| tbl-cap: Summary of Dharma residual tests for nbinom1
-nb2_dharma_results <- process_dharma_results(nb2_models)
+if (exists("nb2_models") && length(nb2_models) > 0) {
+  nb2_dharma_results <- process_dharma_results(nb2_models)
 
-kable(nb2_dharma_results$summary)
-
+  kable(nb2_dharma_results$summary)
+}
 ```
 
 ### Zero-inflated Poisson Models
@@ -444,38 +455,44 @@ kable(nb2_dharma_results$summary)
 #| label: poi models
 
 poi_models <- keep_at(
-  poi_results$all_models,
+  poi_EvsB$all_models,
   filter(bestDist_filtered, dist == "poi")$outcome_id
 )
 
-poi_unfit <- diagnoseZI(poi_models)
 ```
 
-Are there any models that fail diagnostics: `r any(poi_unfit$pass == FALSE)`
 
 ```{r}
 #| eval: true
 #| label: poi-summary
+if (exists("poi_models") && length(poi_models) > 0) {
+  poi_unfit <- diagnoseZI(poi_models)
 
-poi_summary <- data.frame(
-  outcome_id = names(poi_models),
-  continuous_distribution = "poisson",
-  continuous_link = "log",
-  covaraince_structure = "unstructured",
-  zero_distribution = "binary",
-  zero_link = "logit",
-  optimizer = "nlminb"
-)
+  poi_summary <- data.frame(
+    outcome_id = names(poi_models),
+    continuous_distribution = "poisson",
+    continuous_link = "log",
+    covaraince_structure = "unstructured",
+    zero_distribution = "binary",
+    zero_link = "logit",
+    optimizer = "nlminb"
+  )
+  poi_ogu_models <- poi_EvsB$adj_results %>%
+    filter(outcome_id %in% names(poi_models))
+}
 ```
+
+Are there any models that fail diagnostics: `r if (exists("poi_models") && length(poi_models) > 0) {any(poi_unfit$pass == FALSE)} else {paste("NA- no models generated by this fit")}`
 
 ```{r}
 #| eval: true
 #| label: dharma-results
 #| tbl-cap: Summary of Dharma residual tests for Poisson models
-poi_dharma_results <- process_dharma_results(poi_models)
+if (exists("poi_models") && length(poi_models) > 0) {
+  poi_dharma_results <- process_dharma_results(poi_models)
 
-kable(poi_dharma_results$summary)
-
+  kable(poi_dharma_results$summary)
+}
 ```
 
 ### Zero-inflated Gaussian Models
@@ -483,40 +500,45 @@ kable(poi_dharma_results$summary)
 ```{r}
 #| eval: true
 #| label: gau unfit models
-
 gau_models <- keep_at(
-  gau_results$all_models,
+  gau_EvsB$all_models,
   filter(bestDist_filtered, dist == "gau")$outcome_id
 )
 
-gau_unfit <- diagnoseZI(gau_models)
 ```
 
-Are there any models that fail diagnostics: `r any(gau_unfit$pass == FALSE)`
 
 ```{r}
 #| eval: true
-#| label: poi-summary
+#| label: gau-summary
+if (exists("gau_models") && length(gau_models) > 0) {
+  gau_unfit <- diagnoseZI(gau_models)
 
-gau_summary <- data.frame(
-  outcome_id = names(poi_models),
-  continuous_distribution = "gaussian",
-  continuous_link = "log",
-  covaraince_structure = "unstructured",
-  zero_distribution = "binary",
-  zero_link = "logit",
-  optimizer = "nlminb"
-)
+  gau_summary <- data.frame(
+    outcome_id = names(gau_models),
+    continuous_distribution = "gaussian",
+    continuous_link = "log",
+    covaraince_structure = "unstructured",
+    zero_distribution = "binary",
+    zero_link = "logit",
+    optimizer = "nlminb"
+  )
+  gau_ogu_models <- gau_EvsB$adj_results %>%
+    filter(outcome_id %in% names(gau_models))
+}
 ```
+
+Are there any models that fail diagnostics: `r if (exists("gau_models") && length(gau_models) > 0) {any(gau_unfit$pass == FALSE)} else {paste("NA- no models generated by this fit")}`
 
 ```{r}
 #| eval: true
 #| label: dharma-results
 #| tbl-cap: Summary of Dharma residual tests for Poisson models
-gau_dharma_results <- process_dharma_results(gau_models)
+if (exists("gau_models") && length(gau_models) > 0) {
+  gau_dharma_results <- process_dharma_results(gau_models)
 
-kable(gau_dharma_results$summary)
-
+  kable(gau_dharma_results$summary)
+}
 ```
 
 ### Zero-inflated Lognormal Models
@@ -526,13 +548,42 @@ kable(gau_dharma_results$summary)
 #| label: lognorm unfit models
 
 lognorm_models <- keep_at(
-  lognorm_results$all_models,
+  lognorm_EvsB$all_models,
   filter(bestDist_filtered, dist == "lognorm")$outcome_id
 )
 
 ```
 
-There were no models that could be fit with a log normal distribution
+```{r}
+#| eval: true
+#| label: lognorm-summary
+if (exists("lognorm_models") && length(lognorm_models) > 0) {
+  lognorm_unfit <- diagnoseZI(gau_models)
+
+  lognorm_summary <- data.frame(
+    outcome_id = names(lognorm_models),
+    continuous_distribution = "Log normal",
+    continuous_link = "log",
+    covaraince_structure = "unstructured",
+    zero_distribution = "binary",
+    zero_link = "logit",
+    optimizer = "nlminb"
+  )
+  lognorm_ogu_models <- lognorm_EvsB$adj_results %>%
+    filter(outcome_id %in% names(lognorm_models))
+}
+```
+
+```{r}
+#| eval: true
+#| label: dharma-results
+#| tbl-cap: Summary of Dharma residual tests for Poisson models
+if (exists("lognorm_models") && length(lognorm_models) > 0) {
+  lognorm_dharma_results <- process_dharma_results(lognorm_models)
+
+  kable(lognorm_dharma_results$summary)
+}
+```
 
 ### Save Final Model Fits
 
@@ -547,7 +598,7 @@ save(
   poi_models,
   gau_models,
   lognorm_models,
-  file = file.path(RESULTS, "yr2-OGU-ZIBR", "finalised-fits.RData")
+  file = file.path(RESULTS, "yr2-OGU-ZIBR", "EvsB-finalised-fits.RData")
 )
 ```
 
@@ -556,7 +607,7 @@ save(
 #| label: load
 #| echo: false
 
-load(file.path(RESULTS, "yr2-OGU-ZIBR", "finalised-fits.RData"))
+load(file.path(RESULTS, "yr2-OGU-ZIBR", "EvsB-finalised-fits.RData"))
 
 ```
 
@@ -565,16 +616,16 @@ load(file.path(RESULTS, "yr2-OGU-ZIBR", "finalised-fits.RData"))
 ```{r}
 #| eval: true
 #| label: model-ogus
-nb1_ogu_models <- nb1_results$adj_results %>%
+nb1_ogu_models <- nb1_EvsB$adj_results %>%
   filter(outcome_id %in% names(nb1_models))
 
-nb2_ogu_models <- nb2_results$adj_results %>%
+nb2_ogu_models <- nb2_EvsB$adj_results %>%
   filter(outcome_id %in% names(nb2_models))
 
-poi_ogu_models <- poi_results$adj_results %>%
+poi_ogu_models <- poi_EvsB$adj_results %>%
   filter(outcome_id %in% names(poi_models))
 
-gau_ogu_models <- gau_results$adj_results %>%
+gau_ogu_models <- gau_EvsB$adj_results %>%
   filter(outcome_id %in% names(gau_models))
 ```
 
@@ -587,14 +638,12 @@ poi_summary <- left_join(poi_summary, poi_ogu_models)
 nb1_summary <- left_join(nb1_summary, nb1_ogu_models)
 
 nb2_summary <- left_join(nb2_summary, nb2_ogu_models)
-gau_summary <- left_join(gau_summary, gau_ogu_models)
 
 kable(
   summary <- rbind(
     nb1_summary,
     nb2_summary,
-    poi_summary,
-    gau_summary
+    poi_summary
   )
 )
 ```
@@ -604,11 +653,21 @@ kable(
 #| label: save-tbl-summary
 #| echo: false
 
-write.csv(
-  summary,
-  file.path(RESULTS, "yr2-OGU-ZIBR", "zero-inflated-ogu-model-summaries.csv"),
-  row.names = FALSE
+save_and_link(
+  data = summary,
+  filename = "EvsB-zero-inflated-ogu-fitted-model-summaries.csv",
+  description = "Summary table of OGUs successfully fit by a model",
+  use_filename = FALSE
 )
+# write.csv(
+#   summary,
+#   file.path(
+#     RESULTS,
+#     "yr2-OGU-ZIBR",
+#     "EvsB-zero-inflated-ogu-fitted-model-summaries.csv"
+#   ),
+#   row.names = FALSE
+# )
 ```
 
 Of the `r ncol(outcome)` OGUs that passed filtering (`r ncol(outcome)/ncol(data$ogu_data)`), `r nrow(summary)` were sucessfully fit to a zero-inflated model (`r nrow(summary)/ncol(outcome)*100`%)
@@ -730,15 +789,21 @@ joined_data %>%
 #| eval: true
 ziSig <- left_join(ziSig, aveChange, by = "outcome_id")
 
-write.csv(
-  ziSig,
-  file.path(
-    RESULTS,
-    "yr2-OGU-ZIBR",
-    "significant-ogus-zero-inflated-model.csv"
-  ),
-  row.names = FALSE
+save_and_link(
+  data = ziSig,
+  filename = "EvsB-significant-ogus-zero-inflated-model.csv",
+  description = "Significant OGUs based on ZI-GLMMs",
+  use_filename = FALSE
 )
+# write.csv(
+#   ziSig,
+#   file.path(
+#     RESULTS,
+#     "yr2-OGU-ZIBR",
+#     "EvsB-significant-ogus-zero-inflated-model.csv"
+#   ),
+#   row.names = FALSE
+# )
 ```
 
 ## Zero-inflated component
@@ -779,6 +844,23 @@ zip <- bind_rows(
 if (any(zip <= 0.05)) {
   zip_sig <- identify_significant_ogus(zip, data$taxa_data)
 }
+
+save_and_link(
+  data = zip_sig,
+  filename = "EvsB-significant-ogus-zero-inflated-model-ZI-component.csv",
+  description = "Significant OGUs based on ZI-GLMMs (zero-inflated compponent)",
+  use_filename = FALSE
+)
+
+# write.csv(
+#   zip_sig,
+#   file.path(
+#     RESULTS,
+#     "yr2-OGU-ZIBR",
+#     "EvsB-significant-ogus-zero-inflated-model-ZI-component.csv"
+#   ),
+#   row.names = FALSE
+# )
 ```
 
 ## Using EMMEANS to determine significant changes in taxa abundances
@@ -787,7 +869,7 @@ if (any(zip <= 0.05)) {
 #| eval: true
 #| label: fit-mods
 
-fits <- list(nb1_models, nb2_models, poi_models, gau_models)
+fits <- list(nb1_models, nb2_models, poi_models)
 
 fits <- list_c(fits)
 ```
@@ -849,7 +931,7 @@ emm_pairs <- lapply(emm, function(x) {
 
 emm_pairs_df <- emm_bind(emm_pairs, kable = F)
 
-sigArms <- emm_pairs_df %>%
+sigAgeB <- emm_pairs_df %>%
   filter(p.value <= 0.05) %>%
   left_join(rownames_to_column(data$taxa_data, "Model"), by = "Model") %>%
   mutate(
@@ -873,8 +955,7 @@ emmEff <- lapply(1:length(emm_pairs), function(i) {
     sigma = attr(VarCorr(fits[[i]])$cond$subject, "stddev") * sqrt(2),
     edf = df.residual(fits[[i]]),
     method = "identity",
-    parens = FALSE,
-    adjust = "fdr"
+    parens = FALSE
   )
 })
 
@@ -883,7 +964,7 @@ names(emmEff) <- names(emm_pairs)
 emmEff_df <- emm_bind(emmEff, kable = F)
 
 emmEff_df <- emmEff_df %>%
-  filter(Model %in% sigArms$Model) %>%
+  filter(Model %in% sigAgeB$Model) %>%
   mutate(
     magnitude = case_when(
       abs(effect.size) < 0.2 ~ "negligible",
@@ -896,13 +977,13 @@ emmEff_df <- emmEff_df %>%
   select(Model, contrast, time, effect.size, magnitude) %>%
   mutate_at(vars(everything()), type.convert, as.is = T)
 
-sigArmsEff <- left_join(sigArms, emmEff_df, by = c("Model", "contrast", "time"))
+sigAgeBeff <- left_join(sigAgeB, emmEff_df, by = c("Model", "contrast", "time"))
 
-mth12v15 <- sigArmsEff %>%
+mth12v15 <- sigAgeBeff %>%
   filter(str_detect(contrast, "12mths")) %>%
   filter(str_detect(contrast, "15mths"))
 
-mth12v18 <- sigArmsEff %>%
+mth12v18 <- sigAgeBeff %>%
   filter(str_detect(contrast, "12mths")) %>%
   filter(str_detect(contrast, "18mths"))
 
@@ -961,7 +1042,6 @@ slopes <- lapply(trend, function(x) {
     x,
     method = "revpairwise",
     type = "scale",
-    adjust = "fdr",
     weights = "proportional",
     adjust = "fdr"
   )
@@ -1045,7 +1125,7 @@ plotPhylaEMMs(filter(mth12v18, effect.size >= 0.5), highlight_common = FALSE)
 
 ```{r emm}
 #| eval: true
-#| label: Estimated marginal means for OGU abundances within each intervention arm
+#| label: Changes in estimated marginal means for OGU abundances
 #| warning: false
 #| message: false
 
@@ -1095,8 +1175,7 @@ emmEff <- lapply(1:length(time_cont), function(i) {
     time_cont[[i]],
     sigma = attr(VarCorr(fits[[i]])$cond$subject, "stddev") * sqrt(2),
     edf = df.residual(fits[[i]]),
-    method = "identity",
-    adjust = "fdr"
+    method = "identity"
   )
 })
 
@@ -1126,26 +1205,39 @@ sigTimeEff <- left_join(sigTime, emmEff_df, by = c("Model"))
 #| label: save-sigTime
 #| fig-cap: NA
 #| tbl-cap: NA
-
-write.csv(
-  sigTimeEff,
-  file.path(
-    RESULTS,
-    "yr2-OGU-ZIBR",
-    "significant-ogu-emms-time-ZI.csv"
-  ),
-  row.names = FALSE
+save_and_link(
+  data = time_cont_df,
+  filename = "EvsB-ogu-emms-time-ZI.csv",
+  description = "OGU EMMs differences between timepoint",
+  use_filename = FALSE
 )
 
-write.csv(
-  time_cont_df,
-  file.path(
-    RESULTS,
-    "yr2-OGU-ZIBR",
-    "ogu-emms-time-ZI.csv"
-  ),
-  row.names = FALSE
+save_and_link(
+  data = sigTimeEff,
+  filename = "EvsB-significant-ogu-emms-time-ZI.csv",
+  description = "OGU EMMs significantly different at endpoint and their effect sizes",
+  use_filename = FALSE
 )
+
+# write.csv(
+#   sigTimeEff,
+#   file.path(
+#     RESULTS,
+#     "yr2-OGU-ZIBR",
+#     "EvsB-significant-ogu-emms-time-ZI.csv"
+#   ),
+#   row.names = FALSE
+# )
+
+# write.csv(
+#   time_cont_df,
+#   file.path(
+#     RESULTS,
+#     "yr2-OGU-ZIBR",
+#     "EvsB-ogu-emms-time-ZI.csv"
+#   ),
+#   row.names = FALSE
+# )
 
 ```
 
@@ -1393,8 +1485,7 @@ emmEff_zi <- lapply(1:length(slopes_zi), function(i) {
     sigma = attr(VarCorr(fits[[i]])$cond$subject, "stddev") * sqrt(2),
     edf = df.residual(fits[[i]]),
     method = "identity",
-    parens = FALSE,
-    adjust = "fdr"
+    parens = FALSE
   )
 })
 
@@ -1536,7 +1627,7 @@ poi_stunt <- genZI(
 )
 
 compare_nested_models(list(
-  poi_models = keep_at(poi_results, names(poi_models)),
+  poi_models = keep_at(poi_EvsB, names(poi_models)),
   poi_stunt = poi_stunt
 ))
 

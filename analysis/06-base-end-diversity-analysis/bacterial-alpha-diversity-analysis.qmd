@@ -49,11 +49,13 @@ Sample names were standardized by removing technical suffixes (like '_wol_alignm
 base_end_paired_samples <-
   microbiome::meta(seqdata_bac) %>% #whole dataset metadata file
   rownames_to_column() %>%
-  mutate(sample = str_replace(
+  mutate(
+    sample = str_replace(
       str_replace(str_remove(rowname, "_G"), "_B_B", "_B"),
       "_B_E",
       "_E"
-    )) %>%
+    )
+  ) %>%
   dplyr::select(
     sample,
     displayid,
@@ -803,6 +805,7 @@ stargazer::stargazer(header = FALSE, alpha_lmms_transformed, type = "html")
 #| eval: true
 #| label: tbl-lmm-1
 #| tbl-cap: Model statistics for LMM including baseline age (ageB) as a fixed effect.
+#| results: asis
 lapply(alpha_lmms_transformed, model_stats)
 ```
 
