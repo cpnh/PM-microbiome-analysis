@@ -6,6 +6,7 @@
 #| echo: false
 #| eval: true
 #| label: setup
+#| cache: false
 
 # This initial code block loads custom utility functions and environment variables
 # These are stored in separate files to keep the main analysis clean and organized
@@ -17,7 +18,7 @@ suppressWarnings(suppressMessages({
 
   library(promicrobialTools)
 
-  prefix <- "EvsBarmarm-"
+  prefix <- "EvsBarm-"
 
   filepath <- get_results_dir(directory_naming = "both")
 }))
@@ -40,10 +41,13 @@ EvsBarm_ZI <- read.csv(
   header = TRUE
 )
 
-EvsBarm_ANCOM <- read.csv(file.path(
-  RESULTS,
-  "07-differential-abundance-analysis/EvsBarm-ANCOM-BC/EvsBarm-DA-ancombc.csv"
-))
+EvsBarm_ANCOM <- read.csv(
+  file.path(
+    RESULTS,
+    "07-differential-abundance-analysis/EvsBarm-ANCOM-BC/EvsBarm-DA-ancombc.csv"
+  ),
+  header = TRUE
+)
 ```
 
 ```{r}
@@ -84,7 +88,7 @@ save_and_link(
 
 ```{r}
 #| eval: true
-#| label:
+#| label: comm-formatted
 tmp <- common %>%
   select(
     OGU = outcome_id,
@@ -93,8 +97,9 @@ tmp <- common %>%
     Genus,
     Species,
     `ZI-GLMM Time P-value` = time,
+    `ZI-GLMM Intervention Arm P-value` = arm,
     `ZI-GLMM Age at Baseline P-value` = age_B,
-    `ZI-GLMM Interaction P-value` = time.age_B,
+    `ZI-GLMM Interaction P-value` = time.arm,
     `Loge Fold Change (ANCOM-BC)` = lfc_timepointEndpoint,
     `Fold Change (expFC)` = FC,
     `ANCOM-BC P-value` = p_timepointEndpoint,
@@ -339,7 +344,7 @@ kable(head(
 ))
 ```
 
-There are `r nrow(commonEMMEMM1.2)` OGUs with a fold change of 1.2 or more (`r length(unique(commonEMM1.2$Species))` unique species and `r length(unique(commonEMM1.2$Genus))` unique genera) are significantly changing over time between zero-inflated GLMM and DA results i.e. are commonEMM between the two methods.
+There are `r nrow(commonEMM1.2)` OGUs with a fold change of 1.2 or more (`r length(unique(commonEMM1.2$Species))` unique species and `r length(unique(commonEMM1.2$Genus))` unique genera) are significantly changing over time between zero-inflated GLMM and DA results i.e. are commonEMM between the two methods.
 
 ```{r}
 #| eval: true

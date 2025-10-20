@@ -4,6 +4,7 @@
 #| echo: false
 #| eval: true
 #| label: setup
+#| cache: false
 
 # This initial code block loads custom utility functions and environment variables
 # These are stored in separate files to keep the main analysis clean and organized
@@ -24,11 +25,12 @@ suppressWarnings(suppressMessages({
 
   library(promicrobialTools)
 
+  prefix <- "baseArm-ZI-"
   filepath <- get_results_dir(directory_naming = "both")
 }))
 ```
 
-Results will be saved to ``r filepath``.
+Results will be saved to `r filepath`.
 
 ## Prepare Outcome and Predictor Variables
 
@@ -37,7 +39,7 @@ Results will be saved to ``r filepath``.
 #| label: data prep
 #| results: asis
 #| cache: true
-baseline <- phyloseq::subset_samples(seqdata_bac, timepoint == "1Baseline")
+baseline <- phyloseq::subset_samples(seqdata_bac, timepoint == "Baseline")
 
 data <- prepare_ogu_data(
   baseline,
@@ -70,14 +72,14 @@ predictors <- predictors %>%
 
 The following distribution families were used to fit a zero-inflated model:
 
-- Poisson
-- Simple negative binomial (linear parameterization) [@Hardin2007]
-- Complex negative binomial (quadratic parameterization) [@Hardin2007]
-- Gaussian (normal)
-- Log normal
+-   Poisson
+-   Simple negative binomial (linear parameterization) [@Hardin2007]
+-   Complex negative binomial (quadratic parameterization) [@Hardin2007]
+-   Gaussian (normal)
+-   Log normal
 
 ```{r fit}
-#| eval: true
+#| eval: false
 #| label: fit-genZI
 #| cache: true
 nb2_baseAge <- genZI(
@@ -122,7 +124,7 @@ lognorm_baseAge <- genZI(
 ```
 
 ```{r save}
-#| eval: true
+#| eval: false
 #| echo: false
 saveRDS(
   nb2_baseAge,
@@ -151,7 +153,7 @@ saveRDS(
 ```
 
 ```{r load}
-#| eval: false
+#| eval: true
 #| echo: false
 #| cache: true
 nb2_baseAge <- readRDS(file.path(
@@ -247,7 +249,7 @@ if (any(summaries$error_message != "")) {
 #| eval: true
 #| label: diag-compare
 summaries <- summaries %>%
-  filter(pass == TRUE) %>%
+  dplyr::filter(pass == TRUE) %>%
   select(!c(error_message, message)) %>%
   mutate(index = 1:nrow(.)) %>% #make it easier to distinguish between outcome ids
   pivot_longer(
@@ -295,8 +297,7 @@ bestDist <- left_join(aic, bic) %>%
 
 ### Checking for deviations in model assumptions
 
-::: {.callout-note}
-
+::: callout-note
 The larger the dispersion value, $\theta$ in `nbinom2` models, the less variance there is in the model [@Brooks2017].
 :::
 
@@ -331,7 +332,7 @@ pvals <- left_join(
   arrange(index)
 ```
 
-` n_distinct(pvals$outcome_id)` models have a significant test result making the model fit problematic
+`r n_distinct(pvals$outcome_id)` models have a significant test result making the model fit problematic
 
 ### Final Model Distributions
 
@@ -407,7 +408,6 @@ nb2_models <- keep_at(
 
 ```
 
-
 ```{r}
 #| eval: true
 #| label: nb2-summary
@@ -453,7 +453,6 @@ poi_models <- keep_at(
 )
 
 ```
-
 
 ```{r}
 #| eval: true
@@ -748,7 +747,6 @@ fits <- list_c(fits)
 | 0.454        | 456         | 1.25yrs (15mths) |
 | 0.859        | 548         | 1.5yrs (18mths)  |
 
-
 ```{r}
 #| eval: true
 #| label: Estimated marginal means for OGU abundances across different ages
@@ -925,8 +923,7 @@ ZIsigAge <- emm_zi_pairs_df %>%
 
 ##### Effect Size
 
-> [!quote]
-> When a logistic regression is calculated, the regression coefficient (b1) is the estimated increase in the log odds of the outcome per unit increase in the value of the exposure. In other words, the exponential function of the regression coefficient (eb1) is the odds ratio associated with a one-unit increase in the exposure. [@Szumilas2010]
+> \[!quote\] When a logistic regression is calculated, the regression coefficient (b1) is the estimated increase in the log odds of the outcome per unit increase in the value of the exposure. In other words, the exponential function of the regression coefficient (eb1) is the odds ratio associated with a one-unit increase in the exposure. [@Szumilas2010]
 
 i.e. if $\beta_x = log(odds)$, then the odds ratio is $OR = \exp(\beta_x) = e^{\beta_x}$
 
@@ -1034,9 +1031,10 @@ compare_nested_models(list(
 
 ## Note on applying Structured Covariance Matricies to Zero-inflated data
 
-Structured covariance matricies are typically avoided when the data is sparse, zero-inflated or have few repeated measures available. See notes on "Approaches to Modelling Covariance".
+Structured covariance matrices are typically avoided when the data is sparse, zero-inflated or have few repeated measures available. See notes on "Approaches to Modelling Covariance".
 
 ## Results Summary
+
 ```{r}
 #| eval: true
 #| echo: false
@@ -1046,6 +1044,18 @@ list_all_results()
 ```
 
 ```{r}
+#| eval: true
+#| echo: false
 #| results: asis
 generate_results_section(directory_naming = "both")
+```
+
+## Appendix
+
+```{r}
+#| eval: true
+#| echo: false
+#| label: info
+
+print(sessionInfo(), locale = FALSE)
 ```

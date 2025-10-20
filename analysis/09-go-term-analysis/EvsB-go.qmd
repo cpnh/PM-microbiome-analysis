@@ -1,15 +1,15 @@
 # Baseline to Endpoint Functional Analysis
 
-```{r}
+```{r setup}
 #| echo: false
 #| eval: true
 #| label: setup
+#| cache: false
 
 # This initial code block loads custom utility functions and environment variables
-# These are stored in separate files to keep the main analysis clean and organized
 suppressWarnings(suppressMessages({
-  source(normalizePath("utils/r-utils.r"))
-  source(normalizePath("_environment.required"))
+  source("utils/r-utils.r")
+  source("_environment.required")
   load(normalizePath("data/seqdata.RData"))
 
   metadata <- read_delim(normalizePath(METADATA))
@@ -20,19 +20,20 @@ suppressWarnings(suppressMessages({
   library(pairwiseAdonis)
   library(patchwork)
 
-  dir.create(
-    file.path(RESULTS, "EvB-GO"),
-    showWarnings = FALSE,
-    recursive = TRUE
-  )
+  library(promicrobialTools)
+
   annoBac <- read.csv(file.path(
     REF,
     "gene-ontology/goslim_prokaryote-formatted.csv"
   ))
 
-  onto_col <- assign_unique_colors(go$ontology)
+  prefix <- "GO-EvsB-"
+
+  filepath <- get_results_dir(directory_naming = "both")
 }))
 ```
+
+Results will be saved to ``r filepath``.
 
 ## Gene Ontology Enrichment
 
@@ -41,9 +42,11 @@ suppressWarnings(suppressMessages({
 ```{r}
 #| eval: true
 #| label: load data
-#| fig-cap: NA
-#| tbl-cap: NA
-go_be <- read.csv(file.path(RESULTS, "EvB-GO/EvB-annotated-go-terms.csv"))
+
+go_be <- read.csv(file.path(
+  RESULTS,
+  "09-go-term-analysis/GO-EvsB-annotated-go-terms.csv"
+))
 ```
 
 ### GO term presence
@@ -120,6 +123,8 @@ go_be %>%
 ```{r}
 #| eval: true
 #| label: EvsB plot of percent samples with particular generic GO terms
+onto_col <- assign_unique_colors(go_be$ontology)
+
 go_be %>%
   dplyr::filter(ontology == "Biological process") %>%
   ggplot(aes(
@@ -182,6 +187,7 @@ $H_1$: There is a difference between GO functional terms pathway abundance betwe
 #### Cross-sectional comparisons
 
 ```{r}
+#| eval: true
 base <- go_be %>% filter(timepoint == "Baseline")
 end <- go_be %>% filter(timepoint == "Endpoint")
 ```
@@ -275,8 +281,8 @@ write.fit(
   fit = efit,
   results = FDR5,
   file = file.path(
-    RESULTS,
-    "EvB-GO/limma-write-fit-baseline-results-FDR5-eBayes.csv"
+    filepath,
+    paste0(prefix, "limma-write-fit-baseline-results-FDR5-eBayes.csv")
   ),
   row.names = F
 )
@@ -482,8 +488,8 @@ write.fit(
   fit = efit,
   results = FDR5,
   file = file.path(
-    RESULTS,
-    "EvB-GO/limma-write-fit-endpoint-results-FDR5-eBayes.csv"
+    filepath,
+    paste0(prefix, "limma-write-fit-endpoint-results-FDR5-eBayes.csv")
   ),
   row.names = F
 )
@@ -684,7 +690,7 @@ glm_results %>%
 #If the DGEList object has been scale-normalized in edgeR (or before), then leave normalize.method="none" in voom, i.e., the logCPM values should not usually be re-normalized in the voom call.
 #go_be abundance values have not been normalised, however initial normalization duing raw sequence QC will have accounted for differences in sequencing depth/library size. go_be counts should reflect these adjustments and further normalization should not be necessary.
 
-v <- voomLmFit(counts, design, normalize.method = "none") #Transforms count data to log2-counts per million
+vfit <- voomLmFit(counts, design, normalize.method = "none") #Transforms count data to log2-counts per million
 vfit <- contrasts.fit(vfit, contrasts = contrasts)
 efit <- eBayes(vfit) #estimation of QL dispersions
 fc1.2 <- treat(vfit, fc = 1.2)
@@ -694,18 +700,6 @@ fc2 <- treat(vfit, fc = 2)
 
 ```{r}
 #| eval: true
-#| label:
-#| fig-cap: NA
-#| tbl-cap: NA
-# top_efit <- as.data.frame(topTable(efit, n = Inf)) %>%
-#   select(
-#     ko,
-#     logFC.Endpoint = EvsB,
-#     logFC.FeZnPM = CPMvsFeZnPM,
-#     logFC.FeZnPM_Endpoint = CPMvsFeZnPM_overtime,
-#     PValue = P.Value,
-#     FDR = adj.P.Val
-#   )
 
 top_efit <- as.data.frame(topTable(efit, n = Inf)) %>%
   select(
@@ -742,13 +736,6 @@ knitr::kable(summary(
 knitr::kable(summary(
   FDR5.FC1.2 <- decideTests(fc1.2, adjust.method = "BH", p.value = 0.05)
 ))
-
-write.fit(
-  fit = fc1.2,
-  results = FDR5.FC1.2,
-  file = file.path(RESULTS, "EvB-GO/limma-write-fit-results-FDR5-FC2.csv"),
-  row.names = F
-)
 ```
 
 ```{r}
@@ -760,13 +747,6 @@ write.fit(
 knitr::kable(summary(
   FDR5.FC2 <- decideTests(fc2, adjust.method = "BH", p.value = 0.05)
 ))
-
-write.fit(
-  fit = fc2,
-  results = FDR5.FC2,
-  file = file.path(RESULTS, "EvB-GO/limma-write-fit-results-FDR5-FC2.csv"),
-  row.names = F
-)
 ```
 
 ###### Unsupervised ordination: MDS plot og GO terms between timepoints
@@ -824,9 +804,9 @@ The p-value ($Pr(>F)$) for `r counts$samples$timepoint` is `r pv$p`, which is gr
 #| label: fig-EvB-MDS
 #| fig-cap: MDS plot comparing timepoints
 
-xmax = max(
+xmax <- max(
   plotMDS(
-    v,
+    vfit$EList,
     col = group_colours,
     dim.plot = c(1, 2),
     pch = 16,
@@ -836,7 +816,7 @@ xmax = max(
   0.05
 ymax = max(
   plotMDS(
-    v,
+    vfit$EList,
     col = group_colours,
     dim.plot = c(1, 2),
     pch = 16,
@@ -847,7 +827,7 @@ ymax = max(
 
 par(mar = c(7.1, 5.1, 5.1, 5.1), xpd = TRUE)
 plotMDS(
-  v,
+  vfit$EList,
   col = group_colours,
   dim.plot = c(1, 2),
   pch = 16,
@@ -872,4 +852,31 @@ text(
   y = ymax - 0.12,
   labels = bquote(p == .(round(as.data.frame(mds_stat[2])[1, 5], 3)))
 )
+```
+
+## Results Summary
+
+```{r}
+#| eval: true
+#| echo: false
+#| results: asis
+
+list_all_results()
+```
+
+```{r}
+#| eval: true
+#| echo: false
+#| results: asis
+generate_results_section(directory_naming = "both")
+```
+
+## Appendix
+
+```{r}
+#| eval: true
+#| echo: false
+#| label: info
+
+print(sessionInfo(), locale = FALSE)
 ```

@@ -46,6 +46,19 @@ EvsB_ANCOM <- read.csv(file.path(
 
 ```{r}
 #| eval: true
+#| label: tbl-ancom-sig
+#| tbl-cap: Total number of significant OGUs (FDR $\leq$ 0.05)
+kable(
+  EvsB_ANCOM %>%
+    select(taxon, Result_FC1.2, Result_FC2) %>%
+    pivot_longer(cols = c(Result_FC1.2, Result_FC2)) %>%
+    group_by(name, value) %>%
+    summarise(n = n())
+)
+```
+
+```{r}
+#| eval: true
 #| label: FC2
 #| fig-cap: NA
 #| tbl-cap: NA
@@ -82,7 +95,7 @@ save_and_link(
 
 ```{r}
 #| eval: true
-#| label:
+#| label: comm-formatted
 tmp <- common %>%
   select(
     OGU = outcome_id,
@@ -337,7 +350,7 @@ kable(head(
 ))
 ```
 
-There are `r nrow(commonEMMEMM1.2)` OGUs with a fold change of 1.2 or more (`r length(unique(commonEMM1.2$Species))` unique species and `r length(unique(commonEMM1.2$Genus))` unique genera) are significantly changing over time between zero-inflated GLMM and DA results i.e. are commonEMM between the two methods.
+There are `r nrow(commonEMM1.2)` OGUs with a fold change of 1.2 or more (`r length(unique(commonEMM1.2$Species))` unique species and `r length(unique(commonEMM1.2$Genus))` unique genera) are significantly changing over time between zero-inflated GLMM and DA results i.e. are commonEMM between the two methods.
 
 ```{r}
 #| eval: true

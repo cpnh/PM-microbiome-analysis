@@ -5,6 +5,7 @@
 #| eval: true
 #| label: setup
 #| include: false
+#| cache: false
 
 # This initial code block loads custom utility functions and environment variables
 # These are stored in separate files to keep the main analysis clean and organized
@@ -25,6 +26,8 @@ suppressWarnings(suppressMessages({
   library(nlme)
   library(ggpubr)
   library(gridExtra)
+
+  library(promicrobialTools)
 
   dir.create(
     file.path(RESULTS, "iron-status-subgroup-analysis"),
@@ -588,7 +591,7 @@ tmp <- be_meta %>%
     fer_def12,
     fer_def25,
     fer,
-    Sex = sex,
+    Sex = sexf,
     `Observed features` = observed,
     `Chao 1 Index` = chao1,
     `Shannon Entropy` = diversity_shannon,
@@ -1180,7 +1183,7 @@ tmp <- be_meta %>%
     fer,
     iron_status,
     baseline_iron_status,
-    Sex = sex,
+    Sex = sexf,
     `Observed features` = observed,
     `Chao 1 Index` = chao1,
     `Shannon Entropy` = diversity_shannon,
@@ -1538,7 +1541,7 @@ tmp <- be_meta %>%
     anemia_status_new,
     iron_status,
     baseline_iron_status,
-    Sex = sex,
+    Sex = sexf,
     `Observed features` = observed,
     `Chao 1 Index` = chao1,
     `Shannon Entropy` = diversity_shannon,
@@ -1752,19 +1755,14 @@ kable(
 
 print("Correlation coefficients p-values")
 kable(round(cor_test(tmp), 4))
-``
-`
+```
   
 Positive correlation between serum iron and haemoglobin concentrations ($\rho$ = 0.5879, p < 0.0001), may indicate multicolinearity. If you look at the Spearman correlation plot you can also see that a number of Iron and anaemia variables have correlation coefficients greater than |0.4|.
 
 If there are any colinearity concerns:
   - consider combining them into one variable
 
-`
-``
-{
-  r
-}
+```{r}
 #| eval: true
 #| results: hide
 #| label: Combining iron and anemia status variables
@@ -2024,23 +2022,11 @@ The default correlation structure is assumed to be unstructured, that is, there 
 tmp <- be_meta %>%
   dplyr::select(
     timepoint,
-    `
-Observed
-features
-` = observed,
-    `
-Chao
-1
-Index
-` = chao1,
-    `
-Shannon
-Entropy
-` = diversity_shannon,
+    `Observed features` = observed,
+    `Chao1 Index` = chao1,
+    `Shannon Entropy` = diversity_shannon,
     Evenness = evenness_pielou,
-    `
-Faith
-'s PD` = pd
+    `Faith's PD` = pd
   ) %>%
   mutate_at(vars(!timepoint), as.numeric) %>%
   group_by(timepoint) %>%
@@ -2856,12 +2842,12 @@ $$
 :::
 
 ```{r}
-#| eval: false
+#| eval: true
 #| label: tbl-emm-iron-sex-contrasts
 #| tbl-cap: emmeans for iron and sex contrasts
 #| results: asis
 
-emmeans <- lapply(alpha_lmms_FeHb_conc, function(x) {
+emms <- lapply(alpha_lmms_FeHb_conc, function(x) {
   emmeans(
     x,
     ~ arm_group * time + fe_conc * hb_conc * sex,
@@ -2871,7 +2857,7 @@ emmeans <- lapply(alpha_lmms_FeHb_conc, function(x) {
   )
 })
 
-lapply(emmeans, kable, format = "markdown")
+lapply(emms, kable, format = "markdown")
 ```
 
 ```{r}
@@ -2882,7 +2868,7 @@ lapply(emmeans, kable, format = "markdown")
 
 #pairwise comparision
 lapply(
-  lapply(emmeans, function(x) {
+  lapply(emms, function(x) {
     contrast(x, "pairwise")
   }),
   kable,
@@ -2891,7 +2877,8 @@ lapply(
 ```
 
 ```{r}
-#| eval: true
+#| eval: false
+#| echo: false
 #| label: tbl-sex-fe-diff
 #| tbl-cap: Sex group differences
 #| results: asis
@@ -2902,7 +2889,7 @@ BM <- c(0, 0, 0.5, 0)
 EM <- c(rep(0, 3), 0.5)
 
 lapply(
-  lapply(emmeans, function(x) {
+  lapply(emms, function(x) {
     contrast(x, method = list(EF - BF - EM + BM))
   }),
   kable,
@@ -2920,9 +2907,9 @@ lapply(
 plot_list <- list()
 
 ## Loop through each item in the list
-for (i in names(emmeans)) {
+for (i in names(emms)) {
   # Create a plot for each item
-  plot <- emmip(emmeans[[i]], fe_conc * hb_conc * sex ~ time, CIs = TRUE) +
+  plot <- emmip(emms[[i]], fe_conc * hb_conc * sex ~ time, CIs = TRUE) +
     ggtitle(paste(str_extract(i, "^[^_]*"))) +
     theme(
       legend.position = "bottom",
@@ -3559,8 +3546,222 @@ Endpoint Sufficient Normal Male - Baseline Sufficient Normal Male
 
 ###### Contrast testing
 
+####### Contast filters
+
 ```{r}
-#| eval: false
+#| eval: true
+#| label: sex-within-same
+#| fig-cap: NA
+#| tbl-cap: NA
+A <- c(
+  "Baseline Deficient Severe Male - Baseline Deficient Severe Female",
+  "Baseline Deficient Moderate Male - Baseline Deficient Moderate Female",
+  "Baseline Deficient Mild Male - Baseline Deficient Mild Female",
+  "Baseline Deficient Normal Male - Baseline Deficient Normal Female",
+  "Baseline Depleted Severe Male - Baseline Depleted Severe Female",
+  "Baseline Depleted Moderate Male - Baseline Depleted Moderate Female",
+  "Baseline Depleted Mild Male - Baseline Depleted Mild Female",
+  "Baseline Depleted Normal Male - Baseline Depleted Normal Female",
+  "Baseline Sufficient Severe Male - Baseline Sufficient Severe Female",
+  "Baseline Sufficient Moderate Male - Baseline Sufficient Moderate Female",
+  "Baseline Sufficient Mild Male - Baseline Sufficient Mild Female",
+  "Baseline Sufficient Normal Male - Baseline Sufficient Normal Female",
+
+  "Endpoint Deficient Severe Male - Endpoint Deficient Severe Female",
+  "Endpoint Deficient Moderate Male - Endpoint Deficient Moderate Female",
+  "Endpoint Deficient Mild Male - Endpoint Deficient Mild Female",
+  "Endpoint Deficient Normal Male - Endpoint Deficient Normal Female",
+  "Endpoint Depleted Severe Male - Endpoint Depleted Severe Female",
+  "Endpoint Depleted Moderate Male - Endpoint Depleted Moderate Female",
+  "Endpoint Depleted Mild Male - Endpoint Depleted Mild Female",
+  "Endpoint Depleted Normal Male - Endpoint Depleted Normal Female",
+  "Endpoint Sufficient Severe Male - Endpoint Sufficient Severe Female",
+  "Endpoint Sufficient Moderate Male - Endpoint Sufficient Moderate Female",
+  "Endpoint Sufficient Mild Male - Endpoint Sufficient Mild Female",
+  "Endpoint Sufficient Normal Male - Endpoint Sufficient Normal Female"
+)
+```
+
+```{r}
+#| eval: true
+#| label: B
+B <- c(
+  "Baseline Sufficient Severe Female - Baseline Deficient Severe Female",
+  "Baseline Sufficient Severe Female - Baseline Depleted Severe Female",
+  "Baseline Depleted Severe Female - Baseline Deficient Severe Female",
+  "Baseline Sufficient Severe Male - Baseline Deficient Severe Male",
+  "Baseline Sufficient Severe Male - Baseline Depleted Severe Male",
+  "Baseline Depleted Severe Male - Baseline Deficient Severe Male",
+  "Baseline Sufficient Moderate Female - Baseline Deficient Moderate Female",
+  "Baseline Sufficient Moderate Female - Baseline Depleted Moderate Female",
+  "Baseline Depleted Moderate Female - Baseline Deficient Moderate Female",
+  "Baseline Sufficient Moderate Male - Baseline Deficient Moderate Male",
+  "Baseline Sufficient Moderate Male - Baseline Depleted Moderate Male",
+  "Baseline Depleted Moderate Male - Baseline Deficient Moderate Male",
+  "Baseline Sufficient Mild Female - Baseline Deficient Mild Female",
+  "Baseline Sufficient Mild Female - Baseline Depleted Mild Female",
+  "Baseline Depleted Mild Female - Baseline Deficient Mild Female",
+  "Baseline Sufficient Mild Male - Baseline Deficient Mild Male",
+  "Baseline Sufficient Mild Male - Baseline Depleted Mild Male",
+  "Baseline Depleted Mild Male - Baseline Deficient Mild Male",
+  "Baseline Sufficient Normal Female - Baseline Deficient Normal Female",
+  "Baseline Sufficient Normal Female - Baseline Depleted Normal Female",
+  "Baseline Depleted Normal Female - Baseline Deficient Normal Female",
+  "Baseline Sufficient Normal Male - Baseline Deficient Normal Male",
+  "Baseline Sufficient Normal Male - Baseline Depleted Normal Male",
+  "Baseline Depleted Normal Male - Baseline Deficient Normal Male",
+
+  "Endpoint Sufficient Severe Female - Endpoint Deficient Severe Female",
+  "Endpoint Sufficient Severe Female - Endpoint Depleted Severe Female",
+  "Endpoint Depleted Severe Female - Endpoint Deficient Severe Female",
+
+  "Endpoint Sufficient Severe Male - Endpoint Deficient Severe Male",
+  "Endpoint Sufficient Severe Male - Endpoint Depleted Severe Male",
+  "Endpoint Depleted Severe Male - Endpoint Deficient Severe Male",
+
+  "Endpoint Sufficient Moderate Female - Endpoint Deficient Moderate Female",
+  "Endpoint Sufficient Moderate Female - Endpoint Depleted Moderate Female",
+  "Endpoint Depleted Moderate Female - Endpoint Deficient Moderate Female",
+
+  "Endpoint Sufficient Moderate Male - Endpoint Deficient Moderate Male",
+  "Endpoint Sufficient Moderate Male - Endpoint Depleted Moderate Male",
+  "Endpoint Depleted Moderate Male - Endpoint Deficient Moderate Male",
+
+  "Endpoint Sufficient Mild Female - Endpoint Deficient Mild Female",
+  "Endpoint Sufficient Mild Female - Endpoint Depleted Mild Female",
+  "Endpoint Depleted Mild Female - Endpoint Deficient Mild Female",
+
+  "Endpoint Sufficient Mild Male - Endpoint Deficient Mild Male",
+  "Endpoint Sufficient Mild Male - Endpoint Depleted Mild Male",
+  "Endpoint Depleted Mild Male - Endpoint Deficient Mild Male",
+
+  "Endpoint Sufficient Normal Female - Endpoint Deficient Normal Female",
+  "Endpoint Sufficient Normal Female - Endpoint Depleted Normal Female",
+  "Endpoint Depleted Normal Female - Endpoint Deficient Normal Female",
+
+  "Endpoint Sufficient Normal Male - Endpoint Deficient Normal Male",
+  "Endpoint Sufficient Normal Male - Endpoint Depleted Normal Male",
+  "Endpoint Depleted Normal Male - Endpoint Deficient Normal Male"
+)
+```
+
+```{r}
+#| eval: true
+#| label: C
+#| fig-cap: NA
+#| tbl-cap: NA
+
+C <- c(
+  "Endpoint Deficient Normal Female - Endpoint Deficient Severe Female",
+  "Endpoint Deficient Normal Male - Endpoint Deficient Severe Male",
+  "Endpoint Depleted Normal Female - Endpoint Depleted Severe Female",
+  "Endpoint Depleted Normal Male - Endpoint Depleted Severe Male",
+  "Endpoint Sufficient Normal Female - Endpoint Sufficient Severe Female",
+  "Endpoint Sufficient Normal Male - Endpoint Sufficient Severe Male",
+  "Baseline Deficient Normal Female - Baseline Deficient Severe Female",
+  "Baseline Deficient Normal Male - Baseline Deficient Severe Male",
+  "Baseline Depleted Normal Female - Baseline Depleted Severe Female",
+  "Baseline Depleted Normal Male - Baseline Depleted Severe Male",
+  "Baseline Sufficient Normal Female - Baseline Sufficient Severe Female",
+  "Baseline Sufficient Normal Male - Baseline Sufficient Severe Male",
+  "Endpoint Deficient Normal Female - Endpoint Deficient Moderate Female",
+  "Endpoint Deficient Normal Male - Endpoint Deficient Moderate Male",
+  "Endpoint Depleted Normal Female - Endpoint Depleted Moderate Female",
+  "Endpoint Depleted Normal Male - Endpoint Depleted Moderate Male",
+  "Endpoint Sufficient Normal Female - Endpoint Sufficient Moderate Female",
+  "Endpoint Sufficient Normal Male - Endpoint Sufficient Moderate Male",
+  "Baseline Deficient Normal Female - Baseline Deficient Moderate Female",
+  "Baseline Deficient Normal Male - Baseline Deficient Moderate Male",
+  "Baseline Depleted Normal Female - Baseline Depleted Moderate Female",
+  "Baseline Depleted Normal Male - Baseline Depleted Moderate Male",
+  "Baseline Sufficient Normal Female - Baseline Sufficient Moderate Female",
+  "Baseline Sufficient Normal Male - Baseline Sufficient Moderate Male",
+  "Endpoint Deficient Normal Female - Endpoint Deficient Mild Female",
+  "Endpoint Deficient Normal Male - Endpoint Deficient Mild Male",
+  "Endpoint Depleted Normal Female - Endpoint Depleted Mild Female",
+  "Endpoint Depleted Normal Male - Endpoint Depleted Mild Male",
+  "Endpoint Sufficient Normal Female - Endpoint Sufficient Mild Female",
+  "Endpoint Sufficient Normal Male - Endpoint Sufficient Mild Male",
+  "Baseline Deficient Normal Female - Baseline Deficient Mild Female",
+  "Baseline Deficient Normal Male - Baseline Deficient Mild Male",
+  "Baseline Depleted Normal Female - Baseline Depleted Mild Female",
+  "Baseline Depleted Normal Male - Baseline Depleted Mild Male",
+  "Baseline Sufficient Normal Female - Baseline Sufficient Mild Female",
+  "Baseline Sufficient Normal Male - Baseline Sufficient Mild Male",
+  "Endpoint Deficient Moderate Female - Endpoint Deficient Severe Female",
+  "Endpoint Deficient Moderate Male - Endpoint Deficient Severe Male",
+  "Endpoint Depleted Moderate Female - Endpoint Depleted Severe Female",
+  "Endpoint Depleted Moderate Male - Endpoint Depleted Severe Male",
+  "Endpoint Sufficient Moderate Female - Endpoint Sufficient Severe Female",
+  "Endpoint Sufficient Moderate Male - Endpoint Sufficient Severe Male",
+  "Baseline Deficient Moderate Female - Baseline Deficient Severe Female",
+  "Baseline Deficient Moderate Male - Baseline Deficient Severe Male",
+  "Baseline Depleted Moderate Female - Baseline Depleted Severe Female",
+  "Baseline Depleted Moderate Male - Baseline Depleted Severe Male",
+  "Baseline Sufficient Moderate Female - Baseline Sufficient Severe Female",
+  "Baseline Sufficient Moderate Male - Baseline Sufficient Severe Male",
+  "Endpoint Deficient Mild Female - Endpoint Deficient Severe Female",
+  "Endpoint Deficient Mild Male - Endpoint Deficient Severe Male",
+  "Endpoint Depleted Mild Female - Endpoint Depleted Severe Female",
+  "Endpoint Depleted Mild Male - Endpoint Depleted Severe Male",
+  "Endpoint Sufficient Mild Female - Endpoint Sufficient Severe Female",
+  "Endpoint Sufficient Mild Male - Endpoint Sufficient Severe Male",
+  "Baseline Deficient Mild Female - Baseline Deficient Severe Female",
+  "Baseline Deficient Mild Male - Baseline Deficient Severe Male",
+  "Baseline Depleted Mild Female - Baseline Depleted Severe Female",
+  "Baseline Depleted Mild Male - Baseline Depleted Severe Male",
+  "Baseline Sufficient Mild Female - Baseline Sufficient Severe Female",
+  "Baseline Sufficient Mild Male - Baseline Sufficient Severe Male",
+  "Endpoint Deficient Mild Female - Endpoint Deficient Moderate Female",
+  "Endpoint Deficient Mild Male - Endpoint Deficient Moderate Male",
+  "Endpoint Depleted Mild Female - Endpoint Depleted Moderate Female",
+  "Endpoint Depleted Mild Male - Endpoint Depleted Moderate Male",
+  "Endpoint Sufficient Mild Female - Endpoint Sufficient Moderate Female",
+  "Endpoint Sufficient Mild Male - Endpoint Sufficient Moderate Male",
+  "Baseline Deficient Mild Female - Baseline Deficient Moderate Female",
+  "Baseline Deficient Mild Male - Baseline Deficient Moderate Male",
+  "Baseline Depleted Mild Female - Baseline Depleted Moderate Female",
+  "Baseline Depleted Mild Male - Baseline Depleted Moderate Male",
+  "Baseline Sufficient Mild Female - Baseline Sufficient Moderate Female",
+  "Baseline Sufficient Mild Male - Baseline Sufficient Moderate Male"
+)
+```
+
+```{r}
+#| eval: true
+#| label: temporal
+#| fig-cap: NA
+#| tbl-cap: NA
+D <- c(
+  "Endpoint Deficient Severe Female - Baseline Deficient Severe Female",
+  "Endpoint Deficient Severe Male - Baseline Deficient Severe Male",
+  "Endpoint Deficient Moderate Female - Baseline Deficient Moderate Female",
+  "Endpoint Deficient Moderate Male - Baseline Deficient Moderate Male",
+  "Endpoint Deficient Mild Female - Baseline Deficient Mild Female",
+  "Endpoint Deficient Mild Male - Baseline Deficient Mild Male",
+  "Endpoint Deficient Normal Female - Baseline Deficient Normal Female",
+  "Endpoint Deficient Normal Male - Baseline Deficient Normal Male",
+  "Endpoint Depleted Severe Female - Baseline Depleted Severe Female",
+  "Endpoint Depleted Severe Male - Baseline Depleted Severe Male",
+  "Endpoint Depleted Moderate Female - Baseline Depleted Moderate Female",
+  "Endpoint Depleted Moderate Male - Baseline Depleted Moderate Male",
+  "Endpoint Depleted Mild Female - Baseline Depleted Mild Female",
+  "Endpoint Depleted Mild Male - Baseline Depleted Mild Male",
+  "Endpoint Depleted Normal Female - Baseline Depleted Normal Female",
+  "Endpoint Depleted Normal Male - Baseline Depleted Normal Male",
+  "Endpoint Sufficient Severe Female - Baseline Sufficient Severe Female",
+  "Endpoint Sufficient Severe Male - Baseline Sufficient Severe Male",
+  "Endpoint Sufficient Moderate Female - Baseline Sufficient Moderate Female",
+  "Endpoint Sufficient Moderate Male - Baseline Sufficient Moderate Male",
+  "Endpoint Sufficient Mild Female - Baseline Sufficient Mild Female",
+  "Endpoint Sufficient Mild Male - Baseline Sufficient Mild Male",
+  "Endpoint Sufficient Normal Female - Baseline Sufficient Normal Female",
+  "Endpoint Sufficient Normal Male - Baseline Sufficient Normal Male"
+)
+```
+
+```{r}
+#| eval: true
 #| label: tbl-emmFeHbSex-slopes
 #| tbl-cap: NA
 
@@ -3876,7 +4077,7 @@ lapply(
 How does negative iron status and anemia change in the population over time?
 :::
   
-  ```{r}
+```{r}
 #| eval: true
 #| label: prevalence of iron deficiency/depletion at endpoint compared to baseline
 #| fig-cap: prevalence of iron deficiency/depletion at endpoint compared to baseline
@@ -3902,6 +4103,23 @@ be_meta %>%
   mutate(proportion = count / sum(count)) %>%
   ggplot(aes(x = name, fill = timepoint)) +
   geom_bar(aes(y = count), stat = "identity", position = "fill")
+```
+
+## Results Summary
+
+```{r}
+#| eval: true
+#| echo: false
+#| results: asis
+
+list_all_results()
+```
+
+```{r}
+#| eval: true
+#| echo: false
+#| results: asis
+generate_results_section(directory_naming = "both")
 ```
 
 ## Appendix
@@ -3986,218 +4204,10 @@ sex_time_plots <- lapply(names(alpha_lmms_FeHb_conc), function(metric) {
 gridExtra::grid.arrange(grobs = sex_time_plots, ncol = 2)
 ```
 
-### Contast filters
-
 ```{r}
 #| eval: true
-#| label: sex-within-same
-#| fig-cap: NA
-#| tbl-cap: NA
-A <- c(
-  "Baseline Deficient Severe Male - Baseline Deficient Severe Female",
-  "Baseline Deficient Moderate Male - Baseline Deficient Moderate Female",
-  "Baseline Deficient Mild Male - Baseline Deficient Mild Female",
-  "Baseline Deficient Normal Male - Baseline Deficient Normal Female",
-  "Baseline Depleted Severe Male - Baseline Depleted Severe Female",
-  "Baseline Depleted Moderate Male - Baseline Depleted Moderate Female",
-  "Baseline Depleted Mild Male - Baseline Depleted Mild Female",
-  "Baseline Depleted Normal Male - Baseline Depleted Normal Female",
-  "Baseline Sufficient Severe Male - Baseline Sufficient Severe Female",
-  "Baseline Sufficient Moderate Male - Baseline Sufficient Moderate Female",
-  "Baseline Sufficient Mild Male - Baseline Sufficient Mild Female",
-  "Baseline Sufficient Normal Male - Baseline Sufficient Normal Female",
+#| echo: false
+#| label: info
 
-  "Endpoint Deficient Severe Male - Endpoint Deficient Severe Female",
-  "Endpoint Deficient Moderate Male - Endpoint Deficient Moderate Female",
-  "Endpoint Deficient Mild Male - Endpoint Deficient Mild Female",
-  "Endpoint Deficient Normal Male - Endpoint Deficient Normal Female",
-  "Endpoint Depleted Severe Male - Endpoint Depleted Severe Female",
-  "Endpoint Depleted Moderate Male - Endpoint Depleted Moderate Female",
-  "Endpoint Depleted Mild Male - Endpoint Depleted Mild Female",
-  "Endpoint Depleted Normal Male - Endpoint Depleted Normal Female",
-  "Endpoint Sufficient Severe Male - Endpoint Sufficient Severe Female",
-  "Endpoint Sufficient Moderate Male - Endpoint Sufficient Moderate Female",
-  "Endpoint Sufficient Mild Male - Endpoint Sufficient Mild Female",
-  "Endpoint Sufficient Normal Male - Endpoint Sufficient Normal Female"
-)
-```
-
-```{r}
-#| eval: true
-#| label:
-#| fig-cap: NA
-#| tbl-cap: NA
-B <- c(
-  "Baseline Sufficient Severe Female - Baseline Deficient Severe Female",
-  "Baseline Sufficient Severe Female - Baseline Depleted Severe Female",
-  "Baseline Depleted Severe Female - Baseline Deficient Severe Female",
-  "Baseline Sufficient Severe Male - Baseline Deficient Severe Male",
-  "Baseline Sufficient Severe Male - Baseline Depleted Severe Male",
-  "Baseline Depleted Severe Male - Baseline Deficient Severe Male",
-  "Baseline Sufficient Moderate Female - Baseline Deficient Moderate Female",
-  "Baseline Sufficient Moderate Female - Baseline Depleted Moderate Female",
-  "Baseline Depleted Moderate Female - Baseline Deficient Moderate Female",
-  "Baseline Sufficient Moderate Male - Baseline Deficient Moderate Male",
-  "Baseline Sufficient Moderate Male - Baseline Depleted Moderate Male",
-  "Baseline Depleted Moderate Male - Baseline Deficient Moderate Male",
-  "Baseline Sufficient Mild Female - Baseline Deficient Mild Female",
-  "Baseline Sufficient Mild Female - Baseline Depleted Mild Female",
-  "Baseline Depleted Mild Female - Baseline Deficient Mild Female",
-  "Baseline Sufficient Mild Male - Baseline Deficient Mild Male",
-  "Baseline Sufficient Mild Male - Baseline Depleted Mild Male",
-  "Baseline Depleted Mild Male - Baseline Deficient Mild Male",
-  "Baseline Sufficient Normal Female - Baseline Deficient Normal Female",
-  "Baseline Sufficient Normal Female - Baseline Depleted Normal Female",
-  "Baseline Depleted Normal Female - Baseline Deficient Normal Female",
-  "Baseline Sufficient Normal Male - Baseline Deficient Normal Male",
-  "Baseline Sufficient Normal Male - Baseline Depleted Normal Male",
-  "Baseline Depleted Normal Male - Baseline Deficient Normal Male",
-
-  "Endpoint Sufficient Severe Female - Endpoint Deficient Severe Female",
-  "Endpoint Sufficient Severe Female - Endpoint Depleted Severe Female",
-  "Endpoint Depleted Severe Female - Endpoint Deficient Severe Female",
-
-  "Endpoint Sufficient Severe Male - Endpoint Deficient Severe Male",
-  "Endpoint Sufficient Severe Male - Endpoint Depleted Severe Male",
-  "Endpoint Depleted Severe Male - Endpoint Deficient Severe Male",
-
-  "Endpoint Sufficient Moderate Female - Endpoint Deficient Moderate Female",
-  "Endpoint Sufficient Moderate Female - Endpoint Depleted Moderate Female",
-  "Endpoint Depleted Moderate Female - Endpoint Deficient Moderate Female",
-
-  "Endpoint Sufficient Moderate Male - Endpoint Deficient Moderate Male",
-  "Endpoint Sufficient Moderate Male - Endpoint Depleted Moderate Male",
-  "Endpoint Depleted Moderate Male - Endpoint Deficient Moderate Male",
-
-  "Endpoint Sufficient Mild Female - Endpoint Deficient Mild Female",
-  "Endpoint Sufficient Mild Female - Endpoint Depleted Mild Female",
-  "Endpoint Depleted Mild Female - Endpoint Deficient Mild Female",
-
-  "Endpoint Sufficient Mild Male - Endpoint Deficient Mild Male",
-  "Endpoint Sufficient Mild Male - Endpoint Depleted Mild Male",
-  "Endpoint Depleted Mild Male - Endpoint Deficient Mild Male",
-
-  "Endpoint Sufficient Normal Female - Endpoint Deficient Normal Female",
-  "Endpoint Sufficient Normal Female - Endpoint Depleted Normal Female",
-  "Endpoint Depleted Normal Female - Endpoint Deficient Normal Female",
-
-  "Endpoint Sufficient Normal Male - Endpoint Deficient Normal Male",
-  "Endpoint Sufficient Normal Male - Endpoint Depleted Normal Male",
-  "Endpoint Depleted Normal Male - Endpoint Deficient Normal Male"
-)
-```
-
-```{r}
-#| eval: true
-#| label: C
-#| fig-cap: NA
-#| tbl-cap: NA
-
-C <- c(
-  "Endpoint Deficient Normal Female - Endpoint Deficient Severe Female",
-  "Endpoint Deficient Normal Male - Endpoint Deficient Severe Male",
-  "Endpoint Depleted Normal Female - Endpoint Depleted Severe Female",
-  "Endpoint Depleted Normal Male - Endpoint Depleted Severe Male",
-  "Endpoint Sufficient Normal Female - Endpoint Sufficient Severe Female",
-  "Endpoint Sufficient Normal Male - Endpoint Sufficient Severe Male",
-  "Baseline Deficient Normal Female - Baseline Deficient Severe Female",
-  "Baseline Deficient Normal Male - Baseline Deficient Severe Male",
-  "Baseline Depleted Normal Female - Baseline Depleted Severe Female",
-  "Baseline Depleted Normal Male - Baseline Depleted Severe Male",
-  "Baseline Sufficient Normal Female - Baseline Sufficient Severe Female",
-  "Baseline Sufficient Normal Male - Baseline Sufficient Severe Male",
-  "Endpoint Deficient Normal Female - Endpoint Deficient Moderate Female",
-  "Endpoint Deficient Normal Male - Endpoint Deficient Moderate Male",
-  "Endpoint Depleted Normal Female - Endpoint Depleted Moderate Female",
-  "Endpoint Depleted Normal Male - Endpoint Depleted Moderate Male",
-  "Endpoint Sufficient Normal Female - Endpoint Sufficient Moderate Female",
-  "Endpoint Sufficient Normal Male - Endpoint Sufficient Moderate Male",
-  "Baseline Deficient Normal Female - Baseline Deficient Moderate Female",
-  "Baseline Deficient Normal Male - Baseline Deficient Moderate Male",
-  "Baseline Depleted Normal Female - Baseline Depleted Moderate Female",
-  "Baseline Depleted Normal Male - Baseline Depleted Moderate Male",
-  "Baseline Sufficient Normal Female - Baseline Sufficient Moderate Female",
-  "Baseline Sufficient Normal Male - Baseline Sufficient Moderate Male",
-  "Endpoint Deficient Normal Female - Endpoint Deficient Mild Female",
-  "Endpoint Deficient Normal Male - Endpoint Deficient Mild Male",
-  "Endpoint Depleted Normal Female - Endpoint Depleted Mild Female",
-  "Endpoint Depleted Normal Male - Endpoint Depleted Mild Male",
-  "Endpoint Sufficient Normal Female - Endpoint Sufficient Mild Female",
-  "Endpoint Sufficient Normal Male - Endpoint Sufficient Mild Male",
-  "Baseline Deficient Normal Female - Baseline Deficient Mild Female",
-  "Baseline Deficient Normal Male - Baseline Deficient Mild Male",
-  "Baseline Depleted Normal Female - Baseline Depleted Mild Female",
-  "Baseline Depleted Normal Male - Baseline Depleted Mild Male",
-  "Baseline Sufficient Normal Female - Baseline Sufficient Mild Female",
-  "Baseline Sufficient Normal Male - Baseline Sufficient Mild Male",
-  "Endpoint Deficient Moderate Female - Endpoint Deficient Severe Female",
-  "Endpoint Deficient Moderate Male - Endpoint Deficient Severe Male",
-  "Endpoint Depleted Moderate Female - Endpoint Depleted Severe Female",
-  "Endpoint Depleted Moderate Male - Endpoint Depleted Severe Male",
-  "Endpoint Sufficient Moderate Female - Endpoint Sufficient Severe Female",
-  "Endpoint Sufficient Moderate Male - Endpoint Sufficient Severe Male",
-  "Baseline Deficient Moderate Female - Baseline Deficient Severe Female",
-  "Baseline Deficient Moderate Male - Baseline Deficient Severe Male",
-  "Baseline Depleted Moderate Female - Baseline Depleted Severe Female",
-  "Baseline Depleted Moderate Male - Baseline Depleted Severe Male",
-  "Baseline Sufficient Moderate Female - Baseline Sufficient Severe Female",
-  "Baseline Sufficient Moderate Male - Baseline Sufficient Severe Male",
-  "Endpoint Deficient Mild Female - Endpoint Deficient Severe Female",
-  "Endpoint Deficient Mild Male - Endpoint Deficient Severe Male",
-  "Endpoint Depleted Mild Female - Endpoint Depleted Severe Female",
-  "Endpoint Depleted Mild Male - Endpoint Depleted Severe Male",
-  "Endpoint Sufficient Mild Female - Endpoint Sufficient Severe Female",
-  "Endpoint Sufficient Mild Male - Endpoint Sufficient Severe Male",
-  "Baseline Deficient Mild Female - Baseline Deficient Severe Female",
-  "Baseline Deficient Mild Male - Baseline Deficient Severe Male",
-  "Baseline Depleted Mild Female - Baseline Depleted Severe Female",
-  "Baseline Depleted Mild Male - Baseline Depleted Severe Male",
-  "Baseline Sufficient Mild Female - Baseline Sufficient Severe Female",
-  "Baseline Sufficient Mild Male - Baseline Sufficient Severe Male",
-  "Endpoint Deficient Mild Female - Endpoint Deficient Moderate Female",
-  "Endpoint Deficient Mild Male - Endpoint Deficient Moderate Male",
-  "Endpoint Depleted Mild Female - Endpoint Depleted Moderate Female",
-  "Endpoint Depleted Mild Male - Endpoint Depleted Moderate Male",
-  "Endpoint Sufficient Mild Female - Endpoint Sufficient Moderate Female",
-  "Endpoint Sufficient Mild Male - Endpoint Sufficient Moderate Male",
-  "Baseline Deficient Mild Female - Baseline Deficient Moderate Female",
-  "Baseline Deficient Mild Male - Baseline Deficient Moderate Male",
-  "Baseline Depleted Mild Female - Baseline Depleted Moderate Female",
-  "Baseline Depleted Mild Male - Baseline Depleted Moderate Male",
-  "Baseline Sufficient Mild Female - Baseline Sufficient Moderate Female",
-  "Baseline Sufficient Mild Male - Baseline Sufficient Moderate Male"
-)
-```
-
-```{r}
-#| eval: true
-#| label: temporal
-#| fig-cap: NA
-#| tbl-cap: NA
-D <- c(
-  "Endpoint Deficient Severe Female - Baseline Deficient Severe Female",
-  "Endpoint Deficient Severe Male - Baseline Deficient Severe Male",
-  "Endpoint Deficient Moderate Female - Baseline Deficient Moderate Female",
-  "Endpoint Deficient Moderate Male - Baseline Deficient Moderate Male",
-  "Endpoint Deficient Mild Female - Baseline Deficient Mild Female",
-  "Endpoint Deficient Mild Male - Baseline Deficient Mild Male",
-  "Endpoint Deficient Normal Female - Baseline Deficient Normal Female",
-  "Endpoint Deficient Normal Male - Baseline Deficient Normal Male",
-  "Endpoint Depleted Severe Female - Baseline Depleted Severe Female",
-  "Endpoint Depleted Severe Male - Baseline Depleted Severe Male",
-  "Endpoint Depleted Moderate Female - Baseline Depleted Moderate Female",
-  "Endpoint Depleted Moderate Male - Baseline Depleted Moderate Male",
-  "Endpoint Depleted Mild Female - Baseline Depleted Mild Female",
-  "Endpoint Depleted Mild Male - Baseline Depleted Mild Male",
-  "Endpoint Depleted Normal Female - Baseline Depleted Normal Female",
-  "Endpoint Depleted Normal Male - Baseline Depleted Normal Male",
-  "Endpoint Sufficient Severe Female - Baseline Sufficient Severe Female",
-  "Endpoint Sufficient Severe Male - Baseline Sufficient Severe Male",
-  "Endpoint Sufficient Moderate Female - Baseline Sufficient Moderate Female",
-  "Endpoint Sufficient Moderate Male - Baseline Sufficient Moderate Male",
-  "Endpoint Sufficient Mild Female - Baseline Sufficient Mild Female",
-  "Endpoint Sufficient Mild Male - Baseline Sufficient Mild Male",
-  "Endpoint Sufficient Normal Female - Baseline Sufficient Normal Female",
-  "Endpoint Sufficient Normal Male - Baseline Sufficient Normal Male"
-)
+print(sessionInfo(), locale = FALSE)
 ```

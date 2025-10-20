@@ -4,6 +4,7 @@
 #| echo: false
 #| eval: true
 #| label: setup
+#| cache: false
 
 # This initial code block loads custom utility functions and environment variables
 # These are stored in separate files to keep the main analysis clean and organized
@@ -56,7 +57,7 @@ write.csv(
 ### Import Woltka KEGG pathway results
 
 ```{r}
-#| eval: false
+#| eval: true
 path_cov <- read_delim(file.path(WOLTKA_OUT, "kegg/pathway_coverage.tsv")) %>%
   pivot_longer(cols = !`#FeatureID`)
 
@@ -72,7 +73,7 @@ write.csv(
 ```
 
 ```{r}
-#| eval: false
+#| eval: true
 #| label: import KO files
 ko <- read_delim(file.path(WOLTKA_OUT, "kegg/pathway.tsv")) %>%
   pivot_longer(cols = !`#FeatureID`)

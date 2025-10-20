@@ -4,6 +4,7 @@
 #| echo: false
 #| eval: true
 #| label: setup
+#| cache: false
 
 # This initial code block loads custom utility functions and environment variables
 # These are stored in separate files to keep the main analysis clean and organized
@@ -19,13 +20,14 @@ suppressWarnings(suppressMessages({
     header = T
   )
 
-  dir.create(
-    file.path(RESULTS, "KEGG-functional-analysis"),
-    showWarnings = FALSE,
-    recursive = TRUE
-  )
+  library(promicrobialTools)
+  prefix <- "GO-"
+
+  filepath <- get_results_dir(directory_naming = "parent")
 }))
 ```
+
+Results will be saved to ``r filepath``.
 
 ## Data preparation
 
@@ -77,12 +79,18 @@ go <- go %>%
       ontology == "CC" ~ "Cellular component"
     )
   )
+```
 
-onto_col <- assign_unique_colors(go$ontology)
-write.csv(
-  go,
-  file.path(WOLTKA_OUT, "go/processed-all.generic.csv"),
-  row.names = F
+```{r}
+#| eval: true
+#| label: save
+#| results: asis
+
+save_and_link(
+  data = go,
+  filename = paste0(prefix, "processed-all.generic.csv"),
+  description = "Processed GO terms (MF, BP, CC)",
+  directory_naming = "both"
 )
 ```
 
@@ -91,32 +99,44 @@ write.csv(
 ```{r}
 #| eval: true
 #| label: baseline-go
-#| fig-cap: NA
-#| tbl-cap: NA
+
 go_base <- go %>%
   dplyr::filter(timepoint == "Baseline")
+```
 
-write.csv(
-  go_base,
-  file.path(RESULTS, "baseline-go/baseline-annotated-go-terms.csv"),
-  row.names = F
+```{r}
+#| eval: true
+#| label: save-base-go
+#| results: asis
+
+save_and_link(
+  data = go_base,
+  filename = paste0(prefix, "Baseline-annotated-go-terms.csv"),
+  description = "Baseline GO Annotations",
+  directory_naming = "both"
 )
 ```
 
 ```{r}
 #| eval: true
 #| label: baseline-endpoint-go
-#| fig-cap: NA
-#| tbl-cap: NA
+
 go_be <- subset(
   subset(go, sample %in% base_end_paired_samples$sample),
   timepoint %in% c("Baseline", "Endpoint")
 )
+```
 
-write.csv(
-  go_be,
-  file.path(RESULTS, "EvB-GO/EvB-annotated-go-terms.csv"),
-  row.names = F
+```{r}
+#| eval: true
+#| label: save-base-go
+#| results: asis
+
+save_and_link(
+  data = go_be,
+  filename = paste0(prefix, "EvsB-annotated-go-terms.csv"),
+  description = "Paired Baseline and Endpoint GO Annotations",
+  directory_naming = "both"
 )
 ```
 
@@ -140,10 +160,17 @@ annoBac <- read.delim(
   col.names = c("go_id", "terms")
 ) %>%
   mutate(go_id = str_replace(str_extract(go_id, "GO_\\d*"), "_", ":"))
+```
 
-write.csv(
-  annoBac,
-  file.path(REF, "gene-ontology/goslim_prokaryote-formatted.csv"),
-  row.names = F
+```{r}
+#| eval: true
+#| label: save
+#| results: asis
+
+save_and_link(
+  data = annoBac,
+  filename = paste0(prefix, "goslim_prokaryote-formatted.csv"),
+  description = "",
+  directory_naming = "both"
 )
 ```

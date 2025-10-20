@@ -1,4 +1,4 @@
-# Baseline to Endpoint Analysis
+# Introduction
 
 This analysis compares microbiome samples between two timepoints:
 
