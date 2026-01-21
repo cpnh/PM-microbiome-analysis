@@ -17,26 +17,77 @@
 #  Configuration                                                             #
 ##############################################################################
 
-suppressWarnings(suppressMessages({
-  library("phyloseq")
-  library("tidyverse")
-  library("ggpubr")
-  library("RColorBrewer")
-  library("kableExtra")
-  library("vegan")
-  library("rstatix")
-  library("gtsummary")
-  library("gt")
-  conflicted::conflicts_prefer(
-    dplyr::filter,
-    dplyr::select,
-    dplyr::mutate,
-    base::load,
-    base::attr,
-    stats::update,
-    purrr::modify
+# Function to safely load libraries with warnings for missing packages
+safe_library <- function(package_name) {
+  if (requireNamespace(package_name, quietly = TRUE)) {
+    suppressWarnings(suppressMessages(library(
+      package_name,
+      character.only = TRUE
+    )))
+    return(TRUE)
+  } else {
+    warning(
+      paste(
+        "Package",
+        package_name,
+        "is not installed. Some functions may not work properly."
+      ),
+      call. = FALSE,
+      immediate. = TRUE
+    )
+    return(FALSE)
+  }
+}
+
+# List of required packages
+required_packages <- c(
+  "phyloseq",
+  "tidyverse",
+  "ggpubr",
+  "RColorBrewer",
+  "kableExtra",
+  "vegan",
+  "rstatix",
+  "gtsummary",
+  "gt",
+  "conflicted"
+)
+
+# Load packages safely
+loaded_packages <- sapply(required_packages, safe_library)
+
+# Set up conflicts only if conflicted package loaded successfully
+if (loaded_packages["conflicted"]) {
+  tryCatch(
+    {
+      conflicted::conflicts_prefer(
+        dplyr::filter,
+        dplyr::select,
+        dplyr::mutate,
+        base::load,
+        base::attr,
+        stats::update,
+        purrr::modify
+      )
+    },
+    error = function(e) {
+      warning("Could not set conflict preferences: ", e$message, call. = FALSE)
+    }
   )
-}))
+}
+
+# Optional: Print summary of loaded packages
+missing_packages <- names(loaded_packages)[!loaded_packages]
+if (length(missing_packages) > 0) {
+  cat("\nMissing packages:", paste(missing_packages, collapse = ", "), "\n")
+  cat(
+    "Install with: install.packages(c(",
+    paste(paste0('"', missing_packages, '"'), collapse = ", "),
+    "))\n\n"
+  )
+} else {
+  cat("All required packages loaded successfully.\n")
+}
 
 options(max.print = 50, scipen = 999, max.width = 100, digits = 3, prType='html')
 set.seed(1234)
@@ -109,9 +160,11 @@ theme_set(
 #  #start gtsummary Theme Settings                                                  #
 ##############################################################################
 
-suppressMessages(set_gtsummary_theme(
-  theme_gtsummary_journal("lancet")
-))
+if (requireNamespace("gtsummary", quietly = TRUE)) {
+  suppressMessages(gtsummary::set_gtsummary_theme(
+    gtsummary::theme_gtsummary_journal("lancet")
+  ))
+}
 
 pvalue_format <- function(x) {
   dplyr::case_when(
@@ -7679,4 +7732,14 @@ plotDAvol <- function(df,
   attr(p, "dpi") <- dpi
   
   return(p)
+}
+
+#from toupper doc examples
+capwords <- function(s, strict = FALSE) {
+    s <- as.character(s)
+    
+    cap <- function(s) paste(toupper(substring(s, 1, 1)),
+                  {s <- substring(s, 2); if(strict) tolower(s) else s},
+                             sep = "", collapse = " " )
+    sapply(strsplit(s, split = " "), cap, USE.NAMES = !is.null(names(s)))
 }
