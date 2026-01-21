@@ -50,6 +50,7 @@ EvsB_ANCOM <- read.csv(file.path(
 #| tbl-cap: Total number of significant OGUs (FDR $\leq$ 0.05)
 kable(
   EvsB_ANCOM %>%
+    filter(passed_ss_timepointEndpoint == TRUE, q_timepointEndpoint <= 0.05) %>%
     select(taxon, Result_FC1.2, Result_FC2) %>%
     pivot_longer(cols = c(Result_FC1.2, Result_FC2)) %>%
     group_by(name, value) %>%
@@ -144,12 +145,11 @@ common %>%
 ```{r}
 #| eval: true
 #| label: common1.2
-#| fig-cap: NA
-#| tbl-cap: NA
-kable(head(
+#| tbl-cap: Common OGUs between ZI-GLMMs and ANCOM-BC analyses (FDR \u2264 0.05; FC \u2265 1.2)
+kable(
   common1.2 <- common %>%
     filter(Result_FC1.2 != "No change")
-))
+)
 ```
 
 There are `r nrow(common1.2)` OGUs with a fold change of 1.2 or more (`r length(unique(common1.2$Species))` unique species and `r length(unique(common1.2$Genus))` unique genera) are significantly changing over time between zero-inflated GLMM and DA results i.e. are common between the two methods.
@@ -200,10 +200,12 @@ common_mat %>%
 ```{r}
 #| eval: true
 #| label: common-sig
-kable(head(
+#| tbl-cap: Common OGUs between ZI-GLMMs and ANCOM-BC analyses (FDR \u2264 0.05; FC \u2265 2)
+
+kable(
   common2 <- common %>%
     filter(Result_FC2 != "No change")
-))
+)
 
 ```
 
@@ -271,8 +273,6 @@ emms <- read.csv(
 ```{r}
 #| eval: true
 #| label: FC2
-#| fig-cap: NA
-#| tbl-cap: NA
 
 commonEMM <- emms %>%
   inner_join(., EvsB_ANCOM, by = c("outcome_id" = "taxon"))
@@ -342,8 +342,7 @@ commonEMM %>%
 ```{r}
 #| eval: true
 #| label: commonEMM1.2
-#| fig-cap: NA
-#| tbl-cap: NA
+#| tbl-cap: Common OGUs between ZI-GLMMs EMMS and ANCOM-BC analyses (FDR \u2264 0.05; FC \u2265 1.2)
 kable(head(
   commonEMM1.2 <- commonEMM %>%
     filter(Result_FC1.2 != "No change")
@@ -376,7 +375,7 @@ phylum_anno <- assign_unique_colors(
 ```{r}
 #| eval: true
 #| label: fig-com
-#| fig-cap: Log2 fold change of OGUs shared across LMM and DA results
+#| fig-cap: Log2 fold change of OGUs shared across ZI-GLMM EMMs and DA results
 commonEMM_mat %>%
   arrange(logFC) %>%
   ggplot(aes(y = reorder(Species, logFC), x = logFC, fill = Phylum)) +
@@ -401,10 +400,12 @@ commonEMM_mat %>%
 ```{r}
 #| eval: true
 #| label: commonEMM-sig
-kable(head(
+#| tbl-cap: Common OGUs between ZI-GLMMs EMMs and ANCOM-BC analyses (FDR \u2264 0.05; FC \u2265 2)
+
+kable(
   commonEMM2 <- commonEMM %>%
     filter(Result_FC2 != "No change")
-))
+)
 
 ```
 

@@ -38,7 +38,6 @@ Results will be saved to `r filepath`.
 #| eval: true
 #| label: data prep
 #| results: asis
-#| cache: true
 baseline <- phyloseq::subset_samples(seqdata_bac, timepoint == "Baseline")
 
 data <- prepare_ogu_data(

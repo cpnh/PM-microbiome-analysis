@@ -1,25 +1,40 @@
 ## Baseline Diversity Analysis
 
-### Load and Prepare Rarefied Reads
-
-```{r}
+```{r setup}
 #| echo: false
 #| eval: true
 #| label: setup
+#| cache: false
 
 # This initial code block loads custom utility functions and environment variables
-# These are stored in separate files to keep the main analysis clean and organized
-source("utils/r-utils.r")
-source("_environment.required")
+suppressWarnings(suppressMessages({
+  source("utils/r-utils.r")
+  source("_environment.required")
+
+  library(promicrobialTools)
+
+  prefix <- "baseDiv-"
+
+  filepath <- get_results_dir(directory_naming = "both")
+}))
 ```
+
+Results will be saved to ``r filepath``.
+
+### Load and Prepare Rarefied Reads
 
 The phyloseq object saved as "rarefied_bacteria.rds" in [Section 3](../03-rarefaction/rarefaction.qmd) is the starting point for this analysis, and must be loaded into the R environment:
 
 ```{r}
 #| eval: true
 #| label: load rarefied read data
+#| cache: false
 
 (seqdata_bac <- readRDS(paste0(RARE_RESULTS, "/rarefied_bacteria.rds")))
+sample_data(seqdata_bac)$timepoint <- str_remove(
+  sample_data(seqdata_bac)$timepoint,
+  "1|2|3"
+)
 ```
 
 ::: {.callout-note}
@@ -34,7 +49,7 @@ Next, data is filtered to contain only baseline samples.
 
 # subset data
 # Filters data to include only samples from the study's starting point ("baseline")
-baseline <- phyloseq::subset_samples(seqdata_bac, timepoint == "1Baseline")
+baseline <- phyloseq::subset_samples(seqdata_bac, timepoint == "Baseline")
 
 # Creates a new column with sample names by reassigning rownames (containing sample names)
 sample_data(baseline) <- cbind(
@@ -188,7 +203,12 @@ baseline_metadata <- microbiome::meta(baseline) %>%
     by = c("sample_names" = "rowname")
   ) %>%
   left_join(., rownames_to_column(pd), by = c("sample_names" = "rowname")) %>%
-  mutate(arm = case_when(trt == 0 ~ "CPM", trt == 1 ~ "FeZnPM"))
+  mutate(
+    arm = case_when(
+      trt == 0 ~ "CPM",
+      trt == 1 ~ "FeZnPM"
+    )
+  )
 
 rownames(baseline_metadata) <- baseline_metadata$sample_names
 
@@ -458,7 +478,7 @@ saveRDS(baseline_metadata, "data/metadata/baseline-metadata.rds")
 
 htmltools::save_html(
   gt::as_raw_html(p),
-  paste0(RESULTS, "/baseline-diversity-analysis/alpha-div.tbl")
+  file.path(filepath, paste0(prefix, "alpha-div.tbl"))
 )
 
 ```
@@ -562,10 +582,10 @@ for (t in timepoints) {
 }
 
 baseline_betadivCPM <- data.frame(
-  dissimilarity_by_time_treatment$`1Baseline_CPM_bray`,
-  dissimilarity_by_time_treatment$`1Baseline_CPM_jaccard`,
-  dissimilarity_by_time_treatment$`1Baseline_CPM_uunifrac`,
-  dissimilarity_by_time_treatment$`1Baseline_CPM_wunifrac`
+  dissimilarity_by_time_treatment$`Baseline_CPM_bray`,
+  dissimilarity_by_time_treatment$`Baseline_CPM_jaccard`,
+  dissimilarity_by_time_treatment$`Baseline_CPM_uunifrac`,
+  dissimilarity_by_time_treatment$`Baseline_CPM_wunifrac`
 )
 
 baseline_betadivCPM$id <- seq_len(nrow(baseline_betadivCPM))
@@ -580,10 +600,10 @@ baseline_betadivCPM <- baseline_betadivCPM %>%
   dplyr::select(!id)
 
 baseline_betadivFeZnPM <- data.frame(
-  dissimilarity_by_time_treatment$`1Baseline_FeZnPM_bray`,
-  dissimilarity_by_time_treatment$`1Baseline_FeZnPM_jaccard`,
-  dissimilarity_by_time_treatment$`1Baseline_FeZnPM_uunifrac`,
-  dissimilarity_by_time_treatment$`1Baseline_FeZnPM_wunifrac`
+  dissimilarity_by_time_treatment$`Baseline_FeZnPM_bray`,
+  dissimilarity_by_time_treatment$`Baseline_FeZnPM_jaccard`,
+  dissimilarity_by_time_treatment$`Baseline_FeZnPM_uunifrac`,
+  dissimilarity_by_time_treatment$`Baseline_FeZnPM_wunifrac`
 )
 
 baseline_betadivFeZnPM$id <- seq_len(nrow(baseline_betadivFeZnPM))
@@ -600,7 +620,7 @@ baseline_betadiv <- bind_rows(baseline_betadivCPM, baseline_betadivFeZnPM)
 
 saveRDS(
   baseline_betadiv,
-  file.path(RESULTS, "baseline-diversity-analysis/baseline-beta-div.rds")
+  file.path(filepath, paste0(prefix, "baseline-beta-div.rds"))
 )
 
 (p <- baseline_betadiv %>%
@@ -648,7 +668,7 @@ saveRDS(
 
 htmltools::save_html(
   gt::as_raw_html(p),
-  paste0(RESULTS, "/baseline-diversity-analysis/baseline-beta-div.tbl")
+  file.path(filepath, paste0(prefix, "beta-div.tbl"))
 )
 
 ```

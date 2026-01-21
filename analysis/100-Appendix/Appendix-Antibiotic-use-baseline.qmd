@@ -196,7 +196,7 @@ kable(
 #| eval: true
 #| label: children reported to be sick in last 4 weeks
 missing <- metadata %>%
-  filter(any_other_relevant_information == "1Baseline") %>%
+  filter(any_other_relevant_information == "Baseline") %>%
   select(
     freq3diarr,
     freqcough,
@@ -250,7 +250,7 @@ paste0(
 
 
 tmp <- metadata %>%
-  filter(any_other_relevant_information == "1Baseline") %>%
+  filter(any_other_relevant_information == "Baseline") %>%
   select(
     abx,
     freq3diarr,
@@ -299,7 +299,7 @@ tmp %>%
 #| eval: true
 #| label: Illnesses and Abx
 tmp <- metadata %>%
-  filter(any_other_relevant_information == "1Baseline") %>%
+  filter(any_other_relevant_information == "Baseline") %>%
   select(
     abx,
     abx_yn,

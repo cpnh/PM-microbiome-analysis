@@ -27,8 +27,20 @@ Load previously rarefied (normalized) bacterial sequence data:
 ```{r}
 #| eval: true
 #| label: load rarefied read data
+#| cache: false
 
 (seqdata_bac <- readRDS(paste0(RARE_RESULTS, "/rarefied_bacteria.rds")))
+
+sample_data(seqdata_bac)$timepoint <- str_remove(
+  sample_data(seqdata_bac)$timepoint,
+  "1|2|3"
+)
+
+sample_data(seqdata_bac)$arm <- ifelse(
+  sample_data(seqdata_bac)$trt == 0,
+  "CPM",
+  "FeZnPM"
+)
 
 #move rownmaes to sample name column
 sample_data(seqdata_bac) <- cbind(
@@ -44,40 +56,29 @@ Sample names were standardized by removing technical suffixes (like '_wol_alignm
 ```{r}
 #| eval:  true
 #| label: subset data
+#| cache: false
 
 #only 82 sample have matching baseline and endpoint samples
 base_end_paired_samples <-
   microbiome::meta(seqdata_bac) %>% #whole dataset metadata file
-  rownames_to_column() %>%
   mutate(
     sample = str_replace(
-      str_replace(str_remove(rowname, "_G"), "_B_B", "_B"),
+      str_replace(str_remove(sample_names, "_G"), "_B_B", "_B"),
       "_B_E",
       "_E"
     )
   ) %>%
   dplyr::select(
-    sample,
+    sample_names,
     displayid,
-    timepoint = any_other_relevant_information
+    timepoint
   ) %>%
   mutate(displayid = str_trim(displayid, side = "both")) %>%
   group_by(displayid) %>%
-  dplyr::filter(all(c("1Baseline", "3Endpoint") %in% timepoint)) %>%
+  dplyr::filter(all(c("Baseline", "Endpoint") %in% timepoint)) %>%
   ungroup() #base-mid-end sample n = 228
 
-write.csv(
-  base_end_paired_samples,
-  "data/metadata/base-end-paired-samples.csv",
-  row.names = FALSE
-)
-
 bac_base_end <- seqdata_bac
-
-sample_data(bac_base_end) <- cbind(
-  sample_names = rownames(sample_data(bac_base_end)),
-  sample_data(bac_base_end)
-)
 
 bac_base_end <- phyloseq::subset_samples(
   bac_base_end,
@@ -86,11 +87,22 @@ bac_base_end <- phyloseq::subset_samples(
 
 bac_base_end <- phyloseq::subset_samples(
   bac_base_end,
-  timepoint %in% c("1Baseline", "3Endpoint")
+  timepoint %in% c("Baseline", "Endpoint")
 ) #82 base-end sample
 
 otu_table(bac_base_end) <- t(otu_table(bac_base_end)) #ensure OGUs are rownames
 ```
+
+```{r}
+#| eval: true
+#| label: save-meta
+write.csv(
+  base_end_paired_samples,
+  "data/metadata/base-end-paired-samples.csv",
+  row.names = FALSE
+)
+```
+
 
 #### Bacterial Relative Abundances
 
@@ -208,7 +220,6 @@ bac_base_end_meta <- microbiome::meta(bac_base_end) %>%
     rownames_to_column(pd.bve),
     by = c("sample_names" = "rowname")
   ) %>%
-  mutate(arm = case_when(trt == 0 ~ "CPM", trt == 1 ~ "FeZnPM")) %>%
   mutate(
     timepoint = case_when(
       str_detect(timepoint, "Baseline") ~ "Baseline",
