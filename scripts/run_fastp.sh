@@ -22,7 +22,7 @@
 #                                                                            #
 # Usage: ./run_fastp.sh <r1_file> <r2_file> <outdir> <base_name>                              #
 #                                                                            #
-# Last updated: 10-01-25                                                     #
+# Last updated: 02-12-25                                                     #
 ##############################################################################
 
 # Strict error handling
@@ -60,6 +60,13 @@ Note:
   For single-end data, use "NA" as the r2_file argument.
 EOF
 }
+
+# If no arguments provided, show help
+if [[ $# -eq 0 ]]; then
+    echo "Missing required arguments"
+    usage
+    exit 0
+fi
 
 # if help is requested
 if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
