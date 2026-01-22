@@ -1,0 +1,675 @@
+## Endpoint KEGG Enrichment Analysis
+
+::: {.callout-important}
+This cross-sectional analysis contains all available endpoint samples (n = 109).
+:::
+
+```{r}
+#| echo: false
+#| eval: true
+#| cache: false
+#| label: setup
+
+# This initial code block loads custom utility functions and environment variables
+# These are stored in separate files to keep the main analysis clean and organized
+suppressWarnings(suppressMessages({
+  source(normalizePath("utils/r-utils.r"))
+  source(normalizePath("_environment.required"))
+  load(normalizePath("data/seqdata.RData"))
+  metadata <- read_delim(normalizePath(METADATA))
+  endpoint_metadata <- readRDS(normalizePath(
+    "data/metadata/endpoint-metadata.rds"
+  ))
+
+  library(edgeR)
+  library(limma)
+  library(ComplexHeatmap)
+  library(pairwiseAdonis)
+  library(Glimma)
+  library(ANCOMBC)
+
+  library(promicrobialTools)
+
+  #to save for consistancy:
+  pathway_class_col <- c(
+    "Carbohydrate metabolism" = "#A6CEE3",
+    "Lipid metabolism" = "#5399C6",
+    "Metabolism of cofactors and vitamins" = "#3F8EAA",
+    "Amino acid metabolism" = "#99CD91",
+    "Nucleotide metabolism" = "#79C360",
+    "Biosynthesis of other secondary metabolites" = "#3E9F32",
+    "Xenobiotics biodegradation and metabolism" = "#B89B74",
+    "Metabolism of other amino acids" = "#F47676",
+    "Glycan biosynthesis and metabolism" = "#E52829",
+    "Metabolism of terpenoids and polyketides" = "#F06C45",
+    "Energy metabolism" = "#FDB762",
+    "Metabolic pathways" = "#FE901E",
+    "Microbial metabolism in diverse environments" = "#ED8F47",
+    "Carbon metabolism" = "#CCAFCA",
+    "2-Oxocarboxylic acid metabolism" = "#9471B4",
+    "Degradation of aromatic compounds" = "#825D99",
+    "Biosynthesis of amino acids" = "#DDD399",
+    "Biosynthesis of cofactors" = "#E0BE6D",
+    "Biosynthesis of nucleotide sugars" = "#B15928"
+  )
+
+  kegg <- readRDS(file.path(WOLTKA_OUT, "kegg/kegg.rds"))
+
+  prefix <- "endKO-"
+  filepath <- get_results_dir(directory_naming = "both")
+}))
+```
+
+Results will be saved to ``r filepath``.
+
+### Filtering data by 70% pathway coverage
+
+KEGG pathway coverage is a file containing the percentage of features present in the sample (i.e. how much of the pathway is complete). Coverage can be used to assess the likelihoods of presence of metabolic pathways in each organism or community. Because a pathway consists of multiple chemical reactions or functional genes connected to each other, the presence of some of them (even with high abundance) in the sample does not necessarily suggest that the entire pathway is viable. Only when all or a large proportion of them are found can we be more confident about this hypothesis.
+
+Strong evidence: 70-100% complete
+
+```{r}
+#| eval: true
+#| label: pathway coverage filtering
+kegg_end <- kegg %>%
+  dplyr::filter(str_detect(timepoint, "Endpoint") & percent_cov >= 70)
+
+tmp <- kegg_end %>%
+  arrange(desc(percent_cov)) %>%
+  group_by(ko) %>%
+  mutate(n = 1) %>%
+  mutate(percent_samples = sum(n) / length(unique(.$sample)) * 100)
+```
+
+```{r}
+#| eval: true
+#| label: save
+#| results: asis
+
+save_and_link(
+  data = tmp,
+  filename = paste0(prefix, "ko-pathways-70percent-complete.csv"),
+  description = "KO pathways at endpoint with at least 70% gene completion",
+  directory_naming = "both"
+)
+```
+
+There are `r length(unique(kegg_end$ko))` unique pathways with $\geq$ 70% completeness
+
+```{r}
+#| eval: true
+#| label: fig-end-pathway-presence
+#| fig-height: 18
+#| fig-width: 16
+#| fig-cap: KEGG pathway presence at endpoint
+
+tmp %>%
+  ggplot(aes(
+    y = reorder(pathway_name, dplyr::desc(pathway_class)),
+    x = percent_samples,
+    fill = pathway_class
+  )) +
+  geom_col(position = "dodge") +
+  xlab("Percentage of Samples") +
+  ylab(NULL) +
+  scale_fill_manual(values = pathway_class_col) +
+  theme(
+    legend.text = element_text(size = 12, face = 'bold', color = 'black'),
+    legend.location = "plot"
+  )
+
+```
+
+```{r}
+#| eval: true
+#| label: fig-end-pathway-presence
+#| fig-height: 18
+#| fig-width: 16
+#| fig-cap: KEGG pathway presence at endpoint between intervention arms
+
+tmp %>%
+  ggplot(aes(
+    y = reorder(pathway_name, dplyr::desc(pathway_class)),
+    x = percent_samples,
+    fill = pathway_class
+  )) +
+  geom_col(position = "dodge") +
+  xlab("Percentage of Samples") +
+  ylab(NULL) +
+  scale_fill_manual(values = pathway_class_col) +
+  theme(
+    legend.text = element_text(size = 12, face = 'bold', color = 'black'),
+    legend.location = "plot"
+  ) +
+  facet_wrap(~arm)
+
+```
+
+### KEGG endpoint differential abundance analysis on pathways with $\geq$ 70% completeness
+
+#### Assigning KEGG counts to DGEList
+
+```{r}
+#| eval: true
+#| label: endpoint kegg da
+counts <- kegg_end %>%
+  dplyr::select(ko, sample, count) %>%
+  pivot_wider(names_from = sample, values_from = count, values_fill = 0) %>%
+  as.data.frame()
+
+counts <- DGEList(as.data.frame(counts))
+
+paste("There are", nrow(counts), "unique KO terms at endpoint")
+
+counts$samples
+counts$samples$arm <- as.factor(kegg$arm[match(
+  rownames(counts$samples),
+  kegg$sample
+)])
+counts$samples$timepoint <- kegg$timepoint[match(
+  rownames(counts$samples),
+  kegg$sample
+)]
+
+counts$ko <- kegg %>%
+  select(ko, pathway_group, pathway_class, pathway_name) %>%
+  as.data.frame()
+
+counts.keep <- rowSums(counts$counts == 0) == ncol(counts$counts)
+counts <- counts[counts.keep == FALSE, ]
+
+counts <- normLibSizes(counts)
+```
+
+$H_0$: KEGG pathways are not differentially abundant between intervention arm at endpoint
+$H_1$: There is a difference between KEGG pathway abundance between intervention arm at endpoint
+
+#### KEGG pathway differences between treatment arms at endpoint
+
+```{r}
+#| eval: true
+#| label: tbl-end-arm-kegg
+#| tbl-cap: Summary of the number of KEGG pathways that are significantly increased or decreased in the intervention arm (FeZnPM) compared to control (CPM) at endpoint.
+
+#Contrasts
+design <- stats::model.matrix(~ counts$samples$arm)
+colnames(design) <- c("Intercept", "FeZnPM")
+
+
+contrasts <- makeContrasts(CPMvsFeZnPM = FeZnPM, levels = design)
+
+#Transform raw count data to log2-counts per million (logCPM), estimate the mean-variance relationship and use this to compute appropriate observation-level weights. The data are then ready for linear modelling.
+
+#If the DGEList object has been scale-normalized in edgeR (or before), then leave normalize.method="none" in voom, i.e., the logCPM values should not usually be re-normalized in the voom call.
+#KEGG pathway counts have not been normalised
+v <- voom(counts, design) #Transforms count data to log2-counts per million
+vfit <- lmFit(v, design)
+vfit <- contrasts.fit(vfit, contrasts = contrasts)
+efit <- eBayes(vfit) #estimation of QL dispersions
+
+#FDR of 0.05
+FDR5 <- decideTests(efit, adjust.method = "BH", p.value = 0.05, lfc = 0) #Identify which genes are significantly differentially expressed for each contrast from a fit object (eBayes) containing p-values and test statistics.
+knitr::kable(summary(FDR5))
+```
+
+###### Endpoint KEGG MDS plot and PERMANOVA results
+
+```{r}
+#| eval: true
+#| label: unsupervised learning- MDS plot
+#| tab-cap: KEGG pathway unsupervised multidimensional scaling PERMANOVA results
+group_colours <- counts$samples$arm
+levels(group_colours) <- c("#FC8D62", "#8DA0CB")
+group_colours <- as.character(group_colours)
+df <- as.data.frame(t(counts$counts))
+df <- cbind(df, group = counts$samples$arm)
+
+#PERMANOVA testing differenital abundances between intervention arms
+mds_stat <- pairwiseAdonis::pairwise.adonis2(
+  df[, 1:(ncol(df) - 1)] ~ group,
+  data = df,
+  method = 'eu'
+) #returns non-adjusted p-values
+
+#output table
+knitr::kable(mds_stat[2])
+```
+
+Based on the PERMANOVA output, we can conclude that the variable arm has no significant impact on the variability of the microbial pathway abundances ($R^2 =$ r mds_stat[[2]][1,3] $\Rightarrow$ 0.2% varaibility explained). The residuals $R^2$ value is r mds_stat[[2]][2,3], indicating that the variation we see is random/due to other factors.
+
+```{r}
+#| eval: true
+#| tab-cap: Summary table of PERMANOVA results for differences between intervention arm KEGG pathways at endpoint
+pv <- lapply(2:length(mds_stat), function(x) {
+  r <- mds_stat[[x]][1, 3]
+  w <- mds_stat[[x]][1, 4]
+  y <- mds_stat[[x]][1, 5]
+  z <- names(mds_stat)[x]
+  data.frame(contrast = z, r2 = r, F.stat = w, p = y)
+})
+
+pv <- bind_rows(pv)
+knitr::kable(
+  pv %>%
+    mutate(p.adj = round(p.adjust(p, method = "BH"), 4)) %>%
+    mutate(
+      sig = case_when(
+        p.adj <= 0.0001 ~ "****",
+        p.adj <= 0.001 ~ "***",
+        p.adj <= 0.01 ~ "**",
+        p.adj <= 0.05 ~ "*",
+        p.adj > 0.05 ~ "ns"
+      )
+    )
+)
+```
+
+The p-value ($Pr(>F)$) for counts$samples$arm is r pv$p, which is greater than the conventional significance level of 0.05. This suggests that we cannot reject the null hypothesis, implying that there is no significant difference in microbial pathway abundance between intervention arms at endpoint.
+
+**MDS plot comparing arms at endpoint**
+
+```{r}
+#| eval: true
+#| label: MDS plot comparing arms at endpoint
+#| fig-cap: Multidimensional scaling plot comparing the abundance of KEGG pathways between intervention arms at endpoint
+
+xmax = max(
+  plotMDS(
+    v,
+    col = group_colours,
+    dim.plot = c(1, 2),
+    pch = 16,
+    gene.selection = "common"
+  )$x
+) -
+  0.05
+ymax = max(
+  plotMDS(
+    v,
+    col = group_colours,
+    dim.plot = c(1, 2),
+    pch = 16,
+    gene.selection = "common"
+  )$y
+) -
+  0.05
+
+par(mar = c(7.1, 5.1, 5.1, 5.1), xpd = TRUE)
+plotMDS(
+  v,
+  col = group_colours,
+  dim.plot = c(1, 2),
+  pch = 16,
+  gene.selection = "common"
+)
+legend(
+  "bottom",
+  pch = 16,
+  col = unique(group_colours),
+  legend = levels(counts$samples$arm),
+  inset = c(0, -0.165),
+  bty = "n",
+  ncol = 2
+)
+text(
+  x = xmax - 0.05,
+  y = ymax,
+  labels = bquote(R^2 == .(round(as.data.frame(mds_stat[2])[1, 3], 3)))
+)
+text(
+  x = xmax - 0.05,
+  y = ymax - 0.12,
+  labels = bquote(p == .(round(as.data.frame(mds_stat[2])[1, 5], 3)))
+)
+```
+
+There is a very clear divide in the data, just not due to intervention arm.
+
+#### KEGG pathway relative abundances
+
+```{r}
+#| eval: true
+#| label: fig-ms-2
+#| fig-cap: "Relative abundance of KEGG functional pathway classes at endpoint: Individual samples are represented by stacked barplots depicting the relative abundance of KEGG functional pathway classes that had 70% or more of pathway completeness. Pathways have been ordered in decreasing abundance of carbohydrate metabolism pathways."
+#| fig-width: 15
+#| fig-height: 10
+## top pathways at endpoint for each individual
+relAbund_kegg_end <- kegg_end %>%
+  group_by(sample) %>%
+  mutate(relAbund = count / sum(count))
+
+#order by carbohydrate metabolism pathway abundance within arm
+tmp <- relAbund_kegg_end %>%
+  dplyr::select(!c(ko, pathway_name, pathway_group, percent_cov)) %>%
+  group_by(sample, pathway_class, arm) %>%
+  summarize(sum_class_abund = sum(relAbund, na.rm = TRUE)) %>%
+  mutate(
+    carb_met = ifelse(pathway_class == "Carbohydrate metabolism", TRUE, FALSE)
+  ) %>%
+  group_by(arm, sample) %>%
+  arrange(desc(carb_met), desc(sum_class_abund), by.group = TRUE) %>%
+  group_by(arm) %>%
+  arrange(arm, by.group = TRUE)
+
+tmp %>%
+  mutate(sample = str_remove_all(sample, "SO_8465_|_B|_G")) %>%
+  ggplot(aes(
+    x = fct_inorder(sample),
+    y = sum_class_abund,
+    fill = fct_inorder(pathway_class)
+  )) +
+  geom_bar(position = "stack", stat = "identity") +
+  xlab(NULL) +
+  ylab(NULL) + #labels the y axis
+  scale_fill_manual(values = pathway_class_col) +
+  theme(
+    axis.text.x = element_text(size = 8),
+    plot.margin = unit(c(1, 0.1, 0, 0), "cm"),
+    legend.direction = "horizontal",
+    legend.position = "bottom"
+  ) + # unit(c(top, right, bottom, left), units)
+  ylim(0, 1.06) +
+  scale_y_continuous(expand = c(0.01, 0)) + # removes white space between plot and x axis
+  ylab("Relative Abundance") +
+  geom_vline(
+    aes(
+      xintercept = nrow(distinct(
+        dplyr::filter(relAbund_kegg_end, arm == "CPM"),
+        sample
+      )) +
+        0.5
+    ),
+    linetype = "dotted",
+    linewidth = 1
+  ) +
+  annotate(
+    geom = "text",
+    x = nrow(distinct(
+      dplyr::filter(relAbund_kegg_end, arm == "CPM"),
+      sample
+    )) /
+      2,
+    y = 1.04,
+    label = "CPM",
+    fontface = "bold"
+  ) +
+  annotate(
+    geom = "text",
+    x = nrow(distinct(relAbund_kegg_end, sample)) -
+      nrow(distinct(
+        dplyr::filter(relAbund_kegg_end, arm == "FeZnPM"),
+        sample
+      )) /
+        2,
+    y = 1.04,
+    label = "FeZnPM",
+    fontface = "bold"
+  )
+```
+
+```{r}
+#| eval: true
+#| label: save
+#| results: asis
+
+save_and_link(
+  data = relAbund_kegg_end,
+  filename = paste0(prefix, "indv-endpoint-kegg-pathway-percent-reads.csv"),
+  description = "Individual KEGG pathway relative abundances at endpoint",
+  directory_naming = "both"
+)
+```
+
+
+```{r}
+#| eval: false
+#| label: fig-age-kegg
+#| fig-cap: "Relative abundance of KEGG functional pathway classes at endpoint: Individual samples are represented by stacked barplots depicting the relative abundance of KEGG functional pathway classes that had 70% or more of pathway completeness. Pathways have been ordered by increasing age in months."
+#| fig-width: 18
+#| fig-height: 16
+endpoint_metadata <- readRDS(normalizePath(
+  "data/metadata/endpoint-metadata.rds"
+))
+
+## order samples by age
+age_labels <- endpoint_metadata %>%
+  dplyr::select(sample = displayid, agedays_rounded) %>%
+  arrange(agedays_rounded)
+#$data$Sample <- factor(p$data$Sample, levels = age_labels$rowname)
+
+#order by carbohydrate metabolism pathway abundamnce within arm
+tmp <- relAbund_kegg_end %>%
+  dplyr::select(!c(ko, pathway_name, pathway_group, percent_cov)) %>%
+  group_by(sample, pathway_class, arm) %>%
+  summarize(sum_class_abund = sum(relAbund, na.rm = TRUE)) %>%
+  mutate(
+    carb_met = ifelse(pathway_class == "Carbohydrate metabolism", TRUE, FALSE)
+  ) %>%
+  group_by(arm, sample) %>%
+  arrange(desc(carb_met), desc(sum_class_abund), by.group = TRUE) %>%
+  group_by(arm) %>%
+  arrange(arm, by.group = TRUE)
+
+tmp %>%
+  mutate(sample = str_remove_all(sample, "SO_8465_|_B|_G")) %>%
+  ggplot(aes(
+    x = fct_inorder(sample),
+    y = sum_class_abund,
+    fill = fct_inorder(pathway_class)
+  )) +
+  geom_bar(position = "stack", stat = "identity") +
+  xlab(NULL) +
+  ylab(NULL) + #labels the y axis
+  scale_fill_manual(values = pathway_class_col) +
+  theme(
+    axis.text.x = element_text(size = 8),
+    plot.margin = unit(c(1, 0.1, 0, 0), "cm"),
+    legend.direction = "horizontal"
+  ) + # unit(c(top, right, bottom, left), units)
+  ylim(0, 1.06) +
+  scale_y_continuous(expand = c(0.01, 0)) + # removes white space between plot and x axis
+  ylab("Relative Abundance") +
+  geom_vline(
+    aes(
+      xintercept = nrow(distinct(
+        dplyr::filter(relAbund_kegg_end, arm == "CPM"),
+        sample
+      )) +
+        0.5
+    ),
+    linetype = "dotted",
+    linewidth = 1
+  ) +
+  annotate(
+    geom = "text",
+    x = nrow(distinct(
+      dplyr::filter(relAbund_kegg_end, arm == "CPM"),
+      sample
+    )) /
+      2,
+    y = 1.04,
+    label = "CPM",
+    fontface = "bold"
+  ) +
+  annotate(
+    geom = "text",
+    x = nrow(distinct(relAbund_kegg_end, sample)) -
+      nrow(distinct(
+        dplyr::filter(relAbund_kegg_end, arm == "FeZnPM"),
+        sample
+      )) /
+        2,
+    y = 1.04,
+    label = "FeZnPM",
+    fontface = "bold"
+  ) +
+  geom_text(
+    aes(y = max(sum_class_abund + 0.05), label = arm, group = sample),
+    angle = 90,
+    size = 3,
+    check_overlap = T
+  ) + # to check the groups are ordered correctly
+  geom_text(
+    aes(y = max(Abundance + 0.05), label = agedays_rounded, group = Sample),
+    angle = 90,
+    size = 3,
+    check_overlap = T
+  ) +
+  annotate(
+    geom = "text",
+    x = 84,
+    y = 1.06,
+    label = "Age (days)",
+    fontface = "bold"
+  )
+```
+
+```{r}
+#| eval: true
+#| label: total number of reads mapped to pathways
+#| tab-cap: total number of reads mapped to KEGG pathways
+
+#Edit: 27-08-24
+#Checking out what those metabolic pathway annotations are about. Unclassified? They all have the same KO number; ko01100
+df <- relAbund_kegg_end %>%
+  group_by(sample) %>%
+  summarise(Total_kegg = sum(count))
+
+tmp2 <- tmp %>%
+  dplyr::filter(pathway_class == "Metabolic pathways")
+
+#load file containing the number of raw reads mapped to WoL2
+bowtie <- read.csv(
+  file.path(WOL_RESULTS, "alignment-percentages.csv"),
+  header = TRUE
+)
+
+df <- left_join(df, bowtie, by = "sample") %>%
+  dplyr::select(sample, Total_kegg, reads.mapped) %>%
+  mutate(difference = reads.mapped - Total_kegg)
+
+df$ko01100 <- tmp2$pathway_class[match(df$sample, tmp2$sample)]
+df %>% dplyr::filter(!is.na(ko01100))
+```
+
+There is no pattern where the difference between the WoL2 and KEGG mapped reads being more in the KEGG column match samples with the metabolic pathways class
+
+```{r}
+#| eval: false
+#png(paste("07-Research_Q_analysis/06-Functional_analysis/01-Endpoint_analysis/01-Bacteria/01-KEGG/indv_endpoint_kegg_pathway_percent_reads", "Mumbai_ID14768", format(Sys.time(), "%b_%d_%Y_%I:%M"), "NC.png", sep = "_"), width = 2200, height = 1000)
+
+ggplot(
+  tmp,
+  aes(
+    fill = pathway_class,
+    y = sum_class_abund,
+    x = sample,
+    pattern = pathway_class
+  )
+) +
+  geom_bar_pattern(
+    position = "stack",
+    stat = "identity",
+    pattern_spacing = 0.01,
+    pattern_frequency = 1,
+    pattern_angle = 45
+  ) +
+  scale_fill_manual(values = pathway_class_col) +
+  scale_pattern_manual(
+    values = c(
+      'stripe',
+      'none',
+      'none',
+      'stripe',
+      'none',
+      'none',
+      'stripe',
+      'none',
+      'none',
+      'stripe',
+      'none',
+      'none',
+      'stripe',
+      'none',
+      'none',
+      'stripe',
+      'none',
+      'none',
+      'stripe'
+    )
+  )
+
+#dev.off()
+```
+
+```{r}
+#| eval: false
+#| label: endpoint kegg clustering
+tmp <- tmp %>%
+  pivot_wider(
+    id_cols = sample,
+    names_from = pathway_class,
+    values_from = sum_class_abund
+  ) %>%
+  as.data.frame()
+rownames(tmp) <- tmp$sample
+mat <- data.matrix(tmp[2:ncol(tmp)])
+mat[is.na(mat)] <- 0
+mat <- scale(mat)
+
+row_annotation <- HeatmapAnnotation(
+  Phylum = da$Phylum,
+  show_legend = T,
+  col = list(Phylum = phylum_anno),
+  which = "row",
+  annotation_legend_param = list(
+    title_gp = gpar(fontsize = 15, fontface = "bold"),
+    labels_gp = gpar(fontsize = 15),
+    grid_height = unit(8, "mm"),
+    grid_width = unit(4, "mm")
+  )
+)
+
+
+Heatmap(
+  t(mat),
+  width = unit(0.75, "npc"),
+  cluster_rows = F,
+  show_row_dend = T,
+  col = c('#0571b0', '#92c5de', "white", '#f4a582', '#ca0020'),
+  row_names_side = "left",
+  row_names_gp = gpar(cex = 1, fontface = "bold"),
+  column_names_gp = gpar(cex = 0.5),
+  show_column_names = T,
+  show_heatmap_legend = T,
+  #right_annotation = row_annotation,
+  #heatmap_legend_param = list(title="log2 fold change", title_gp = gpar(fontsize = 15, fontface = "bold"), labels_gp = gpar(fontsize = 15), grid_height = unit(8, "mm"), grid_width = unit(4, "mm")),
+  cell_fun = function(j, i, x, y, width, height, fill) {
+    grid.text(sprintf("%.1f", mat[i, j]), x, y, gp = gpar(fontsize = 10))
+  }
+)
+```
+
+## Results Summary
+
+```{r}
+#| eval: true
+#| echo: false
+#| results: asis
+
+list_all_results()
+```
+
+```{r}
+#| results: asis
+generate_results_section(directory_naming = "both")
+```
+
+## Appendix
+
+```{r}
+#| eval: true
+#| label: info
+
+print(sessionInfo(), locale = FALSE)
+```
