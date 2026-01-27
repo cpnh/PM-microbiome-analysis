@@ -54,7 +54,6 @@ find "$CLEAN_FILE_DIR" -maxdepth 1 -type f -name "*_R1.fq" | \
 
 ```
 
-
 #### Alignment statistics
 
 Alignment statistics are calculated using the following script:

@@ -509,7 +509,6 @@ nb2_models <- keep_at(
 
 ```
 
-
 ```{r}
 #| eval: true
 #| label: nb2-summary
@@ -733,7 +732,6 @@ poi_summary <- left_join(poi_summary, poi_ogu_models)
 nb1_summary <- left_join(nb1_summary, nb1_ogu_models)
 nb2_summary <- left_join(nb2_summary, nb2_ogu_models)
 gau_summary <- left_join(gau_summary, gau_ogu_models)
-
 
 summary <- rbind(nb1_summary, nb2_summary, poi_summary, gau_summary)
 kable(head(summary))
@@ -1184,7 +1182,6 @@ ggplot(
   )
 
 ```
-
 
 ### Zero-inflated Componet EMMs
 

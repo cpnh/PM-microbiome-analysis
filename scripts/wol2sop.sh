@@ -59,7 +59,6 @@ function help() {
 HELP
 }
 
-
 ##############
 # Parameters #
 ##############
@@ -107,7 +106,6 @@ while [[ $# -gt 0 ]]; do
   esac
   shift
 done
-
 
 ##############
 # Validation #
@@ -192,7 +190,6 @@ echo "# Output directory: $output"
 
 [ -z "$funnrm" ] && funnrm= || funnrm="--sizes . --scale 1k --digits 3"
 
-
 #######
 # SOP #
 #######
@@ -240,7 +237,6 @@ fi
 
 mv none.$fmt ogu.$fmt
 
-
 ###################
 # Read/gene match #
 ###################
@@ -267,7 +263,6 @@ echo "# Will classify using the following databases:"
 echo "#   "$fundbs | sed 's/,/, /g'
 
 fundbs=(${fundbs//,/ })  # convert to array
-
 
 ##########
 # UniRef #
@@ -318,11 +313,9 @@ if [[ " ${fundbs[*]} " =~ " uniref " ]] || [[ " ${fundbs[*]} " =~ " go " ]]; the
   cd ..
 fi
 
-
 ######
 # GO #
 ######
-
 
 if [[ " ${fundbs[*]} " =~ " go " ]]; then
   echo "# Classifying using GO..."
@@ -364,7 +357,6 @@ if [[ " ${fundbs[*]} " =~ " go " ]]; then
   cd ..
 fi
 
-
 ########
 # Pfam #
 ########
@@ -401,7 +393,6 @@ if [[ " ${fundbs[*]} " =~ " pfam " ]]; then
   fi
   cd ..
 fi
-
 
 ########
 # KEGG #
@@ -491,7 +482,6 @@ if [[ " ${fundbs[*]} " =~ " kegg " ]]; then
   fi
   cd ..
 fi
-
 
 ###########
 # MetaCyc #
@@ -584,7 +574,6 @@ if [[ " ${fundbs[*]} " =~ " metacyc " ]]; then
   fi
   cd ..
 fi
-
 
 ##########
 # eggNOG #

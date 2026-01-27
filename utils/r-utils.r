@@ -2186,7 +2186,6 @@ otu_df <- function(x) {
   return(otu_df)
 }
 
-
 #' @rdname DfUtilites
 #' @aliases tax_df
 #' @export
@@ -3037,7 +3036,6 @@ color_common_labels <- function(data,
 #   x = "estimate",
 #   position = "stack"
 # )
-
 
 calculate_pairwise_vda <- function(data, value_col, group_col) {
   # Get unique groups
@@ -4222,7 +4220,6 @@ format_gt_table <- function(tbl, digits) {
       pattern = "<0.05"
     )
 }
-
 
 #end
 ##############################################################################
@@ -5588,7 +5585,6 @@ otu_df <- function(x) {
     as.data.frame()
   return(otu_df)
 }
-
 
 #' @rdname DfUtilites
 #' @aliases tax_df

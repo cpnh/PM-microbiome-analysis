@@ -635,7 +635,6 @@ est.df %>%
 
 ```
 
-
 The above code is the same as:
 
 ```{r}

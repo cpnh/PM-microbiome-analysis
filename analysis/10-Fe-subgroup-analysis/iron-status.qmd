@@ -292,7 +292,6 @@ be_meta %>%
   kable()
 ```
 
-
 #### Basic Statistics
 
 ```{r}
@@ -1192,7 +1191,6 @@ tmp <- be_meta %>%
   ) %>%
   mutate_at(vars(everything()), as.numeric)
 
-
 corr <- tmp %>%
   cor(method = "spearman", use = "pairwise.complete.obs")
 
@@ -1436,7 +1434,6 @@ Residuals are normally distributed
 
 kable(residual_norm_test(alpha_lmms_iron_status), format = "markdown")
 ```
-
 
 ```{r}
 #| eval: true
@@ -1966,7 +1963,6 @@ mapply(
 )
 ```
 
-
 ```{r}
 #| eval: true
 #| label: variance correlation
@@ -2008,7 +2004,6 @@ kable(data.frame(
 ))
 
 ```
-
 
 ##### Choosing a correlation structure
 
@@ -2400,7 +2395,6 @@ write.csv(
 )
 ```
 
-
 ##### 2. *Average Iron Effect Across Intervention Arms at Baseline and Endpoint:* 
 
 ::: question
@@ -2763,7 +2757,6 @@ H_{0j}: & [(\mu_{Fe\_high\_Control\_end} - \mu_{Fe\_high\_Control\_base}) - (\mu
 $$
 
 :::
-
 
 
 ##### 9. *Sex differences within Intervention arm*

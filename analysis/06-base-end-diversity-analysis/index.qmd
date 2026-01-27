@@ -26,7 +26,6 @@ LMMs were chosen in order to account for repeated measures from same individuals
 | Time ||
 | Age at baseline||
 
-
 3. **Statistical Transformations**
 
 Data transformations applied to meet model assumption of normally distributed residuals:

@@ -195,7 +195,6 @@ $H_1$: There is a difference between KEGG pathway abundance between intervention
 design <- stats::model.matrix(~ counts$samples$arm)
 colnames(design) <- c("Intercept", "FeZnPM")
 
-
 contrasts <- makeContrasts(CPMvsFeZnPM = FeZnPM, levels = design)
 
 #Transform raw count data to log2-counts per million (logCPM), estimate the mean-variance relationship and use this to compute appropriate observation-level weights. The data are then ready for linear modelling.
@@ -420,7 +419,6 @@ save_and_link(
 )
 ```
 
-
 ```{r}
 #| eval: false
 #| label: fig-age-kegg
@@ -629,7 +627,6 @@ row_annotation <- HeatmapAnnotation(
     grid_width = unit(4, "mm")
   )
 )
-
 
 Heatmap(
   t(mat),

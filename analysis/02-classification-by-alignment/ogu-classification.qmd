@@ -45,7 +45,6 @@ find "$WOL_OUT" -maxdepth 1 -type f -name "*.bam" | \
 {{< include ../../scripts/wol2sop.sh >}}
 ```
 
-
 ```{bash}
 #| eval: false
 #| label: woltka classify

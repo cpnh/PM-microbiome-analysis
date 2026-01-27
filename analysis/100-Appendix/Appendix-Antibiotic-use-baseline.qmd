@@ -248,7 +248,6 @@ paste0(
   ")."
 )
 
-
 tmp <- metadata %>%
   filter(any_other_relevant_information == "Baseline") %>%
   select(

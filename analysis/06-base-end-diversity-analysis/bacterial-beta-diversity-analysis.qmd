@@ -301,7 +301,6 @@ tmp <- list(
 data.table::rbindlist(tmp, idcol = "Distance")
 ```
 
-
 #### Effect Size Calculations
 
 ##### Partial Eta-Squared Analysis

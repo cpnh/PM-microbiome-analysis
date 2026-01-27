@@ -356,7 +356,6 @@ EvsBarmANCOM <- ancombc2(
 EvsBarmANCOM_prim <- EvsBarmANCOM$res
 ```
 
-
 ```{r}
 #| eval: true
 #| results: asis
@@ -603,4 +602,3 @@ generate_results_section(directory_naming = "both")
 
 print(sessionInfo(), locale = FALSE)
 ```
-

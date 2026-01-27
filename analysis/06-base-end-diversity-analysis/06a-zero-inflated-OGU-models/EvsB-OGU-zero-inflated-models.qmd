@@ -426,7 +426,6 @@ nb2_models <- keep_at(
 
 ```
 
-
 ```{r}
 #| eval: true
 #| label: nb2-summary
@@ -473,7 +472,6 @@ poi_models <- keep_at(
 
 ```
 
-
 ```{r}
 #| eval: true
 #| label: poi-summary
@@ -518,7 +516,6 @@ gau_models <- keep_at(
 )
 
 ```
-
 
 ```{r}
 #| eval: true

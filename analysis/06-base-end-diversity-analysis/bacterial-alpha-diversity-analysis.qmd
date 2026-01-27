@@ -300,7 +300,6 @@ overall_paired_wilcox_overtime <- dfB_E.stats %>%
   add_xy_position(x = "timepoint", step.increase = 0)
 ```
 
-
 ```{r}
 #| eval: true
 #| label: baseline intervention arm alpha diversity plots

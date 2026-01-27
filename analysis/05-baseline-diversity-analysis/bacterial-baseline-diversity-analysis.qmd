@@ -96,7 +96,6 @@ d <- amp_load(
 )
 ```
 
-
 ```{r}
 #| eval: true
 #| label: top bacterial phyla at baseline
@@ -176,7 +175,6 @@ In practice, the true number of total seceis in a microbiome sample is unknown d
 
 :::
 
-
 ```{r}
 #| eval: true
 #| label: alpha diversity calculation
@@ -248,7 +246,6 @@ plot_names <- c(
   'evenness_pielou' = "Pielou Evenness",
   "chao1" = "Chao diversity Index"
 )
-
 
 baseline_metadata %>%
   dplyr::select(
@@ -664,7 +661,6 @@ saveRDS(
   fmt_number(columns = where(~ is.numeric(.x) < 0.001), pattern = "<0.001") %>%
   fmt_number(columns = where(~ is.numeric(.x) < 0.01), pattern = "<0.01") %>%
   fmt_number(columns = where(~ is.numeric(.x) < 0.05), pattern = "<0.05"))
-
 
 htmltools::save_html(
   gt::as_raw_html(p),

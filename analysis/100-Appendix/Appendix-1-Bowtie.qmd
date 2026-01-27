@@ -253,4 +253,3 @@ mapq_plot / mapq_percent / mapq_cumulative +
 
 ```
 
-

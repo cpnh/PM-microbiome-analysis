@@ -196,7 +196,6 @@ theme_set(
       strip.text = element_text(size = fontsize, face = 'bold', color = 'black')
       ))
 
-
 # Function to assign colors based on number of levels
 assign_unique_colors <- function(char_vector, color_vector = NULL, palette = "Set2") {
   if(!require("RColorBrewer", quietly = TRUE))

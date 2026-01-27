@@ -1298,7 +1298,6 @@ print_zero_summary <- function(zprop_data) {
   ))
 }
 
-
 #' Process DHARMa Diagnostics for a Single Model
 #'
 #' @description
