@@ -24,10 +24,34 @@ Differential abundance analysis (DA) identifies microbial taxa that significantl
 
 **Common Methods:**
 
-- *edgeR/limma-voom:* Originally for RNA-seq, adapted for microbiome
-- *DESeq2:* Handles zero-inflation and overdispersion
-- *ANCOM:* Accounts for compositional nature
-- *ALDEx2:* Uses Bayesian approach with compositional data
+- *edgeR/limma-voom:* Originally for RNA-seq, adapted for microbiome [@Ritchie2015, @Liu2015, @Robinson2010]
+- *DESeq2:* Handles zero-inflation and overdispersion [@Love2014]
+- *ANCOM-BC:* Accounts for compositional nature [@Lin2024]
+- *ALDEx2:* Uses Bayesian approach with compositional data [@Fernandes2014,@Fernandes2013]
 
-#TODO add citations
-#TODO add zero-inflated model info
+### Zero-inflated Models for Differential Abundance Testing
+
+Zero-inflated models handle excess zeros in data through a two-part modelling approach.
+
+Analysis options includes:
+
+- The glmmTMB package ([GitHub](https://github.com/glmmTMB/glmmTMB))
+- The ZIBR package ([GitHub](https://github.com/PennChopMicrobiomeProgram/ZIBR))
+- ZicoSeq [@Yang2022]
+
+### Model Comparison Table
+
+| **Feature**              | **Zero-inflated Beta**                               | **Zero-inflated Poisson (ZIP)**                        | **Zero-inflated Negative Binomial (ZINB)**                | **Zero-inflated beta regression model with random effects (ZIBRE)**           |
+|--------------------------|------------------------------------------------------|--------------------------------------------------------|-----------------------------------------------------------|-------------------------------------------------------------------------------|
+| *Model type*             |                                                      | Mixture                                                | Mixture                                                   |                                                                               |
+| *Data Type*              | Proportions (0,1)                                    | Count data                                             | Count data                                                | Proportions (0,1)                                                             |
+| *Handles Overdispersion* | Yes                                                  | No                                                     | Yes                                                       | Yes                                                                           |
+| *Random Effects*         | No                                                   | No                                                     | No                                                        | Yes                                                                           |
+| *Zero Process*           | Binomial                                             | Binomial                                               | Binomial                                                  | Binomial                                                                      |
+| *Non-zero Process*       | Beta                                                 | Poisson                                                | Negative Binomial                                         | Beta                                                                          |
+| *Best For*               | Compositional data                                   | Low-variance count data                                | High-variance count data                                  | Longitudinal/clustered compositional data                                     |
+| *R Package*              | `gamlss`                                             | [[The glmmTMB Package\|glmmTMB]]                       | [[The glmmTMB Package\|glmmTMB]]                          | [[The ZIBR Package\|ZIBR]]                                                    |
+| *Typical Use*            | Microbiome relative abundance                        | Rare events                                            | Species counts                                            | Repeated measures microbiome data                                             |
+| *Assumptions*            | - Independent observations<br>- No repeated measures | - Variance ≈ mean<br>- No clustering/repeated measures | - Variance > mean<br>   - No clustering/repeated measures | - Have repeated measures<br>   - Need to account for subject-specific effects |
+
+
