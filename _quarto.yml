@@ -1,0 +1,177 @@
+project:
+  type: book
+  output-dir: _output
+  execute-dir: project
+book:
+  title: "Project Sabal ID 14768"
+  subtitle: "Bacterial Metagenome Analysis"
+  author: "Dr Nathaniel Cole"
+  date: "August 15 2023"
+  date-format: "MMM YYYY [- present]"
+  navbar:
+    search: true
+    pinned: true
+  chapters:
+    - part: Introduction
+      chapters:
+        - index.qmd
+        - intro.qmd
+    - part: "Quality Control"
+      chapters:
+        - analysis/01-quality-control/raw-qc.qmd
+    - part: analysis/02-classification-by-alignment/index.qmd
+      chapters:
+        - analysis/02-classification-by-alignment/wol2-alignment.qmd
+        - analysis/02-classification-by-alignment/ogu-classification.qmd
+    - part: analysis/03-rarefaction/index.qmd
+      chapters:
+        - analysis/03-rarefaction/rarefaction.qmd
+    - part: analysis/04-baseline-demographics/index.qmd
+      chapters:
+        - analysis/04-baseline-demographics/baseline-char.qmd
+    - part: analysis/05-baseline-diversity-analysis/index.qmd
+      chapters:
+        - analysis/05-baseline-diversity-analysis/bacterial-baseline-diversity-analysis.qmd
+    - part: "Longitudinal Alpha and Beta Diversity Analysis"
+      chapters:
+        - analysis/06-base-end-diversity-analysis/index.qmd
+        - analysis/06-base-end-diversity-analysis/bacterial-alpha-diversity-analysis.qmd
+        - analysis/06-base-end-diversity-analysis/did-analysis.qmd
+
+        - analysis/06-base-end-diversity-analysis/bacterial-beta-diversity-analysis.qmd
+
+    - part: "Cross-sectional Zero-inflated OGU Models"
+      chapters:
+        - analysis/06-base-end-diversity-analysis/06a-zero-inflated-OGU-models/baseAge-OGU-ZI-models.qmd
+        - analysis/06-base-end-diversity-analysis/06a-zero-inflated-OGU-models/baseArm-OGU-ZI-models.qmd
+
+    - part: "Modelling Longitudional Impact of Intervention on OGU Abundances using Zero-inflated Models"
+      chapters:
+        - analysis/06-base-end-diversity-analysis/06a-zero-inflated-OGU-models/EvsBarm-OGU-zero-inflated-models.qmd
+
+    - part: "Longitudinal Zero-inflated OGU Models"
+      chapters:
+        - analysis/06-base-end-diversity-analysis/06a-zero-inflated-OGU-models/EvsB-OGU-zero-inflated-models.qmd
+
+    - part: "Bacterial Differential Abundance Analysis" 
+      chapters:
+        - analysis/07-differential-abundance-analysis/index.qmd
+
+    - part: "Cross-sectional Differential Abundance Testing"
+      chapters:
+        - analysis/07-differential-abundance-analysis/baseArm-ANCOM-BC.qmd
+        - analysis/07-differential-abundance-analysis/endArm-ANCOM-BC.qmd
+
+    - part: "Longitudional Impact of Intervention on Differential Abundance"
+      chapters:
+        - analysis/07-differential-abundance-analysis/EvsBarm-ANCOM-BC.qmd
+        - analysis/07-differential-abundance-analysis/EvsBarm-ZI-GLMM-ANCOMBC-common.qmd
+
+    - part: "Endpoint vs Baseline Differential Abundance Testing"
+      chapters:
+        - analysis/07-differential-abundance-analysis/EvsB-ANCOM-BC.qmd
+        - analysis/07-differential-abundance-analysis/EvsB-ZI-GLMM-ANCOMBC-common.qmd
+    - part: analysis/08-kegg-analysis/index.qmd
+      chapters:
+        - analysis/08-kegg-analysis/baseline-kegg.qmd
+        - analysis/08-kegg-analysis/endpoint-kegg.qmd
+        - analysis/08-kegg-analysis/EvsB-kegg-analysis.qmd
+    - part: analysis/09-go-term-analysis/index.qmd
+      chapters:       
+        - analysis/09-go-term-analysis/baseline-go.qmd
+        - analysis/09-go-term-analysis/EvsB-go.qmd
+    - part: analysis/10-Fe-subgroup-analysis/index.qmd
+      chapters: 
+        - analysis/10-Fe-subgroup-analysis/iron-status.qmd
+    - part: "References"
+      chapters: 
+        - manuscript/references.qmd
+
+execute:
+  enabled: true #juputr notebooks only- allows code blocks to be executed
+  cache: true
+  freeze: auto #auto/true; false forces recomputation
+engine: knitr
+cite-method: citeproc
+csl: _assets/british-journal-of-nutrition.csl
+bibliography: manuscript/Bacterial-Microbiome-Analysis.bib
+code-block-bg: true
+code-block-border-left: "#EF9F76"
+highlight-style: oblivion
+code-line-numbers: true
+code-overflow: wrap
+fig-prefix: "Figure"
+fig-height: 18
+fig-width: 22
+fig-cap-location: bottom
+mainfont: Liberation Sans
+number-sections: true
+number-depth: 3
+toc-depth: 6
+toc-expand: true
+toc-title: Contents
+format:
+  html:
+    code-fold: true
+    code-tools: true
+    code-summary: View code cell contents
+    default-image-extension: svg
+    fig-format: svg
+    theme: _assets/frappe.scss
+    toc: true
+    toc-location: right-body #body, left-body, right-body, left, right
+    page-layout: full
+    gutter-width: 0.5em
+custom-callout: #https://github.com/coatless-quarto/custom-callout/
+  h0:
+    title: "Null Hypothesis" 
+    icon-symbol: ❔
+    color: "#EF9F76"
+  h1:
+    title: "Alternative Hypothesis" 
+    icon-symbol: ❓
+    color: "#8CAAEE"
+  question:
+    title: "Research Question" 
+    icon-symbol: 💭
+    color: "#EF9F76"
+  report:
+    title: "Report Package Summary" 
+    icon-symbol: 🗒
+    color: "#BABBF1"
+    collapse: true
+filters:
+  - custom-callout
+  - "_assets/foldableResults.lua"
+  - "_assets/toc.lua"
+knitr:
+  opts_chunk:
+    R.options:
+      knitr.graphics.auto_pdf: true
+      knitr.duplicate.label: allow
+    echo: true
+    message: false
+    warning: false
+    eval: false
+    #collapse: true #if possible, collapse source and output blocks from one code chunk
+    results: hold
+    cache.size: 4000
+    error: false # set true to complete render even if there are errors
+    fig-caption: true
+    fig-width: 12
+    fig-height: 8
+    fig-pos: "h"
+    fig-align: "left"
+    dpi: 300
+    fig.width: 10
+    fig.height: 8
+    fig.show: "hold"
+    out.width: "0.8\\linewidth"
+    comment: "" #the prefix to be added before each line of the text output.
+    ft.latex.float: 'float'
+    ft.split: false
+    ft.align: "center"
+    ft.tabcolsep: 5
+    prompt: false
+  opts_knit: #controls the output of quarto render in the terminal
+    verbose: true
