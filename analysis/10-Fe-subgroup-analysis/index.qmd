@@ -1,1 +1,40 @@
-# Baseline to Endpoint Subgroup Analysis
+# Baseline to Endpoint Subgroup Analysis: Iron deficient and Anemic Children
+
+::: question
+
+We are interested in examining a subset of individuals who were iron deficient at baseline. Questions include:
+
+- do iron deficient individuals respond differently than iron sufficient individuals?
+- do iron deficient individuals improve in iron status overtime depending on intervention group
+- how many individuals overall are iron deficient?
+- are there any iron associated microbial signatures (analysis by Catherine)
+- Can the Microbiome serve as a signature of dietary intakes of pearl millet (analysis by Catherine)
+- is iron status at baseline a significant determinant of changes in number of observed, species, alpha diversity, beta diversity.
+
+:::
+
+### Defining Iron Status and Anaemia
+
+There are multiple types of anaemia, not necessarily due to iron deficiency. For example, inflammation or infection can also cause low blood count therefore low red blood cells is not enough to diagnose, iron deficient anaemia. 
+
+Iron deficiency/anaemia diagnostic criteria:
+
+- serum ferritin levels
+- hemoglobin levels (g/L)
+  - most frequent biomarker used to diagnose anaemia
+  - known to very naturally by age, elevation, smoking status, physiological status, such as pregnancy, or race
+  - WHO recommends making an adjustments for certain ethnic groups e.g African-Americans, Jamaican girls, and individuals from Greenland
+  - must be combined with serum ferritin/transferrin receptor levels to diagnose iron deficient anaemia
+![Hemoglobin Cut-offs]("../../_assets/hb_anemia.png")
+- serum transferrin receptor
+- calculating the total iron binding capacity
+
+Based on WHO guidelines [@WHO2011; @WHO2024] we define iron status subgroups as follows:
+
+Sub group characteristics:
+
+- Children who are iron deficient at baseline (<12 ng/mL)
+- Children who are iron depleted at baseline (<25 ng/mL)
+- Children who are iron replete at baseline ($\geq$ 25 ng/mL)
+
+Note that instead of $\geq$ 12ng/mL and $\leq$ 25ng/mL for depleted iron status it will include everyone under 25ng/mL

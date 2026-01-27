@@ -37,20 +37,7 @@ suppressWarnings(suppressMessages({
 }))
 ```
 
-::: question
-
-We are interested in examining a subset of individuals who were iron deficient at baseline. Questions include:
-
-- do iron deficient individuals respond differently than iron sufficient individuals?
-- do iron deficient individuals improve in iron status overtime depending on intervention group
-- how many individuals overall are iron deficient?
-- are there any iron associated microbial signatures (analysis by Catherine)
-- Can the Microbiome serve as a signature of dietary intakes of pearl millet (analysis by Catherine)
-- is iron status at baseline a significant determinant of changes in number of observed, species, alpha diversity, beta diversity.
-
-:::
-
-Recall that alpha diversity statistics have been previously calculated in [Section 6](analysis/06-base-end-diversity-analysis/bacterial-alpha-diversity-analysis.qmd). Below is just a reminder of that code. Note that diversity statistics were calculated using absolute abundances as the microbiome package calculates relative abundances in-function the phyloseq object being used here contains abundance calculations.
+Recall that alpha diversity statistics have been previously calculated in [Section 6](../06-base-end-diversity-analysis/bacterial-alpha-diversity-analysis.qmd). Below is just a reminder of that code. Note that diversity statistics were calculated using absolute abundances as the microbiome package calculates relative abundances in-function the phyloseq object being used here contains abundance calculations.
 
 ```{r}
 #| eval: false
@@ -64,32 +51,6 @@ pd.bve <- picante::pd(
   include.root = FALSE
 )
 ```
-
-### Defining Iron Status and Anaemia
-
-There are multiple types of anaemia, not necessarily due to iron deficiency. For example, inflammation or infection can also cause low blood count therefore low red blood cells is not enough to diagnose, iron deficient anaemia. 
-
-Iron deficiency/anaemia diagnostic criteria:
-
-- serum ferritin levels
-- hemoglobin levels (g/L)
-  - most frequent biomarker used to diagnose anaemia
-  - known to very naturally by age, elevation, smoking status, physiological status, such as pregnancy, or race
-  - WHO recommends making an adjustments for certain ethnic groups e.g African-Americans, Jamaican girls, and individuals from Greenland
-  - must be combined with serum ferritin/transferrin receptor levels to diagnose iron deficient anaemia
-![Hemoglobin Cut-offs]("../../_assets/hb_anemia.png")
-- serum transferrin receptor
-- calculating the total iron binding capacity
-
-Based on WHO guidelines [@WHO2011; @WHO2024] we define iron status subgroups as follows:
-
-Sub group characteristics:
-
-- Children who are iron deficient at baseline (<12 ng/mL)
-- Children who are iron depleted at baseline (<25 ng/mL)
-- Children who are iron replete at baseline ($\geq$ 25 ng/mL)
-
-Note that instead of $\geq$ 12ng/mL and $\leq$ 25ng/mL for depleted iron status it will include everyone under 25ng/mL
 
 ### Iron Status at Baseline
 
@@ -4116,86 +4077,6 @@ generate_results_section(directory_naming = "both")
 ```
 
 ## Appendix
-
-```{r}
-#| eval: false
-#| label: fig-iron-effect
-#| fig-cap: Contrast results comparing EMMs
-# Visualize iron effect
-iron_effect_plots <- lapply(names(alpha_lmms_FeHb_conc), function(metric) {
-  emmip(iron_effect_emm[[metric]], fe_conc ~ time, CIs = TRUE) +
-    ggtitle(paste("Iron Effect -", metric)) +
-    theme_bw() +
-    ylab("Estimated Marginal Mean") +
-    xlab("Time")
-})
-
-# Arrange plots
-gridExtra::grid.arrange(grobs = iron_effect_plots, ncol = 2)
-```
-
-```{r}
-#| eval: false
-#| label: fig-sex-effect
-#| fig-cap: Contrast results comparing EMMs
-# Visualize sex differences by arm
-sex_diff_plots <- lapply(names(alpha_lmms_FeHb_conc), function(metric) {
-  emmip(sex_arm_emm[[metric]], sex ~ arm_group, CIs = TRUE) +
-    ggtitle(paste("Sex Differences -", metric)) +
-    theme_bw() +
-    ylab("Estimated Marginal Mean") +
-    xlab("Intervention Arm")
-})
-
-# Arrange plots
-gridExtra::grid.arrange(grobs = sex_diff_plots, ncol = 2)
-```
-
-```{r}
-#| eval: false
-#| label: fig-sex-time-effect
-#| tbl-cap: Contrast results comparing EMMs
-# Time interaction with sex
-sex_time_emm <- lapply(alpha_lmms_FeHb_conc, function(x) {
-  emmeans(
-    x,
-    specs = ~ sex | time,
-    at = list(time = c(0, 1)),
-    type = "scale",
-    weights = "proportional"
-  )
-})
-```
-
-```{r}
-#| eval: false
-#| label: fig-iron-effect
-#| tbl-cap: Contrast results comparing EMMs
-# Test sex by time interaction
-sex_time_contrasts <- lapply(sex_time_emm, function(x) {
-  contrast(x, method = "pairwise", by = "time", adjust = "none")
-})
-
-# View results
-lapply(sex_time_contrasts, kable)
-```
-
-```{r}
-#| eval: false
-#| label: fig-iron-effect
-#| tbl-cap: Contrast results comparing EMMs
-# Create interaction plots
-sex_time_plots <- lapply(names(alpha_lmms_FeHb_conc), function(metric) {
-  emmip(sex_time_emm[[metric]], sex ~ time, CIs = TRUE) +
-    ggtitle(paste("Sex by Time Interaction -", metric)) +
-    theme_bw() +
-    ylab("Estimated Marginal Mean") +
-    xlab("Time")
-})
-
-# Arrange plots
-gridExtra::grid.arrange(grobs = sex_time_plots, ncol = 2)
-```
 
 ```{r}
 #| eval: true
