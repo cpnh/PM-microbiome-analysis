@@ -1,0 +1,70 @@
+#############################################################
+# Configuration and Environment Variables                   #
+#############################################################
+
+# parent directory (default: current directory)
+WORKDIR="./"
+
+THREADS=16
+
+#############################################################
+# Input and Output locations                                #
+#############################################################
+
+# location of raw metagenome files
+IN="data/raw" 
+
+# location of processed metagenome files after fastp trimming and host DNA depletion
+OUT="data/processed"
+
+RESULTS="results"
+
+# location of reference databases and files
+REF="ref"
+
+METADATA="data/metadata/metadata.tsv"
+
+# location for script logs
+LOGS=".logs"
+
+#############################################################
+# Quality Control Variables                                 #
+#############################################################
+
+# fastp processed files
+FASTP_OUT="data/processed/fastp"
+MULTIQC_REPORT="results/fastp-results"
+
+# tmp directory to store spikein filtered files
+PHIX_CLEANED="data/processed/host-filtered/tmp" 
+
+# human reads reference for host depletion
+DECON_DB="ref/pandora/pandoraV2.0.fasta" 
+
+# clean processed files
+CLEAN_FILE_DIR="data/processed/host-filtered"
+
+#############################################################
+# Bowtie2 Alignment variables                               #
+#############################################################
+
+#bowtie database directory and basename
+BT_REF="ref/WoL2-Bowtie2DB/WoL2" 
+
+#alignment output folder
+WOL_OUT="data/processed/Bowtie2-WoL2-alignment"
+
+# output directory for alignment stats
+WOL_RESULTS="results/Bowtie-WoL2-alignment-stats"
+
+#############################################################
+# Woltka OGU Classification Variables                       #
+#############################################################
+
+WOLTKA_OUT="results/WoL2-Woltka-OGU-classify"
+
+#############################################################
+# Rarefied OGU Tables                                       #
+#############################################################
+
+RARE_RESULTS="results/WoL2-OGU-rarefied"
