@@ -84,8 +84,7 @@ The following is pasted from the Bowtie2 manual:
 
 #### Test alignment
 
-```{bash}
-#| label: test bowtie2 alignment
+```bash
 
 #find the trimmed read 1 metagenome seq files and replace "_R1.trim.dep.fq.gz" with nothing- this ensures that the base sample name e.g. "SO_8465_6161_B" is used for both R1 and R2. The base name is piped into parallel (to run several (x5: -j 5) alignments cocurrently with an estimated time (--eta)). Each alignment is run using bowtie installed in the mumbai_analysis docker image. --threads = 8 CPU cores will be used to run a single alignemt (=> if parallel is running 5 jobs each on 8 CPUs, then a total of 40 are nedded (5*8)) -q = tells the software that the inputs are FASTQ files (this is default; see doc if files are NOT FASTQ); -x = location and basename of the bowtie database (same as last argument in bowtie2-build); -1 =R1; -2 = R2 (-U can be used for unpaired reads); -S name of the output SAM file
 
@@ -103,8 +102,7 @@ bowtie2 --threads 50 -q --local --very-sensitive -x $db -1 /local/storage/nc564/
 
 #### Alignment evaluation
 
-```{bash}
-#| label: evaluating alignment modes
+```bash
 #evaluate the alignement to chose the best alignement parameters to use for the rest of the samples
 
 find /local/storage/nc564/bowtie_aligned_mumbai_ID14768 -maxdepth 1 -type f -name "*.sam" | sed 's@.sam@@' | parallel -j 5 --eta docker1 run -v /local/storage/nc564/:/home2/nc564 --rm biohpc_nc564/mumbai_analysis samtools sort -@ 11 -o {}.bam {}.sam
@@ -161,9 +159,7 @@ alignment.
 
 (since been added to the main run bowtie script)
 
-```{bash}
-#| eval: false
-#| label: flagstats
+```bash
 
 for i in /local/storage/shared/Bowtie2-WoL2-alignment/*.bam; do
 

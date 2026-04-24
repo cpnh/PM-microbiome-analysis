@@ -23,9 +23,7 @@ Analysis begins with running quality control on raw metagenome sequence files. R
 
 To perform *fastp* sample processing, the following script can be used:
 
-```{bash}
-#| label: fastp script contents
-#| eval: false
+```bash
 {{< include ../../scripts/run_fastp.sh >}}
 ```
 
@@ -34,10 +32,7 @@ Remember to declare your environment variables in
 [*environment.required*](../../_environment.required)
 :::
 
-```{bash}
-#| eval: false
-#| label: fastp QC and trimming
-#| output: true
+```bash
 
 mkdir -p $FASTP_OUT/logs
 
@@ -49,15 +44,13 @@ find "$IN" -maxdepth 1 -type f \( -name "*_R1.fq.gz" -o -name "*_R1.fastq.gz" \)
     parallel --progress --bar --eta --colsep ' ' -j $THREADS '(echo "Processing {1}"; bash scripts/run_fastp.sh {1} {2} {3} {4}) 2>&1 | tee "{3}/logs/log_{4}.log"'
 ```
 
-Fastp processed files are stored in `{bash} "$FASTP_OUT"` and undergo the next stage of quality control: human host read decontamination.
+Fastp processed files are stored in `bash "$FASTP_OUT"` and undergo the next stage of quality control: human host read decontamination.
 
 ### QC report generation
 
 `fastp` outputs `.json` or `.html` reports detailing the results of the file processing, e.g. duplication rates, number of adapter sequences removed, number of low quiality reads filtered etc. MultiQC is a helpful tool to combine these reports into a single interative `.html` file that makes it easier to determine sample quality over a large number of files. 
 
-```{bash}
-#| eval: false
-#| label: multiqc report
+```bash
 
 multiqc --outdir $MULTIQC_REPORT --title "Basic Metagenome Statistics after fastp Processing" --interactive --export --data-format tsv --quiet --profile-runtime $FASTP_OUT 2>&1 | tee $LOGS/multiqc-report.log
 
@@ -73,10 +66,7 @@ The following process, inspired by the work of [@Guccione2025], uses [PanDora](h
 
 Removal of PhiX, a common Illumina spikein.
 
-```{bash}
-#| eval: false
-#| label: removing human host DNA and sequencing contaminants
-#| output: true
+```bash
 
 mkdir -p $PHIX_CLEANED/logs
 
@@ -96,9 +86,7 @@ find "$FASTP_OUT" -maxdepth 1 -type f -name "*fastp_R1*" | \
 
 #TODO add link when available
 
-```{bash}
-#| eval: false
-#| label: downloading the PanDora database
+```bash
 
 wget 
 ```
@@ -107,9 +95,7 @@ Edit 04-16-25: PanDora can be located on BioHPC at the following path `/local/st
 
 #### Sample k-mer mapping to PanDora
 
-```{bash}
-#| eval: false
-#| label: human read removal
+```bash
 #removing human sequences using pandora database
 
 mkdir -p $CLEAN_FILE_DIR/logs
@@ -126,19 +112,17 @@ find "$PHIX_CLEANED" -maxdepth 1 -type f -name "*_R1.fq" | \
 
 #### Extracting the percentage of contaminants removed
 
-```{bash}
-#| eval: false
-#| label: extract % contaminant removed 
+```bash
 #retuns the total percentage of reads matched to the reference sequence
 
 grep Matched $CLEAN_FILE_DIR/logs/*stats.txt | awk '{gsub(/%/,""); print}'> $CLEAN_FILE_DIR/logs/stats.summary
 ```
 
 The maximum percentage of human reads removed from samples was
-\*\*`{bash} sort -n -r $CLEAN_FILE_DIR/logs/stats.summary | tail -n1` \*\*
+\*\*`bash sort -n -r $CLEAN_FILE_DIR/logs/stats.summary | tail -n1` \*\*
 
 The maximum percentage of human reads removed from samples was
-\*\*`{bash} sort -n -r $CLEAN_FILE_DIR/logs/stats.summary | head -n1` \*\*
+\*\*`bash sort -n -r $CLEAN_FILE_DIR/logs/stats.summary | head -n1` \*\*
 
 At this point, all samples have been trimmed of adapter sequences, filtered for low quality reads, and decontaminated from human sequences. From here on, samples can be used in downstream analysis pipelines.
 

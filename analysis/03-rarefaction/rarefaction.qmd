@@ -10,9 +10,7 @@ The [script](../../scripts/read-rarefaction.r) below rarefies reads to the sampl
 {{< include ../../scripts/read-rarefaction.r >}}
 ```
 
-```{bash}
-#| eval: false
-#| label: read rarefaction
+```bash
 
 Rscript $WORKDIR/scripts/read-rarefaction.r -f $WOLTKA_OUT/ogu-taxonomy/ogu.tsv -m $METADATA -t $REF/WoL2-Woltka/taxonomy/lineages.txt -p $REF/WoL2-Woltka/phylogeny/tree.nwk -o $RARE_RESULTS --verbose 2>&1 | tee $LOGS/read-rarefaction.log
 

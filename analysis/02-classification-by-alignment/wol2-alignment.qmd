@@ -7,9 +7,7 @@ The second version of WoL, containing \> 15,000 genomes, is only available on th
 [website](https://biocore.github.io/wol/), which contains $\approx$ 10,000 reference
 genomes.
 
-```{bash}
-#| eval: false
-#| label: WoL2 download
+```bash
 
 wget -N -P $REF/WoL2-Bowtie2DB/ -r -np -nH --cut-dirs=4 ftp://ftp.microbio.me/pub/wol2/databases/bowtie2/
 ```
@@ -28,18 +26,12 @@ Appendix 1), and so samples were aligned E2E.
 The following script executes Bowtie2 and samtools for alignment and alignment
 statistics, which will determine the number of raw reads that aligned to the WoL2 database, .
 
-```{bash}
-#| eval: false
-#| label: script contents
-#| code-summary: View script contents
+```bash
 
 {{< include ../../scripts/run_bowtie.sh >}}
 ```
 
-```{bash}
-#| eval: false
-#| label: Bowtie2 alignment to WoL2
-#| output: false
+```bash
 
 echo "Running Bowtie2 alignment to WoL2 on files in $CLEAN_FILE_DIR"
 
@@ -58,43 +50,30 @@ find "$CLEAN_FILE_DIR" -maxdepth 1 -type f -name "*_R1.fq" | \
 
 Alignment statistics are calculated using the following script:
 
-```{bash}
-#| eval: false
-#| label: alignment-stats script contents
-#| code-summary: View script contents
+```bash
 
 {{< include ../../scripts/alignment-stats.r >}}
 ```
 
-```{bash}
-#| eval: false
-#| label: sequence alignment percentages
-#| fig-cap: A histogram showing the percentage of total raw sequences that aligned to the Web of Life v2 reference phylogeny using the short-read sequence aligner, Bowtie2.
+```bash
 
 Rscript scripts/alignment-stats.r -i $WOL_OUT -o $WOL_RESULTS 2>&1 | tee $LOGS/alignment-stats.log
 ```
 
 #### Coverage Calculation 
 
-```{bash}
-#| eval: false
-#| label: calculate-coverage script contents
-#| code-summary: View script contents
+```bash
 
 {{< include ../../scripts/calculate-coverage.sh >}}
 ```
 
-```{bash}
-#| eval: false
-#| label: coverage calculation
+```bash
 
 bash $WORKDIR/scripts/calculate-coverage.sh -i $WOL_OUT -o $WOL_RESULTS/coverage_analysis -t $THREADS 2>&1 | tee $LOGS/calculate-coverage.log
 
 ```
 
-```{bash}
-#| eval: false
-#| label: coverage stats
+```bash
 
 Rscript $WORKDIR/scripts/coverage-stats.r -i $WOL_RESULTS -o $WOL_RESULTS/coverage_analysis -p "*.txt" -v 2>&1 | tee $LOGS/coverage-stats.log
 ```

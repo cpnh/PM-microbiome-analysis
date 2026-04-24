@@ -144,9 +144,7 @@ save_and_link(
 
 Filtering GO database to contain only bacterial GO terms using [GO slim prokaryote](https://geneontology.org/docs/download-ontology/). *downloaded 08-Oct-24*
 
-```{bash}
-#| eval: false
-#| label: download GO slim
+```bash
 
 wget -P ref/ https://current.geneontology.org/ontology/subsets/goslim_prokaryote.tsv
 ```
