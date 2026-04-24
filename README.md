@@ -31,6 +31,10 @@ A Dockerfile has also been provided to replicate the R environment. To build the
 docker build ./ --progress=plain ./ --tag pm-microbiome &> build.log
 ```
 
+```bash
+docker run -v "$dir"/:/home --rm $IMAGE quarto render
+```
+
 ## Citation
 
 Huey, S.L., Cole, N.L., Pagani, I., González, A., Finkelstein, J.L., Haas, J.D., Udipi, S.A., Ghugre, P., Potdar, R.D., Knight, R., Mehta, S., (in preperation). Effect of a complementary feeding intervention on the gut microbiota in 12–18-month-old children.
