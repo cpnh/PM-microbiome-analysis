@@ -17,6 +17,8 @@
 #  Configuration                                                             #
 ##############################################################################
 
+.libPaths <- .libPaths(Sys.getenv("R_LIBS_USER"))
+
 # Function to safely load libraries with warnings for missing packages
 safe_library <- function(package_name) {
   if (requireNamespace(package_name, quietly = TRUE)) {
