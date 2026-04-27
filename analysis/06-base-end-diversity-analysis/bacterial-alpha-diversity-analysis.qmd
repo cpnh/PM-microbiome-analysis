@@ -27,7 +27,7 @@ Load previously rarefied (normalized) bacterial sequence data:
 #| label: load rarefied read data
 #| cache: false
 
-(seqdata_bac <- readRDS(paste0(RARE_RESULTS, "/rarefied_bacteria.rds")))
+(seqdata_bac <- readRDS(paste0(RARE_RESULTS, "/bacterial-OGUs-phyloseq.rds")))
 
 sample_data(seqdata_bac)$timepoint <- str_remove(
   sample_data(seqdata_bac)$timepoint,
