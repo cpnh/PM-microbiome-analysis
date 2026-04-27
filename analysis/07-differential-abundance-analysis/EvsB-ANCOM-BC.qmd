@@ -3,7 +3,6 @@
 ```{r}
 #| echo: false
 #| eval: true
-#| label: setup
 #| cache : false
 suppressWarnings(suppressMessages({
   source(normalizePath("utils/r-utils.r"))

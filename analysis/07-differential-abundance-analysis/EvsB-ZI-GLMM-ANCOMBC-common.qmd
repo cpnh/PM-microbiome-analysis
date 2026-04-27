@@ -3,7 +3,6 @@
 ```{r setup}
 #| echo: false
 #| eval: true
-#| label: setup
 
 # This initial code block loads custom utility functions and environment variables
 # These are stored in separate files to keep the main analysis clean and organized

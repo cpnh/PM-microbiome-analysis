@@ -12,7 +12,6 @@ Four different distance metrics were calculated:
 ```{r}
 #| echo: false
 #| eval: true
-#| label: setup
 #| cache: false
 
 # This initial code block loads custom utility functions and environment variables

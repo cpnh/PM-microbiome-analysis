@@ -8,7 +8,6 @@ This cross-sectional analysis contains all available endpoint samples (n = 109).
 #| echo: false
 #| eval: true
 #| cache: false
-#| label: setup
 
 # This initial code block loads custom utility functions and environment variables
 # These are stored in separate files to keep the main analysis clean and organized

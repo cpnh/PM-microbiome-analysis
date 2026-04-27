@@ -7,7 +7,6 @@ The difference between this analysis and previous ZI model analysis is that here
 ```{r setup}
 #| echo: false
 #| eval: true
-#| label: setup
 #| cache: false
 
 # This initial code block loads custom utility functions and environment variables
