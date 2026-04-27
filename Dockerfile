@@ -45,3 +45,9 @@ RUN wget https://github.com/quarto-dev/quarto-cli/releases/download/v1.9.31/quar
     && rm quarto-1.9.31-linux-amd64.deb
 
 RUN R -e 'install.packages("renv", prompt = FALSE)' && R -e 'renv::init()' && R -e 'renv::restore()'
+
+COPY .Rprofile ./
+ENV R_PROFILE_USER=/home/.Rprofile
+ENV R_PROFILE=/home/.Rprofile
+ENV R_LIBS=/home/renv/library/linux-ubuntu-noble/R-4.4/x86_64-pc-linux-gnu
+ENV R_LIBS_USER=/home/renv/library/linux-ubuntu-noble/R-4.4/x86_64-pc-linux-gnu
