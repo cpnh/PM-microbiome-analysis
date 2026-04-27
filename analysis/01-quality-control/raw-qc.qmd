@@ -128,7 +128,7 @@ At this point, all samples have been trimmed of adapter sequences, filtered for 
 ##### Visualisation of decontaminates removed
 
 ```{r}
-#| eval: true
+#| eval: false
 #| label: load-data
 
 df <- read.delim(
@@ -139,7 +139,7 @@ df <- read.delim(
 ```
 
 ```{r}
-#| eval: true
+#| eval: false
 #| label: fig-hist
 #| fig-cap: Percentage of human DNA contamination removed from metagenome samples.
 
