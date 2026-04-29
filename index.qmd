@@ -1,5 +1,34 @@
----
-css: _assets/styles.css
----
+```{r}
+#| echo: false
+#| eval: true
+#| label: setup
+#| cache: false
 
-# Table of Contents
+```
+
+# Preface {.unnumbered}
+
+::: {.content-visible when-format="html"}
+{{< include index-html.qmd >}}
+:::
+
+## About This Document
+
+This document was generated using Quarto CLI {{< version >}} [@Allaire2025] and contains analysis performed from {{< meta date >}}.
+
+### Rendering Information
+
+**Document system**: Quarto v{{< version >}}  
+**Render date**: {{< meta date >}}  
+**R version**: `r R.version.string` [@RCoreTeam2025]  
+**Platform**: `r Sys.info()["sysname"]` `r Sys.info()["machine"]`  
+**Last rendered**: `r format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")`
+
+### Document Layout and Style
+
+This document employs the Tufte handout style, inspired by the statistician Edward Tufte's principles of effective data presentation[^ed]. Extensive margin space is used for annotations, side notes, cross-references etc., while the main narrative flows in the primary text column.
+
+[^ed]: You can learn more about him on his [website](https://www.edwardtufte.com/)
+
+{{< include intro.qmd >}}
+

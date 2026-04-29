@@ -1,0 +1,7 @@
+---
+format:
+  html:
+    css: _assets/styles/toc.css
+---
+
+# Table of Contents {.unnumbered .unlisted}
