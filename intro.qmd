@@ -1,36 +1,9 @@
-
 # Introduction
 
-Malnourished children living in urban slums are characterized by a high burden of inflammation (elevated CRP) and infection (e.g. elevated gastrointestinal infections).
+Previous iron supplemention studies in children have suggested adverse gut microbiota shifts (increased pathogens). Given iron’s importance in early childhood, particularly where iron deficiency and anemia are high, it is essential to test food-based approaches for similar impacts. Here, we report gut microbiome effects of 9 months’ daily consumption of iron/zinc-biofortified pearl millet (FeZnPM), compared to control pearl millet (CPM) in children living in urban slums of Mumbai, India as part of a randomized controlled feeding trial (NCT02233764).
 
-## Computation environment
+Children (12–18 months, N=223, hemoglobin >9 g/dL) were randomized to receive FeZnPM or CPM-based foods (8.70 vs 3 mg Fe/100 g). Rectal swabs collected across follow-up underwent shotgun metagenomic sequencing, and assigned to operational genomic units (OGUs). Arm differences were examined using diversity indices, functional pathway and differential abundance analyses at and between baseline and endpoint. OGU and diversity differences were examined using mixed models, and endpoint KEGG pathways using co-occurrence networks. 
 
-The bash engine used to execute bash code is: `r Sys.which("bash")`
+Children receiving FeZnPM showed distinct metabolic adaptations at study endpoint compared to CPM. The intervention group exhibited increased pathways for antibiotic biosynthesis (phenazine, monobactam) and antioxidant metabolism (glutathione, lipoic acid), indicating enhanced resistance to pathogens and an improved gut environment. Conversely, FeZnPM consumption was associated with decreased pathways for pollutant degradation (xylene, aminobenzoate) and reduced prodigiosin biosynthesis, consistent with reduced abundance of pathogenic bacteria. Independent of arm, the maturing microbiome showed increased diversity and enhanced metabolic capacity for processing diverse substrates and reduced reliance on host-derived substrates. 
 
-The R package library is: `r .libPaths()`
-
-### Session Info
-
-```{r}
-#| eval: true
-#| echo: false
-sessionInfo()
-
-# If the sessioninfo package is available,
-# it provides output that is easier to read,
-# and can write its results to a file
-# sessioninfo:::session_info(to_file = "quarto-session-info-output.txt")
-```
-
-### System environment
-
-```{r}
-#| eval: true
-#| echo: false
-
-knitr::kable(
-  Sys.getenv(),
-  col.names = c("Environment Variable", "Value"),
-  format = "latex"
-)
-```
+This is one of the first studies known to us that examines the effect of  biofortified crops on the human gut microbiome. FeZnPM did not adversely affect the developing microbiota and may support beneficial metabolic adaptations. Thus, biofortified crops could be a sustainable approach to addressing iron deficiency while supporting microbiome development in early life.
