@@ -15,7 +15,7 @@ suppressWarnings(suppressMessages({
   metadata <- read_delim(normalizePath(METADATA))
 
   go2kegg <- read.delim(
-    file.path(REF, "WoL2-Woltka/function/go/idmaps/kegg.map"),
+    file.path(REF, "WoL2-Woltka/function/kegg.map"),
     header = T
   )
 
@@ -144,8 +144,7 @@ save_and_link(
 Filtering GO database to contain only bacterial GO terms using [GO slim prokaryote](https://geneontology.org/docs/download-ontology/). *downloaded 08-Oct-24*
 
 ```bash
-
-wget -P ref/ https://current.geneontology.org/ontology/subsets/goslim_prokaryote.tsv
+wget -P ref/gene-ontology/ https://current.geneontology.org/ontology/subsets/goslim_prokaryote.tsv
 ```
 
 ```{r}
@@ -153,7 +152,7 @@ wget -P ref/ https://current.geneontology.org/ontology/subsets/goslim_prokaryote
 #| label: annotation with only bacterial GO terms
 
 annoBac <- read.delim(
-  file.path(REF, "gene-ontology", "goslim_prokaryote.tsv"),
+  file.path(REF, "gene-ontology", "goslim_prokaryote-formatted.csv"),
   col.names = c("go_id", "terms")
 ) %>%
   mutate(go_id = str_replace(str_extract(go_id, "GO_\\d*"), "_", ":"))
