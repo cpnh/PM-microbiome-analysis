@@ -32,7 +32,10 @@ docker build ./ --progress=plain ./ --tag pm-microbiome &> build.log
 ```
 
 ```bash
-docker run -v "$dir"/:/home --rm $IMAGE quarto render
+dir=$(pwd)
+IMAGE=biohpc_nc564/pm-microbiome-analysis
+
+docker run -v "$dir"/:/home/workdir --rm $IMAGE quarto render workdir --log .logs/quarto-render.log --log-level info
 ```
 
 ## Citation
