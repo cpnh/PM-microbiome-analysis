@@ -1,6 +1,6 @@
 # Investigating differences in OGU abundances across Baseline samples due to Age using Zero-inflated Regression Models
 
-```{r setup}
+```{r}
 #| echo: false
 #| eval: true
 #| cache: false

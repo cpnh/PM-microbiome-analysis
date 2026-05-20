@@ -1,10 +1,9 @@
 ## Baseline Diversity Analysis
 
-```{r setup}
+```{r}
 #| echo: false
 #| eval: true
 #| cache: false
-
 # This initial code block loads custom utility functions and environment variables
 suppressWarnings(suppressMessages({
   source("utils/r-utils.r")
@@ -45,7 +44,6 @@ Next, data is filtered to contain only baseline samples.
 ```{r}
 #| eval: true
 #| label: extract only baseline data
-
 # subset data
 # Filters data to include only samples from the study's starting point ("baseline")
 baseline <- phyloseq::subset_samples(seqdata_bac, timepoint == "Baseline")
@@ -67,7 +65,6 @@ Relative abundances are calculated to show the proportion of each bacterial grou
 ```{r}
 #| eval: true
 #| label: calculate relative abundances
-
 #create new object to avoid changing baseline phyloseq object
 baseTmp <- baseline
 
@@ -85,7 +82,6 @@ Create an ampvis object from phyloseq object
 ```{r}
 #| eval: true
 #| label: create ampvis object
-
 library(ampvis2)
 
 d <- amp_load(
@@ -99,7 +95,6 @@ d <- amp_load(
 #| eval: true
 #| label: top bacterial phyla at baseline
 #| fig-cap: Relative abundance of bacterial phyla at baseline.
-
 #default settings plot relative abundances (normalise = TRUE)
 p <- amp_boxplot(
   d,
@@ -121,7 +116,6 @@ p +
   geom_jitter(color = "black", size = 1.5, stat = "identity", width = 0.35) +
   scale_color_manual(values = phyla_colours, aesthetics = "fill") +
   theme(legend.position = "none")
-
 ```
 
 #### Top Genera at Baseline
@@ -177,7 +171,6 @@ In practice, the true number of total seceis in a microbiome sample is unknown d
 ```{r}
 #| eval: true
 #| label: alpha diversity calculation
-
 #bacterial baseline samples as defiend above
 #calculate abundance based alpha diversity metrics
 # absolute abundances need to be used as the microbiome package calculates relative abundances in-function
@@ -216,7 +209,6 @@ sample_data(baseline) <- baseline_metadata
 ```{r}
 #| eval: true
 #| label: differences between intervention arms
-
 #compare between intervention arms
 unpaired_intervention_wilcox <- baseline_metadata %>%
   dplyr::select(
@@ -237,7 +229,6 @@ unpaired_intervention_wilcox <- baseline_metadata %>%
 #| eval: true
 #| label: fig-baseline-arm-alpha
 #| fig-cap: Alpha diversity statistics among baseline samples separated by intervention arm (n = 168).
-
 plot_names <- c(
   'pd' = "Faith's Phylogentic Diversity",
   'observed' = "Observed Features",
@@ -287,7 +278,6 @@ baseline_metadata %>%
 #| eval: true
 #| label: baseline alpha diversity plots
 #| fig-cap: Alpha diversity statistics among baseline samples (n = 168).
-
 baseline_metadata %>%
   dplyr::select(
     timepoint,
@@ -310,7 +300,6 @@ baseline_metadata %>%
     legend.position = "none"
   ) +
   facet_wrap(diversity_metric ~ ., scales = "free", ncol = 2)
-
 ```
 
 #### Phyla Relative Abundances across all Individuals
@@ -319,7 +308,6 @@ baseline_metadata %>%
 #| eval: true
 #| label: phyla relative abundance per indv
 #| fig-cap: Relative abundance of bacterial phyla at baseline across all individuals (n = 168).
-
 #baseTmp as defined in the realtive abundance boxplots above
 #collapse into phyla to make computation easier
 base_genus <- microbiome::aggregate_taxa(baseTmp, level = "Genus")
@@ -352,14 +340,12 @@ p +
   ) + #unit(c(top, right, bottom, left), units)
   scale_y_continuous(expand = c(0, 0)) + #removes white space between plot and x axis
   ylab("Relative Abundance")
-
 ```
 
 ```{r}
 #| eval: true
 #| label: alpha diversity plots
 #| fig-cap: Relative abundance of bacterial phyla at baseline across all individuals ordered by age (days) (n = 168).
-
 #order samples by age
 age_labels <- baseline_metadata %>%
   dplyr::select(displayid, agedays_rounded) %>%
@@ -402,7 +388,6 @@ p +
 #| eval: true
 #| label: tbl-ms-2
 #| tbl-cap: Microbiome composition and diversity statistics at baseline (n = 168)
-
 top10_genera_list <- names(sort(
   apply(as.data.frame(t(otu_table(base_genus))), 2, median),
   decreasing = T
@@ -476,7 +461,6 @@ htmltools::save_html(
   gt::as_raw_html(p),
   file.path(filepath, paste0(prefix, "alpha-div.tbl"))
 )
-
 ```
 
 ### Baseline Bacteria Beta diversity
@@ -487,7 +471,6 @@ phyloseq provides a wrapper function around ggplot and NeatMapand uses ordinatio
 #| eval: true
 #| label: MS Figure 9
 #| fig-cap: "β-diversity ordination plots comparing intervention arms at baseline."
-
 #phyloseq wraps a number of vegan package functions and can be used to call vegdist()
 bray <- phyloseq::distance(baseline, method = "bray") #calculated on abundance
 jac <- phyloseq::distance(baseline, method = "jaccard")
@@ -527,7 +510,6 @@ ggarrange(
   common.legend = T,
   legend = "bottom"
 )
-
 ```
 
 ```{r}
@@ -535,7 +517,6 @@ ggarrange(
 #| label: MS Table 2 cont.
 #| tbl-cap: Beta diversity summary table
 #| results: asis
-
 dissimilarity_by_time_treatment <- list()
 
 timepoints <- unique(sample_data(baseline)$timepoint)
@@ -665,5 +646,4 @@ htmltools::save_html(
   gt::as_raw_html(p),
   file.path(filepath, paste0(prefix, "beta-div.tbl"))
 )
-
 ```

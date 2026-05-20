@@ -1,6 +1,6 @@
 # Baseline Sample Gene Ontology Enrichment Analysis
 
-```{r setup}
+```{r}
 #| echo: false
 #| eval: true
 #| cache: false

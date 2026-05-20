@@ -31,4 +31,3 @@ This document employs the Tufte handout style, inspired by the statistician Edwa
 [^ed]: You can learn more about him on his [website](https://www.edwardtufte.com/)
 
 {{< include intro.qmd >}}
-

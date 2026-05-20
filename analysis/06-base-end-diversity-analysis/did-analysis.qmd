@@ -4,7 +4,6 @@
 #| echo: false
 #| eval: true
 #| cache: false
-
 # This initial code block loads custom utility functions and environment variables
 # These are stored in separate files to keep the main analysis clean and organized
 source("utils/r-utils.r")
@@ -57,7 +56,6 @@ alpha_did <- list(
 #| label: tbl-lm-sum
 #| tbl-cap: Summary of simple alpha diveristy linear models with formula y ~ arm * timepoint
 #| results: asis
-
 stargazer::stargazer(alpha_did, header = FALSE, type = "html")
 ```
 
@@ -119,7 +117,6 @@ did_df <- did %>%
     fer_def12_base,
     sexf
   )
-
 ```
 
 ```{r}
@@ -177,7 +174,6 @@ did_df %>%
   tab_rows(arm) %>%
   tab_stat_mean() %>%
   tab_pivot()
-
 ```
 
 ```{r}
@@ -202,7 +198,6 @@ did_df %>%
 #| eval: true
 #| label: tbl-did-7
 #| tbl-cap: Model summary investigating the average change between intervention groups at baseline
-
 #Calculate the change in average value between intervention groups at baseline
 did_baseline <- did[did$timepoint == "Baseline", ]
 
@@ -227,7 +222,6 @@ lapply(alpha_did_lm, summary)
 #| eval: true
 #| label: tbl-did-8
 #| tbl-cap: ANOVA results of model investigating the average change between intervention groups at baseline
-
 lapply(alpha_did_lm, anova)
 ```
 
@@ -235,7 +229,6 @@ lapply(alpha_did_lm, anova)
 #| eval: true
 #| label: tbl-did-9
 #| tbl-cap: Model summary investigating the average change between intervention groups at baseline, controlling for age at baseline
-
 alpha_did_lm <- lapply(alpha_did_lm, update, ~ . + ageAtBaseline)
 
 lapply(alpha_did_lm, summary)
@@ -245,7 +238,6 @@ lapply(alpha_did_lm, summary)
 #| eval: true
 #| label: tbl-did-10
 #| tbl-cap: ANOVA results of model investigating the average change between intervention groups at baseline, controlling for age at baseline
-
 lapply(alpha_did_lm, anova)
 ```
 
@@ -253,7 +245,6 @@ lapply(alpha_did_lm, anova)
 #| eval: true
 #| label: tbl-did-11
 #| tbl-cap: Model summary investigating the average change between intervention groups over time with random effects
-
 alpha_did_lmm <- list(
   chao_lmm_transformed = lme(
     chao1 ~ arm * time,
@@ -288,7 +279,6 @@ lapply(alpha_did_lmm, summary)
 #| eval: true
 #| label: tbl-did-12
 #| tbl-cap: ANOVA resutls of model investigating the average change between intervention groups over time with random effects
-
 lapply(alpha_did_lmm, anova)
 ```
 
@@ -296,7 +286,6 @@ lapply(alpha_did_lmm, anova)
 #| eval: true
 #| label: tbl-did-13
 #| tbl-cap: Model summary investigating the average change between intervention groups over time with random effects, accounting for age at baseline
-
 alpha_did_lmm <- lapply(alpha_did_lmm, update, ~ . + ageAtBaseline)
 
 lapply(alpha_did_lmm, summary)
@@ -306,25 +295,44 @@ lapply(alpha_did_lmm, summary)
 #| eval: true
 #| label: tbl-did-14
 #| tbl-cap: ANOVA results of model investigating the average change between intervention groups over time with random effects, accounting for age at baseline
-
 lapply(alpha_did_lmm, anova)
 ```
+
+::: {.landscape .content-visible when-format="html"}
 
 ```{r}
 #| eval: true
 #| label: tbl-did-15
 #| tbl-cap: Comparison of simple linear model and model with random effects
 #| results: asis
-
 stargazer::stargazer(alpha_did_lm, alpha_did_lmm, header = FALSE, type = "html")
 ```
+
+:::
+
+::: {.landscape .content-visible when-format="pdf"}
+
+```{r}
+#| eval: true
+#| label: tbl-did-15
+#| tbl-cap: Comparison of simple linear model and model with random effects
+#| results: asis
+stargazer::stargazer(
+  alpha_did_lm,
+  alpha_did_lmm,
+  header = FALSE,
+  type = "latex"
+)
+```
+
+:::
 
 ::: {.callout-important}
 before proceeding make sure you double check the index number of your interaction term (depends on the order and number of covariates in the model)
 :::
 
 ```{r}
-#| label:  simple model coefs and CIs
+#| label: simple model coefs and CIs
 ## extract the interaction coefficient and calculate confidance intervals
 ## this can be added if there are clusters in the data: vcov.=vcovCL(x, cluster=~cluster_variable)
 lapply(alpha_did_lm, function(x) {
@@ -601,7 +609,6 @@ est.df %>%
 ```{r}
 #| eval: true
 #| label: DiD p-values
-
 did_est <- lapply(emm, function(x) {
   contrast(x, method = list(c(-1, 1, 1, -1)), adjust = "none", ratios = FALSE)
   #note: this is the same as `contrast(x, adjust = "none", ratios = FALSE, interaction = "consec")` -> I have just specified it mannually because it makes more sense to me that way
@@ -631,7 +638,6 @@ est.df %>%
     footnote_as_chunk = TRUE,
     escape = FALSE
   )
-
 ```
 
 The above code is the same as:

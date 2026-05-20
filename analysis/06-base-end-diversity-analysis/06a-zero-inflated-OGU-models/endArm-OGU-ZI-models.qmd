@@ -1,6 +1,6 @@
 # Investigating differences in OGU abundances between intervention arm at Endpoint using Zero-inflated Regression Models
 
-```{r setup}
+```{r}
 #| echo: false
 #| eval: true
 #| cache: false

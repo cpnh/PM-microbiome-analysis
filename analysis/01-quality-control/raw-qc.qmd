@@ -4,7 +4,6 @@
 #| echo: false
 #| eval: true
 #| cache: false
-
 # This initial code block loads custom utility functions and environment variables
 # These are stored in separate files to keep the main analysis clean and organized
 
@@ -130,7 +129,6 @@ At this point, all samples have been trimmed of adapter sequences, filtered for 
 ```{r}
 #| eval: false
 #| label: load-data
-
 df <- read.delim(
   file.path(CLEAN_FILE_DIR, "logs/stats.summary"),
   header = F,
@@ -142,8 +140,6 @@ df <- read.delim(
 #| eval: false
 #| label: fig-hist
 #| fig-cap: Percentage of human DNA contamination removed from metagenome samples.
-
 ggplot(df, aes(x = percent_removed)) +
   geom_histogram(binwidth = 10, col = "white")
-
 ```

@@ -28,7 +28,6 @@ Results will be saved to ``r filepath``.
 ```{r}
 #| eval: true
 #| label: data-prep
-
 phyloseq_summary(absAbund)
 
 check <- data_sanity_check(absAbund, fix_formula = "arm * timepoint")
@@ -57,7 +56,6 @@ end <- subset_samples(absAbund, timepoint == "Endpoint")
 #| label: ancombc
 #| fig-cap: NA
 #| tbl-cap: NA
-
 base_results <- ancombc2(
   base,
   taxa_are_rows = TRUE,
@@ -105,7 +103,6 @@ save_and_link(
 #| eval: true
 #| label: fig-base
 #| fig-cap: Differentially abundant taxa in the FeZnPM intervention group at Baseline. Significant taxa were determined to be so if they had a FDR adjusted p-value $\leq$ 0.05 and a fold change of 2 or more
-
 baseFiltered <- base_prim %>%
   select(taxon, ends_with("_armFeZnPM")) %>%
   dplyr::filter(
@@ -119,7 +116,6 @@ plotDAvol(
   title = "Differentially abundant OGUs in the FeZnPM intervention group at Baseline",
   p.fdr = q
 )
-
 ```
 
 #### Endpoint arm differences
@@ -129,7 +125,6 @@ plotDAvol(
 #| label: ancombc
 #| fig-cap: NA
 #| tbl-cap: NA
-
 end_results <- ancombc2(
   end,
   taxa_are_rows = TRUE,
@@ -165,7 +160,6 @@ end_prim <- end_results$res
 ```{r}
 #| eval: true
 #| results: asis
-
 save_and_link(
   data = end_prim,
   filename = paste0(prefix, "endpoint-ancombc.csv"),
@@ -177,7 +171,6 @@ save_and_link(
 ```{r}
 #| eval: true
 #| label: endFiltered
-
 endFiltered <- end_prim %>%
   select(taxon, ends_with("_armFeZnPM")) %>%
   dplyr::filter(
@@ -191,7 +184,6 @@ endFiltered <- end_prim %>%
 #| eval: true
 #| label: tbl-end-summary
 #| tbl-cap: ANCOM-BC significant (FDR) OGU fold changes. All OGUs passed sensitivity filtering.
-
 endFiltered <- endFiltered %>%
   mutate(
     Result_FC1.2 = case_when(
@@ -236,7 +228,6 @@ kable(
 #| eval: true
 #| label: fig-endArm
 #| fig-cap: Differentially abundant taxa in the FeZnPM intervention group at Endpoint. Significant taxa were determined to be so if they had a FDR adjusted p-value $\leq$ 0.05 and a fold change of 1.2 or more. They must also have passed ANCOM-BC sensitivity filtering.
-
 plotDAvol(
   endFiltered,
   title = "Differentially abundant OGUs in the FeZnPM intervention group at Endpoint compared to CPM",
@@ -250,7 +241,6 @@ plotDAvol(
 #| eval: true
 #| label: fig-sig-endOGUs-1.2
 #| fig-cap: Significant OGUs with a Fold Change of 1.2 or more
-
 phylum_anno <- assign_unique_colors(
   as.vector(endFiltered$Phylum),
   phyla_colours
@@ -281,7 +271,6 @@ endFiltered %>%
 #| eval: true
 #| label: fig-endArm-2
 #| fig-cap: Differentially abundant taxa in the intervention arm, FeZnPM, compared to control (CPM) at Endpoint. Significant taxa were determined to be so if they had a FDR adjusted p-value $\leq$ 0.05 and a fold change of 2 or more. They must also have passed ANCOM-BC sensitivity filtering.
-
 plotDAvol(
   endFiltered,
   title = "Differentially abundant taxa in FeZnPM compared CPM",
@@ -295,7 +284,6 @@ plotDAvol(
 #| eval: true
 #| label: fig-sig-endOGUs-2
 #| fig-cap: Significant OGUs with a Fold Change of 2 or more
-
 endFiltered %>%
   filter(Result_FC2 != "No change") %>%
   mutate(Species = str_remove_all(Species, "_AD|^Member of|family spp")) %>%
@@ -322,7 +310,6 @@ endFiltered %>%
 ```{r}
 #| eval: true
 #| label: ancombc
-
 EvsBarmANCOM <- ancombc2(
   absAbund,
   taxa_are_rows = TRUE,
@@ -395,7 +382,6 @@ save_and_link(
   description = "ANCOM-BC results comparing DA OGUS between intervention arms over time (rate of change)",
   directory_naming = "both"
 )
-
 ```
 
 ```{r}
@@ -421,7 +407,6 @@ tmp <- EvsBarmANCOM_prim %>%
 #| eval: true
 #| label: save-formatted
 #| results: asis
-
 save_and_link(
   data = tmp,
   filename = paste0(prefix, "ancombc-formatted.csv"),
@@ -433,7 +418,6 @@ save_and_link(
 ```{r}
 #| eval: true
 #| label: EvsBarm-filtered
-
 EvsBarmANCOMFiltered <- EvsBarmANCOM_prim %>%
   dplyr::filter(
     `passed_ss_timepointEndpoint:armFeZnPM` == TRUE
@@ -443,7 +427,6 @@ colnames(EvsBarmANCOMFiltered) <- str_remove(
   colnames(EvsBarmANCOMFiltered),
   "_armFeZnPM"
 )
-
 ```
 
 `r nrow(EvsBarmANCOMFiltered)` passed ANCOM-BC sensitivity filtering.
@@ -493,7 +476,6 @@ Coefficient Interpretations:
 #| eval: true
 #| label: fig-EvsBArm
 #| fig-cap: Impact of FeZnPM over time compared to CPM. Differentially abundant taxa in the intervention arm, FeZnPM, compared to control (CPM) at Endpoint. This is the differential treatment effect i.e. the additional change in OGU abundances in the FeZnPM arm at endpoint, beyond what happens in the CPM reference arm. Significant taxa were determined to be so if they had a FDR adjusted p-value $\leq$ 0.05 and a fold change of 1.2 or more. They must also have passed ANCOM-BC sensitivity filtering.
-
 plotDAvol(
   EvsBarmANCOMFiltered,
   title = "OGUs that change at a significantly different rate overtime in the FeZnPM intervention group compared to the rate of change in the CPM group",
@@ -507,7 +489,6 @@ plotDAvol(
 #| eval: true
 #| label: fig-significant-1.2
 #| fig-cap: Significant OGUs with a Fold Change of 1.2 or more
-
 phylum_anno <- assign_unique_colors(
   as.vector(EvsBarmANCOMFiltered$Phylum),
   phyla_colours
@@ -540,7 +521,6 @@ EvsBarmANCOMFiltered %>%
 #| eval: true
 #| label: fig-endArm
 #| fig-cap: Differentially abundant taxa in the intervention arm, FeZnPM, compared to control (CPM) at Endpoint. Significant taxa were determined to be so if they had a FDR adjusted p-value $\leq$ 0.05 and a fold change of 2 or more. They must also have passed ANCOM-BC sensitivity filtering.
-
 plotDAvol(
   EvsBarmANCOMFiltered,
   title = "Differentially abundant taxa in FeZnPM compared CPM",
@@ -554,7 +534,6 @@ plotDAvol(
 #| eval: true
 #| label: fig-significant-2
 #| fig-cap: Significant OGUs with a Fold Change of 2 or more
-
 EvsBarmANCOMFiltered %>%
   filter(Result_FC2 != "No change") %>%
   mutate(Species = str_remove_all(Species, "_AD|^Member of|family spp")) %>%
@@ -582,7 +561,6 @@ EvsBarmANCOMFiltered %>%
 #| eval: true
 #| echo: false
 #| results: asis
-
 list_all_results()
 ```
 
@@ -599,6 +577,5 @@ generate_results_section(directory_naming = "both")
 #| eval: true
 #| echo: false
 #| label: info
-
 print(sessionInfo(), locale = FALSE)
 ```

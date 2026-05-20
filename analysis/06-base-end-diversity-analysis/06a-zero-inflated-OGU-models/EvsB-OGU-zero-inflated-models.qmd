@@ -4,7 +4,7 @@ The difference between this analysis and previous ZI model analysis is that here
 
 **Paired data is not used here**
 
-```{r setup}
+```{r}
 #| echo: false
 #| eval: true
 #| cache: false

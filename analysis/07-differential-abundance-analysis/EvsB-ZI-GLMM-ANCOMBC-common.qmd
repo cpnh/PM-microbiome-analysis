@@ -1,6 +1,6 @@
 # OGUs Common between GLMMs and differential abundance changes over time
 
-```{r setup}
+```{r}
 #| echo: false
 #| eval: true
 

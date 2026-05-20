@@ -1,6 +1,6 @@
 # Baseline to Endpoint Functional Analysis
 
-```{r setup}
+```{r}
 #| echo: false
 #| eval: true
 #| cache: false

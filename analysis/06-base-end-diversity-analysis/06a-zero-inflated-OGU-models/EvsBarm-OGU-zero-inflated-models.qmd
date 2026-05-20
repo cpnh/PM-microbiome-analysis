@@ -1,6 +1,6 @@
 # Investigating Longitudional Impact of Intervention on OGU abundance using Zero-inflated Regression Models with Random Effects
 
-```{r setup}
+```{r}
 #| echo: false
 #| eval: true
 #| cache: false
