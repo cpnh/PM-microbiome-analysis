@@ -1,0 +1,83 @@
+## Post-hoc Power Analysis 
+
+> "Evident is a tool for deriving effect sizes across several metadata variables, including categorical and continuous variables, to provide power calculations for a new study. For each metavariable, the Evident software is flexible to compute effect sizes for many commonly used measures of microbiome analyses, including α diversity, β diversity, and log-ratio analysis. Effect size and power analysis are necessary for computational microbiome analysis. power analysis is important because of the limited resources available for experimental designs.
+> 
+> Almost all parameters of interest, such as measures of α or β diversity are (nonlinear) functions of relative abundances of various taxa. Estimation of relative abundances using small pilot studies (i.e., N < 100) is not always satisfactory because the observed count data contain a large number of zeros. The preliminary estimates from a pilot study are potentially subject to large bias and uncertainties. Consequently, the determination of the effect size for a given parameter, say α diversity defined by Shannon’s entropy, is a difficult task. Evident conducts a simulation study to derive power functions for different sample sizes" - [@Rahman2023]
+
+```bash
+python -m venv evident
+source evident/bin/activate
+pip install evident
+```
+
+```{python}
+#| eval: true
+import pandas as pd
+import evident
+from evident.plotting import plot_power_curve
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Load data
+metadata = pd.read_table("data/metadata/base-end-metadata.csv", sep=",", index_col=0)
+
+# Define variables to analyze
+outcome_vars = [
+    "chao1",
+    "diversity_shannon",
+    "evenness_pielou",
+    "pd",
+    "Bifidobacterium",
+    "Escherichia"
+]
+grouping_vars = ["timepoint"]
+
+# Analysis parameters
+alpha_vals = [0.01, 0.05, 0.1]
+obs_vals = np.arange(10, 101, step=10)
+
+# Results storage
+results = {}
+
+# Loop through all combinations
+for outcome in outcome_vars:
+  for grouping in grouping_vars:
+    print(f"\nAnalyzing: {outcome} ~ {grouping}")
+
+    try:
+      # Prepare data
+      metadata[outcome] = pd.to_numeric(metadata[outcome], errors="coerce")
+      metadata[grouping] = metadata[grouping].astype("object")
+
+      # Summary stats
+      summary = metadata.groupby(grouping)[outcome].agg(["count", "mean", "std"])
+      print(summary)
+
+      # Effect size analysis
+      outcome_data = metadata[outcome]
+      adh = evident.UnivariateDataHandler(outcome_data, metadata)
+      effect_size = adh.calculate_effect_size(column=grouping)
+
+      print(f"Effect size: {effect_size.effect_size:.3f}")
+
+      # Power analysis and plot
+      power_results = adh.power_analysis(
+          grouping, alpha=alpha_vals, total_observations=obs_vals
+      )
+      fig = plot_power_curve(
+          power_results, target_power=0.8, style="alpha", markers=True
+      )
+      plt.title(f"{outcome} ~ {grouping}")
+      plt.show()
+
+      # Store results
+      results[f"{outcome}_{grouping}"] = {
+          "summary": summary,
+          "effect_size": effect_size,
+          "power_results": power_results,
+      }
+
+    except Exception as e:
+      print(f"Error: {e}")
+      continue
+```
