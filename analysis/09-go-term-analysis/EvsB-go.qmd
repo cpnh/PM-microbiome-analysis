@@ -4,7 +4,6 @@
 #| echo: false
 #| eval: true
 #| cache: false
-
 # This initial code block loads custom utility functions and environment variables
 suppressWarnings(suppressMessages({
   source("utils/r-utils.r")
@@ -41,7 +40,6 @@ Results will be saved to ``r filepath``.
 ```{r}
 #| eval: true
 #| label: load data
-
 go_be <- read.csv(file.path(
   RESULTS,
   "09-go-term-analysis/GO-EvsB-annotated-go-terms.csv"
@@ -55,9 +53,9 @@ go_be <- read.csv(file.path(
 ```{r}
 #| eval: true
 #| label: EvsB calculate percentage of samples with particular GO terms
-
 go_be <- go_be %>%
   filter(go_id %in% annoBac$go_id & ontology != "Cellular Component") %>%
+  filter(!str_detect(sample, "SO_8465_7114")) %>%
   arrange(dplyr::desc(count)) %>%
   group_by(go_id) %>%
   mutate(n = 1) %>%
@@ -95,7 +93,6 @@ go_be %>%
 ```{r}
 #| eval: true
 #| label: double checking the change in average counts of particular GO terms
-
 go_be %>%
   group_by(go_id, timepoint) %>%
   summarise(average_count = mean(count)) %>%
@@ -271,7 +268,6 @@ efit <- eBayes(vfit) #estimation of QL dispersions
 #| eval: true
 #| label: tbl-fdr5
 #| tbl-cap: OGUs that are significantly differentially abundant from zero for each contrast from a fit object (eBayes) containing p-values and test statistics. An FDR of 0.05 was used.
-
 knitr::kable(summary(
   FDR5 <- decideTests(efit, adjust.method = "BH", p.value = 0.05, fc = 0)
 ))
@@ -315,7 +311,6 @@ knitr::kable(mds_stat[2])
 #| eval: true
 #| label: tbl-mds-sum
 #| tbl-cap: Results of PERMANOVA test investigating abundance differences between arms at baseline in paired samples.
-
 pv <- lapply(2:length(mds_stat), function(x) {
   w <- mds_stat[[x]][1, 4]
   y <- mds_stat[[x]][1, 5]
@@ -345,7 +340,6 @@ The `plotMDS()` function accepts "any data object that can be coerced to a matri
 ```{r}
 #| eval: true
 #| label: MDS plot comparing arms at baseline in paired samples.
-
 xmax = max(
   plotMDS(
     v$EList,
@@ -478,7 +472,6 @@ efit <- eBayes(vfit) #estimation of QL dispersions
 #| eval: true
 #| label: tbl-fdr5
 #| tbl-cap: OGUs that are significantly differentially abundant from zero for each contrast from a fit object (eBayes) containing p-values and test statistics. An FDR of 0.05 was used.
-
 knitr::kable(summary(
   FDR5 <- decideTests(efit, adjust.method = "BH", p.value = 0.05, fc = 0)
 ))
@@ -522,7 +515,6 @@ knitr::kable(mds_stat[2])
 #| eval: true
 #| label: tbl-mds-sum
 #| tbl-cap: Results of PERMANOVA test investigating abundance differences between arms at endline in paired samples.
-
 pv <- lapply(2:length(mds_stat), function(x) {
   w <- mds_stat[[x]][1, 4]
   y <- mds_stat[[x]][1, 5]
@@ -552,7 +544,6 @@ The `plotMDS()` function accepts "any data object that can be coerced to a matri
 ```{r}
 #| eval: true
 #| label: MDS plot comparing arms at endline in paired samples.
-
 xmax = max(
   plotMDS(
     v$EList,
@@ -683,7 +674,6 @@ glm_results %>%
 #| label: ebayes
 #| fig-cap: NA
 #| tbl-cap: NA
-
 #Transform raw count data to log2-counts per million (logCPM), estimate the mean-variance relationship and use this to compute appropriate observation-level weights. The data are then ready for linear modelling.
 
 #If the DGEList object has been scale-normalized in edgeR (or before), then leave normalize.method="none" in voom, i.e., the logCPM values should not usually be re-normalized in the voom call.
@@ -694,12 +684,10 @@ vfit <- contrasts.fit(vfit, contrasts = contrasts)
 efit <- eBayes(vfit) #estimation of QL dispersions
 fc1.2 <- treat(vfit, fc = 1.2)
 fc2 <- treat(vfit, fc = 2)
-
 ```
 
 ```{r}
 #| eval: true
-
 top_efit <- as.data.frame(topTable(efit, n = Inf)) %>%
   select(
     go_id,
@@ -723,14 +711,12 @@ top_efit %>%
 knitr::kable(summary(
   FDR5 <- decideTests(efit, adjust.method = "BH", p.value = 0.05, fc = 0)
 ))
-
 ```
 
 ```{r}
 #| eval: true
 #| label: tbl-fdr5-fc1.2
 #| tbl-cap: Number of GO terms that are significantly differentially expressed (p $\leq$ 0.05) and have a fold change of 1.2 or more
-
 #FDR of 0.05 & FC > 1.2
 knitr::kable(summary(
   FDR5.FC1.2 <- decideTests(fc1.2, adjust.method = "BH", p.value = 0.05)
@@ -741,7 +727,6 @@ knitr::kable(summary(
 #| eval: true
 #| label: tbl-fdr-fc2
 #| tbl-cap: Number of GO terms that are significantly differentially expressed (p $\leq$ 0.05) and have a fold change of 2 or more
-
 #FDR of 0.05 & FC > 2
 knitr::kable(summary(
   FDR5.FC2 <- decideTests(fc2, adjust.method = "BH", p.value = 0.05)
@@ -802,7 +787,6 @@ The p-value ($Pr(>F)$) for `r counts$samples$timepoint` is `r pv$p`, which is gr
 #| eval: true
 #| label: fig-EvB-MDS
 #| fig-cap: MDS plot comparing timepoints
-
 xmax <- max(
   plotMDS(
     vfit$EList,
@@ -859,7 +843,6 @@ text(
 #| eval: true
 #| echo: false
 #| results: asis
-
 list_all_results()
 ```
 
@@ -876,6 +859,5 @@ generate_results_section(directory_naming = "both")
 #| eval: true
 #| echo: false
 #| label: info
-
 print(sessionInfo(), locale = FALSE)
 ```

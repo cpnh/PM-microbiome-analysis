@@ -5,7 +5,6 @@
 #| eval: true
 #| label: setup
 #| cache: false
-
 # This initial code block loads custom utility functions and environment variables
 # These are stored in separate files to keep the main analysis clean and organized
 
@@ -76,12 +75,11 @@ Results will be saved to ``r filepath``.
 ```{r}
 #| eval: true
 #| label: baseline-endpoint pathway coverage filtering
-
 kegg_be <-
   subset(
     subset(
       kegg,
-      sample %in% base_end_paired_samples$sample
+      sample %in% base_end_paired_samples$sample_names
     ),
     timepoint %in% c("Baseline", "Endpoint")
   ) %>%
@@ -92,8 +90,8 @@ kegg_be <-
     )
   ) %>%
   dplyr::filter(percent_cov >= 70) %>%
+  filter(!str_detect(sample, "SO_8465_7114")) %>%
   mutate(n = 1)
-
 ```
 
 ::: report
@@ -106,7 +104,6 @@ kegg_be <-
 #| eval: true
 #| label: tbl-unique-ko
 #| tbl-cap: Total number of unique pathways (ko terms) at baseline and endpoint in each intervention arm.
-
 kegg_be %>%
   group_by(timepoint, arm) %>%
   summarise(n_distinct(ko)) %>%
@@ -115,7 +112,6 @@ kegg_be %>%
 
 ```{r}
 #| eval: true
-
 tmp <- kegg_be %>%
   dplyr::select(!c(trt, pathway_group)) %>%
   arrange(desc(percent_cov)) %>%
@@ -142,7 +138,6 @@ tmp2 <- tmp %>%
 #| label: fig-ms-4
 #| fig-width: 22
 #| fig-height: 18
-
 tmp %>%
   dplyr::filter(pathway_name %in% tmp2$pathway_name) %>%
   ggplot(aes(
@@ -167,7 +162,6 @@ tmp %>%
 
 ```{r}
 #| eval: true
-
 base <- kegg_be %>% filter(timepoint == "Baseline")
 end <- kegg_be %>% filter(timepoint == "Endpoint")
 ```
@@ -238,7 +232,6 @@ contrasts <- makeContrasts(
 #| eval: true
 #| label: fig-base-glmQLfit
 #| fig-cap: KEGG pathway differences in FeZnPM at baseline compared to CPM based on a negative binomial generalized log-linear model with quasi-dispersions and empirical Bayes moderation.
-
 fit <- glmQLFit(base_counts, design)
 
 qlf <- glmQLFTest(fit, contrast = contrasts)
@@ -279,7 +272,6 @@ efit <- eBayes(vfit) #estimation of QL dispersions
 #| eval: true
 #| label: tbl-fdr5
 #| tbl-cap: OGUs that are significantly differentially abundant from zero for each contrast from a fit object (eBayes) containing p-values and test statistics. An FDR of 0.05 was used.
-
 knitr::kable(summary(
   FDR5 <- decideTests(efit, adjust.method = "BH", p.value = 0.05, fc = 0)
 ))
@@ -317,14 +309,12 @@ mds_stat <- pairwiseAdonis::pairwise.adonis2(
 
 #output table
 knitr::kable(mds_stat[2])
-
 ```
 
 ```{r}
 #| eval: true
 #| label: tbl-mds-sum
 #| tbl-cap: Results of PERMANOVA test investigating abundance differences between arms at baseline in paired samples.
-
 pv <- lapply(2:length(mds_stat), function(x) {
   w <- mds_stat[[x]][1, 4]
   y <- mds_stat[[x]][1, 5]
@@ -355,7 +345,6 @@ The `plotMDS()` function accepts "any data object that can be coerced to a matri
 #| eval: true
 #| label: fig-mds-baseArms
 #| fig-cap: MDS plot comparing arms at baseline in paired samples.
-
 xmax = max(
   plotMDS(
     v$EList,
@@ -514,7 +503,6 @@ efit <- eBayes(vfit) #estimation of QL dispersions
 #| eval: true
 #| label: tbl-fdr5
 #| tbl-cap: OGUs that are significantly differentially abundant from zero for each contrast from a fit object (eBayes) containing p-values and test statistics. An FDR of 0.05 was used.
-
 knitr::kable(summary(
   FDR5 <- decideTests(efit, adjust.method = "BH", p.value = 0.05, fc = 0)
 ))
@@ -558,7 +546,6 @@ knitr::kable(mds_stat[2])
 #| eval: true
 #| label: tbl-mds-sum
 #| tbl-cap: Results of PERMANOVA test investigating abundance differences between arms at endline in paired samples.
-
 pv <- lapply(2:length(mds_stat), function(x) {
   w <- mds_stat[[x]][1, 4]
   y <- mds_stat[[x]][1, 5]
@@ -589,7 +576,6 @@ The `plotMDS()` function accepts "any data object that can be coerced to a matri
 #| eval: true
 #| label: fig-mds-endArm
 #| fig-cap: MDS plot comparing arms at endline in paired samples.
-
 xmax = max(
   plotMDS(
     v$EList,
@@ -779,7 +765,6 @@ fc2 <- treat(vfit, fc = 2)
 
 ```{r}
 #| eval: true
-
 top_efit <- as.data.frame(topTable(efit, n = Inf)) %>%
   select(
     ko,
@@ -798,29 +783,24 @@ top_efit %>%
 #| eval: true
 #| label: tbl-fdr5
 #| tbl-cap: OGUs that are significantly differentially abundant from zero for each contrast from a fit object (eBayes) containing p-values and test statistics. An FDR of 0.05 was used.
-
 knitr::kable(summary(
   FDR5 <- decideTests(efit, adjust.method = "BH", p.value = 0.05, fc = 0)
 ))
-
 ```
 
 ```{r}
 #| eval: true
 #| label: tbl-fdr5-fc1.2
 #| tbl-cap: OGUs with a fold change of 1.2 or more that are significantly differentially abundant for each contrast. An FDR of 0.05 was used.
-
 knitr::kable(summary(
   FDR5.FC1.2 <- decideTests(fc1.2, adjust.method = "BH", p.value = 0.05)
 ))
-
 ```
 
 ```{r}
 #| eval: true
 #| label: tbl-fdr-fc2
 #| tbl-cap: OGUs with a fold change of 2 or more that are significantly differentially abundant for each contrast. An FDR of 0.05 was used.
-
 knitr::kable(summary(
   FDR5.FC2 <- decideTests(fc2, adjust.method = "BH", p.value = 0.05)
 ))
@@ -872,7 +852,6 @@ cnt %>%
   group_by(difference) %>%
   summarise(total = n()) %>%
   kable()
-
 ```
 
 Numbers are very similar to those found in DA.
@@ -934,7 +913,6 @@ abline(
 ```{r}
 #| eval: true
 #| label: identify diff abund pathways FRD5 FC>2
-
 dekegg <- read.delim(
   file = file.path(
     filepath,
@@ -984,7 +962,6 @@ dekegg <- dekegg %>%
 #| eval: true
 #| label: save-fdr5
 #| results: asis
-
 save_and_link(
   data = dekegg,
   filename = paste0(prefix, "limma-treat-significant-results-FDR5-FC2.csv"),
@@ -1002,7 +979,6 @@ Changes in differential abundance of KEGG pathways over time: `r length(unique(d
 #| label: fig-ms-10
 #| fig-height: 18
 #| fig-width: 14
-
 dekegg %>%
   ggplot(aes(y = reorder(pathway_name, Coef), x = Coef)) +
   geom_bar(
@@ -1013,7 +989,6 @@ dekegg %>%
   xlab(bquote(bold("Fold change (" ~ Log[2] ~ "FC )"))) +
   ylab(NULL) + #labels the y axis
   scale_fill_manual(values = pathway_class_col)
-
 ```
 
 :::
@@ -1046,7 +1021,6 @@ knitr::kable(mds_stat[2])
 #| eval: true
 #| label: tbl-mds-sum
 #| tbl-cap: Results of PERMANOVA test investigating abundance differences between timepoints.
-
 pv <- lapply(2:length(mds_stat), function(x) {
   w <- mds_stat[[x]][1, 4]
   y <- mds_stat[[x]][1, 5]
@@ -1076,7 +1050,6 @@ The `plotMDS()` function accepts "any data object that can be coerced to a matri
 ```{r}
 #| eval: true
 #| label: MDS plot comparing timepoints
-
 xmax = max(
   plotMDS(
     v$EList,
@@ -1154,7 +1127,6 @@ knitr::kable(mds_stat[2])
 ```{r}
 #| eval: false
 #| label: cluster analysis
-
 metaRDA <- bac_base_end_meta %>%
   select(
     timepoint,
@@ -1250,7 +1222,6 @@ Heatmap(
     grid_width = unit(4, "mm")
   ),
 )
-
 ```
 
 #### KEGG Differential Abundace with ANCOM-BC
@@ -1262,7 +1233,6 @@ Heatmap(
 #| label: data-prep
 #| fig-cap: NA
 #| tbl-cap: NA
-
 otu <- kegg_be %>%
   select(ko, sample, count) %>%
   pivot_wider(names_from = sample, values_from = count, values_fill = 0) %>%
@@ -1281,7 +1251,6 @@ kegg_phy <- phyloseq(otu, meta)
 #| label: ancombc
 #| fig-cap: NA
 #| tbl-cap: NA
-
 time_results <- ancombc2(
   kegg_phy,
   taxa_are_rows = TRUE,
@@ -1319,7 +1288,6 @@ time_prim <- time_results$res
 #| eval: true
 #| label: save
 #| results: asis
-
 save_and_link(
   data = time_prim,
   filename = paste0(prefix, "ancombc.csv"),
@@ -1360,7 +1328,6 @@ plotDAvol(
   title = "Differentially abundant KEGG terms at Endpoint Compared to Baseline",
   p.fdr = q
 )
-
 ```
 
 ```{r}
@@ -1377,7 +1344,6 @@ EvsB %>%
   xlab(bquote(bold("Fold change (" ~ Log[2] ~ "FC )"))) +
   ylab(NULL) + #labels the y axis
   scale_fill_manual(values = pathway_class_col)
-
 ```
 
 ## Results Summary
@@ -1386,7 +1352,6 @@ EvsB %>%
 #| eval: true
 #| echo: false
 #| results: asis
-
 list_all_results()
 ```
 
@@ -1430,6 +1395,5 @@ tmp %>%
 #| eval: true
 #| echo: false
 #| label: info
-
 print(sessionInfo(), locale = FALSE)
 ```

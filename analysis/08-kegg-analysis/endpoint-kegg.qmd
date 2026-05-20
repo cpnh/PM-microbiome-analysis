@@ -68,7 +68,8 @@ Strong evidence: 70-100% complete
 #| eval: true
 #| label: pathway coverage filtering
 kegg_end <- kegg %>%
-  dplyr::filter(str_detect(timepoint, "Endpoint") & percent_cov >= 70)
+  dplyr::filter(str_detect(timepoint, "Endpoint") & percent_cov >= 70) %>%
+  filter(!str_detect(sample, "SO_8465_7114"))
 
 tmp <- kegg_end %>%
   arrange(desc(percent_cov)) %>%

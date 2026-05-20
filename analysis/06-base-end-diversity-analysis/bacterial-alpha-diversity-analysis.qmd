@@ -30,9 +30,7 @@ Results will be saved to ``r filepath``.
 ```{r}
 #| eval: true
 #| label: custom variables
-
 armColours = c("CPM" = "#FC8D62", "FeZnPM" = "#8DA0CB")
-
 ```
 
 Load previously rarefied (normalized) bacterial sequence data:
@@ -41,6 +39,7 @@ Load previously rarefied (normalized) bacterial sequence data:
 #| eval: true
 #| label: load rarefied read data
 #| cache: false
+(seqdata_bac <- readRDS(paste0(RARE_RESULTS, "/bacterial-OGUs-phyloseq.rds")))
 
 (seqdata_bac <- readRDS(paste0(RARE_RESULTS, "/bacterial-OGUs-phyloseq.rds")))
 
@@ -60,6 +59,19 @@ sample_data(seqdata_bac) <- cbind(
   sample_names = rownames(sample_data(seqdata_bac)),
   sample_data(seqdata_bac)
 )
+
+seqdata_bac <- subset_samples(
+  seqdata_bac,
+  !str_detect(sample_names, "SO_8465_7114")
+)
+
+tax_table(seqdata_bac) <- tax_df(seqdata_bac) %>%
+  rownames_to_column("OGU") %>%
+  mutate(across(!OGU, ~ ifelse(. == "", OGU, .))) %>%
+  mutate_at(vars(everything()), str_remove, "_.*") %>%
+
+  column_to_rownames("OGU") %>%
+  as.matrix()
 ```
 
 The initial microbiome dataset was filtered to include only matched baseline-endpoint pairs, resulting in 82 matched pairs.
@@ -70,8 +82,7 @@ Sample names were standardized by removing technical suffixes (like '_wol_alignm
 #| eval:  true
 #| label: subset data
 #| cache: false
-
-#only 82 sample have matching baseline and endpoint samples
+#only 81 sample have matching baseline and endpoint samples
 base_end_paired_samples <-
   microbiome::meta(seqdata_bac) %>% #whole dataset metadata file
   mutate(
@@ -89,7 +100,7 @@ base_end_paired_samples <-
   mutate(displayid = str_trim(displayid, side = "both")) %>%
   group_by(displayid) %>%
   dplyr::filter(all(c("Baseline", "Endpoint") %in% timepoint)) %>%
-  ungroup() #base-mid-end sample n = 228
+  ungroup()
 
 bac_base_end <- seqdata_bac
 
@@ -101,7 +112,7 @@ bac_base_end <- phyloseq::subset_samples(
 bac_base_end <- phyloseq::subset_samples(
   bac_base_end,
   timepoint %in% c("Baseline", "Endpoint")
-) #82 base-end sample
+) #81 base-end sample
 
 otu_table(bac_base_end) <- t(otu_table(bac_base_end)) #ensure OGUs are rownames
 ```
@@ -142,7 +153,6 @@ Create an ampvis object from phyloseq object
 ```{r}
 #| eval: true
 #| label: create ampvis object
-
 library(ampvis2)
 
 d <- amp_load(
@@ -156,7 +166,6 @@ d <- amp_load(
 #| eval: true
 #| label: heatmap
 #| fig-cap: Relative abundance of bacterial phyla at baseline and endpoint separated by intervention arm.
-
 #top phyla across all samples at each timepoint by arm group
 
 #default settings plot relative abundances (normalise = TRUE) therefore set to FALSE
@@ -179,7 +188,6 @@ p + geom_jitter(color = "black", size = 1.5, stat = "identity", width = 0.35)
 #| eval: true
 #| label: top genera at baseline
 #| fig-cap: Relative abundance of the top 20 bacterial genera at at baseline and endpoint separated by intervention arm.
-
 p <- amp_boxplot(
   d,
   group_by = "trt_timept",
@@ -248,7 +256,6 @@ sample_data(absAbund) <- bac_base_end_meta
 ```{r}
 #| eval: true
 #| label: differences between intervention arms
-
 #subset for individuals with a baseline and matching end point
 #only 82 sample have matching baseline and endpoint samples
 dfB_E.stats <-
@@ -274,7 +281,6 @@ dfB_E.stats <-
 #| eval: true
 #| label: summary stats
 #| tbl-cap: Baseline and matching endpoint alpha diveristy summary statistics
-
 #print summary stats
 dfB_E.stats %>%
   group_by(timepoint, arm, diversity_metric) %>%
@@ -285,7 +291,6 @@ dfB_E.stats %>%
 ```{r}
 #| eval: true
 #| label: comparison stats
-
 #is there a significant difference between treatments at baseline and endpoint?
 #unpaired between group comparisons: arm_base vs. ctrl_base & arm_end vs. ctrl_end
 unpaired_wilcox_endpoint <- dfB_E.stats %>%
@@ -370,7 +375,6 @@ dfB_E.stats %>%
 #| tbl-cap: Microbiome composition and diversity statistics at baseline and endpoint (n = 81)
 
 aggregate_phyla <- microbiome::aggregate_taxa(bac_base_end, level = "Phylum")
-phyla_list <- names(as.data.frame(t(otu_df(aggregate_phyla))))
 aggregate_genera <- microbiome::aggregate_taxa(bac_base_end, level = "Genus")
 
 top10_genera_list <- names(sort(
@@ -380,10 +384,17 @@ top10_genera_list <- names(sort(
 top10_genera <- as.data.frame(t(otu_table(aggregate_genera))) %>%
   dplyr::select(all_of(top10_genera_list))
 
+top10_phyla_list <- names(sort(
+  apply(as.data.frame(t(otu_table(aggregate_phyla))), 2, median),
+  decreasing = T
+)[1:10])
+top10_phyla <- as.data.frame(t(otu_table(aggregate_phyla))) %>%
+  dplyr::select(all_of(top10_phyla_list))
+
 bac_base_end_meta <- bac_base_end_meta %>%
   left_join(
     .,
-    rownames_to_column(as.data.frame(t(otu_df(aggregate_phyla)))),
+    rownames_to_column(top10_phyla),
     by = c("sample_names" = "rowname")
   ) %>%
   left_join(
@@ -425,7 +436,7 @@ mbTab <- bac_base_end_meta %>%
     `Shannon Diversity Index` = diversity_shannon,
     Evenness = evenness_pielou,
     `Faiths Phylogenetic Diversity` = pd,
-    all_of(phyla_list),
+    all_of(top10_phyla_list),
     all_of(top10_genera_list)
   ) %>%
   mutate_at(vars(everything()), type.convert, as.is = TRUE) %>%
@@ -434,8 +445,8 @@ mbTab <- bac_base_end_meta %>%
     .tbl_fun = ~ .x %>%
       tbl_summary(
         by = arm,
-        type = list(Unclassified = "continuous", Unknown = "continuous"),
         missing = "no",
+        type = everything() ~ "continuous",
         statistic = list(
           all_continuous() ~ "{median}  \n({IQR}; {min}-{max})", # stats and format for continuous columns
           all_categorical() ~ "{n} / {N}  \n({p}%)"
@@ -479,12 +490,13 @@ htmltools::save_html(
   gt::as_raw_html(p),
   file.path(RESULTS, "base-end-diversity-analysis", "base-end-alpha-div.tbl")
 )
+
+x %>% tbl_summary()
 ```
 
 ```{r}
 #| eval: true
 #| label: tbl-time-wilcox
-
 p <- bac_base_end_meta %>%
   dplyr::select(
     displayid,
@@ -512,7 +524,6 @@ pl <- p %>%
 #| fig-cap: Differences between Baseline and endpoint within intervention arm. Statistical tests werer performed with a paired Wilcoxon test and FDR = 0.05 p-value correction where appropriate.
 #| eval: true
 #| label: tbl-arm-wilcox
-
 #is there a significant difference between baseline and endpoint within treatment group?
 #paired within group comparisions: arm_base vs. arm_end & ctrl_base vs. ctrl_end
 pl %>%
@@ -529,7 +540,6 @@ pl %>%
 #| eval: true
 #| label: vda
 #| tbl-cap: VDA effect size estimates for differences between timepoints
-
 data.table::rbindlist(
   lapply(colnames(p %>% select(!c(displayid, arm, timepoint))), function(x) {
     vda(data = p, variable = x, by = "timepoint")
@@ -544,7 +554,6 @@ data.table::rbindlist(
 #| fig-cap: Differences between Baseline and Endpoint. Statistical tests werer performed with a paired Wilcoxon test and FDR = 0.05 p-value correction where appropriate.
 #| eval: true
 #| label: tbl-arm-wilcox
-
 pl %>%
   group_by(diversity_metric) %>%
   pairwise_wilcox_test(
@@ -561,7 +570,6 @@ pl %>%
 #| label: base-end differences
 #| fig-cap: Boxplot representing the changes in bacterial alpha diversity statistics from baseline and endpoint
 #| tbl-cap: Changes in bacterial alpha diversity statistics from baseline and endpoint
-
 #calculate the percent change in median and IQR
 diff <- mbTab %>%
   pivot_longer(
@@ -588,7 +596,6 @@ diff %>%
     IQR = max(diff) - min(diff)
   ) %>%
   kable()
-
 ```
 
 #### Modelling changes in Alpha Diversity over time using Linear Mixed Models
@@ -730,7 +737,6 @@ One of the assumptions of random intercept/slope models is that the random error
 #| eval: true
 #| label: check model assumptions
 #| message: false
-
 residualPlots <- mapply(
   residual_plots,
   model = alpha_lmms,
@@ -780,7 +786,6 @@ alpha_lmms_transformed <- list(
 #| eval: true
 #| label: residual diagnostics on newly transformed data
 #| message: false
-
 transformedResidualPlots <- mapply(
   residual_plots,
   model = alpha_lmms_transformed,
@@ -808,7 +813,6 @@ lapply(alpha_lmms_transformed, summary)
 #| label: tbl-stargazer
 #| tbl-cap: Summary of linear mixed models used to predict alpha diversity statistics
 #| results: asis
-
 stargazer::stargazer(header = FALSE, alpha_lmms_transformed, type = "html")
 ```
 
@@ -869,7 +873,6 @@ Standard errors are expected to be more or less the same in a balanced dataset b
 #| eval: true
 #| label: tbl-emms
 #| tbl-cap: Estimated marginal means for alpha diversity statistics within each intervention arm
-
 library(emmeans)
 
 emmeans <- lapply(alpha_lmms_transformed, function(x) {
@@ -890,7 +893,6 @@ lapply(emmeans, knitr::kable)
 #| eval: true
 #| label: fig-emms-arm
 #| fig-cap: Changes in the estimated marginal means of alpha diversity statistics within each intervention arm
-
 # Create an empty list to store plots
 plot_list <- list()
 
@@ -951,7 +953,6 @@ The coeficients for the contrast are as follows (**depends on the order of the e
 #| label: tbl-emm-arm
 #| results: asis
 #| tbl-cap: Changes in alpha diveristy estimated marginal means over time by intervention arm.
-
 #store results for graph
 emmeans_BvsE <- lapply(emmeans, function(x) {
   contrast(x, method = list(c(-0.5, -0.5, 0.5, 0.5)), adjust = "bonferroni")
@@ -985,7 +986,6 @@ knitr::kable(combined_df, digits = 4)
 #| eval: true
 #| label: tbl-emm-arm-eff
 #| tbl-cap: The effect size of temporal changes in alpha diveristy estimated marginal means by intervention arm.
-
 lapply(
   lapply(emmeans, function(x) {
     contrast(x, method = "eff", adjust = "bonferroni")
@@ -1027,7 +1027,6 @@ The coeficients for the contrast are as follows (**depends on the order of the e
 #| label: tbl-emm-arm-contrasts
 #| tbl-cap: Contrast coeficients
 #| results: asis
-
 emmeans_CPMvsFeZnPM <- lapply(emmeans, function(x) {
   contrast(x, method = list(c(-1, 1, 1, -1)), adjust = "bonferroni")
 })
@@ -1072,7 +1071,6 @@ age_emmeans <- lapply(alpha_lmms_transformed, function(x) {
 #| eval:  true
 #| label: fig-emms-age
 #| fig-cap: Changes in the estimated marginal means of alpha diversity statistics within each intervention arm adjusted for age at baseline.
-
 plot_list <- list()
 
 # Loop through each item in the list
@@ -1107,7 +1105,6 @@ ggpubr::annotate_figure(
 #| label: tbl-age-contrasts
 #| tbl-cap: Estimated marginal means adjusting for age at baseline.
 #| results: asis
-
 lapply(
   lapply(age_emmeans, function(x) {
     pairs(x, adjust = "bonferroni")
@@ -1156,7 +1153,6 @@ Here only the intercept and time variable are significant. Therefore, we must re
 #| label: tbl-anova
 #| tbl-cap: ANOVA
 #| results: asis
-
 lapply(lapply(alpha_lmms_transformed, anova), knitr::kable)
 ```
 
@@ -1168,7 +1164,6 @@ lapply(lapply(alpha_lmms_transformed, anova), knitr::kable)
 #| fig-cap: Alpha diversity EMMs plots
 #| fig-width: 18
 #| fig-height: 12
-
 shannon_p <- bac_base_end_meta %>%
   ggplot(aes(
     x = backtransform_scaled_values(
@@ -1506,7 +1501,6 @@ One of the assumptions of random intercept/slope models is that the random error
 ```{r}
 #| eval: false
 #| label: check model assumptions2
-
 for (i in seq_along(alpha_lmms_transformed2)) {
   residual_plots(
     model = alpha_lmms_transformed2[[i]],
@@ -1523,7 +1517,6 @@ Note that the following outputs will be reported on the scale of the transformat
 #| label: summary tables2
 #| results: asis
 #| tbl-cap: Model results summary for LMM including baseline age (ageB) as a fixed effect.
-
 #view summary table
 
 stargazer::stargazer(header = FALSE, alpha_lmms_transformed2, type = "html")
@@ -1546,7 +1539,6 @@ lapply(lapply(alpha_lmms_transformed2, anova), knitr::kable)
 #| label: model compaison stargazer table2
 #| results: asis
 #| tbl-cap: Comparison of random intercept models with our without baseline age (ageB) included as a fixed effect.
-
 stargazer::stargazer(
   alpha_lmms_transformed,
   alpha_lmms_transformed2,
@@ -1562,11 +1554,7 @@ rm(
   list = setdiff(
     ls(),
     c(
-      "seqdata",
       "seqdata_bac",
-      "seqdata_arc",
-      "metadata",
-      "taxonomy",
       "base_end_paired_samples",
       "absAbund",
       "bac_base_end"

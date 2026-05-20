@@ -8,7 +8,6 @@ The difference between this analysis and previous ZI model analysis is that here
 #| echo: false
 #| eval: true
 #| cache: false
-
 # This initial code block loads custom utility functions and environment variables
 # These are stored in separate files to keep the main analysis clean and organized
 suppressWarnings(suppressMessages({
@@ -42,7 +41,6 @@ Results will be saved to ``r filepath``.
 #| eval: true
 #| label: data prep
 #| results: asis
-
 data <- prepare_ogu_data(
   absAbund,
   filter_prevalence = TRUE,
@@ -192,7 +190,6 @@ lognorm_EvsB <- readRDS(file.path(
 ```{r}
 #| eval: true
 #| label: list
-
 list <- list(
   gau = gau_EvsB,
   lognorm = lognorm_EvsB,
@@ -204,7 +201,6 @@ list <- list(
 ```{r}
 #| eval: false
 #| label: diagnose-mods
-
 poor_fits <- lapply(1:length(list), function(x) {
   d <- diagnoseZI(list[[x]]$all_models)
   d$dist <- names(list)[x]
@@ -236,7 +232,6 @@ poor_fits <- data.table::rbindlist(poor_fits)
 ```{r}
 #| eval: true
 #| label: summaries
-
 summaries <- list(
   gau = gau_EvsB$model_summary,
   lognorm = lognorm_EvsB$model_summary,
@@ -253,13 +248,11 @@ summaries <- left_join(summaries, poor_fits, by = c("outcome_id", "dist"))
 ```{r}
 #| eval: true
 #| label: any-errors
-
 if (any(summaries$error_message != "")) {
   print("Some models returned an error message")
   ind <- which(summaries$error_message != "")
   kable(summaries[ind, ])
 }
-
 ```
 
 ```{r}
@@ -279,7 +272,6 @@ summaries <- summaries %>%
 ```{r}
 #| eval: true
 #| label: best-AIC
-
 aic <- summaries %>%
   filter(criterion == "AIC") %>%
   group_by(criterion, outcome_id) %>%
@@ -292,7 +284,6 @@ aic <- summaries %>%
 ```{r}
 #| eval: true
 #| label: best-BIC
-
 bic <- summaries %>%
   filter(criterion == "BIC") %>%
   group_by(criterion, outcome_id) %>%
@@ -300,14 +291,12 @@ bic <- summaries %>%
   slice(1) %>%
   ungroup() %>%
   select(index, outcome_id, minBIC = value, distBIC = dist)
-
 ```
 
 ```{r}
 #| eval: true
 #| label: tbl-best-fits
 #| tbl-cap: Best fit models based on AIC and BIC
-
 (bestDist <- left_join(aic, bic) %>%
   mutate(dist = ifelse(distAIC == distBIC, distAIC, "Undetermined")))
 ```
@@ -325,7 +314,6 @@ The larger the dispersion value, $\theta$ in `nbinom2` models, the less variance
 #| eval: true
 #| label: tbl-best-disp
 #| tbl-cap: lowest disp value for models that passed diagnostics
-
 dispRatio <- summaries %>%
   filter(criterion == "dharmaDisp") %>%
   group_by(criterion, outcome_id) %>%
@@ -339,7 +327,6 @@ dispRatio <- summaries %>%
 ```{r}
 #| eval: true
 #| label: tbl-pvals
-
 pvals <- left_join(
   bestDist,
   summaries,
@@ -358,7 +345,6 @@ pvals <- left_join(
 #| label: best-dist-filtered
 #| fig-cap: NA
 #| tbl-cap: NA
-
 bestDist_filtered <- bestDist %>%
   filter(!outcome_id %in% pvals$outcome_id)
 ```
@@ -370,18 +356,15 @@ bestDist_filtered <- bestDist %>%
 ```{r}
 #| eval: true
 #| label: nbinom1 models
-
 nb1_models <- keep_at(
   nb1_EvsB$all_models,
   filter(bestDist_filtered, dist == "nb1")$outcome_id
 )
-
 ```
 
 ```{r}
 #| eval: true
 #| label: nb1-summary
-
 if (exists("nb1_models") && length(nb1_models) > 0) {
   nb1_unfit <- diagnoseZI(nb1_models)
   nb1_summary <- data.frame(
@@ -409,7 +392,6 @@ if (exists("nb1_models") && length(nb1_models) > 0) {
 
   kable(nb1_dharma_results$summary)
 }
-
 ```
 
 ### Zero-inflated Negative Binomial Polynomial Models
@@ -417,12 +399,10 @@ if (exists("nb1_models") && length(nb1_models) > 0) {
 ```{r}
 #| eval: true
 #| label: nbinom2 models
-
 nb2_models <- keep_at(
   nb2_EvsB$all_models,
   filter(bestDist_filtered, dist == "nb2")$outcome_id
 )
-
 ```
 
 ```{r}
@@ -463,12 +443,10 @@ if (exists("nb2_models") && length(nb2_models) > 0) {
 ```{r}
 #| eval: true
 #| label: poi models
-
 poi_models <- keep_at(
   poi_EvsB$all_models,
   filter(bestDist_filtered, dist == "poi")$outcome_id
 )
-
 ```
 
 ```{r}
@@ -513,7 +491,6 @@ gau_models <- keep_at(
   gau_EvsB$all_models,
   filter(bestDist_filtered, dist == "gau")$outcome_id
 )
-
 ```
 
 ```{r}
@@ -554,12 +531,10 @@ if (exists("gau_models") && length(gau_models) > 0) {
 ```{r}
 #| eval: true
 #| label: lognorm unfit models
-
 lognorm_models <- keep_at(
   lognorm_EvsB$all_models,
   filter(bestDist_filtered, dist == "lognorm")$outcome_id
 )
-
 ```
 
 ```{r}
@@ -601,7 +576,6 @@ Are there any models that fail diagnostics: `r if (exists("lognorm_models") && l
 #| eval: true
 #| label: save
 #| echo: false
-
 save(
   nb1_models,
   nb2_models,
@@ -616,9 +590,7 @@ save(
 #| eval: false
 #| label: load
 #| echo: false
-
 load(file.path(filepath, paste0(prefix, "finalised-fits.RData")))
-
 ```
 
 ## Significant OGUs
@@ -640,7 +612,6 @@ poi_ogu_models <- poi_EvsB$adj_results %>%
 #| eval: true
 #| label: tbl-summary
 #| tbl-cap: Summary table of OGUs successfully fit by a model, and their corresponding coefficient p-values
-
 poi_summary <- left_join(poi_summary, poi_ogu_models)
 nb1_summary <- left_join(nb1_summary, nb1_ogu_models)
 nb2_summary <- left_join(nb2_summary, nb2_ogu_models)
@@ -669,7 +640,6 @@ save_and_link(
   description = "Summary table of OGUs successfully fit by a model",
   directory_naming = "both"
 )
-
 ```
 
 Of the `r ncol(outcome)` OGUs that passed filtering (`r ncol(outcome)/ncol(data$ogu_data)`), `r nrow(summary)` were sucessfully fit to a zero-inflated model (`r nrow(summary)/ncol(outcome)*100`%)
@@ -677,7 +647,6 @@ Of the `r ncol(outcome)` OGUs that passed filtering (`r ncol(outcome)/ncol(data$
 ```{r}
 #| eval: true
 #| label: zi-sig
-
 ziSig <- identify_significant_ogus(
   summary,
   data$taxa_data
@@ -690,7 +659,6 @@ colnames(ziSig)[colnames(ziSig) == "rowname"] <- "outcome_id"
 #| eval: true
 #| results: asis
 #| cache: false
-
 save_and_link(
   data = ziSig,
   filename = paste0(
@@ -753,7 +721,6 @@ save_and_link(
   description = "Significant OGUs based on ZI-GLMMs (zero-inflated compponent)",
   directory_naming = "both"
 )
-
 ```
 
 ## Using EMMEANS to determine significant changes in taxa abundances
@@ -761,7 +728,6 @@ save_and_link(
 ```{r fits}
 #| eval: true
 #| label: fit-mods
-
 fits <- list(nb1_models, nb2_models, poi_models)
 
 fits <- list_c(fits)
@@ -771,7 +737,6 @@ fits <- list_c(fits)
 #| eval: true
 #| label: save-fits
 #| results: asis
-
 save_and_link(
   data = fits,
   filename = paste0(
@@ -799,7 +764,6 @@ The below estimates the mean for each `timepoint`, age at baseline at a constant
 #| eval: true
 #| label: tbl-within-time
 #| tbl-cap: Estimated marginal means for OGU abundances within each timepoint
-
 emm <- lapply(fits, function(x) {
   emm <- emmeans(
     x,
@@ -826,7 +790,6 @@ emm <- lapply(fits, function(x) {
 #| eval: true
 #| label: tbl-within-time-cont
 #| tbl-cap: Comparison of abundance marginal mean estimates (EMMs) betweeen intervention arm at baseline and endpoint. Only those with p $\leq$ 0.05 are show for brevity.
-
 emm_pairs <- lapply(emm, function(x) {
   contrast(
     x,
@@ -840,13 +803,15 @@ emm_pairs <- lapply(emm, function(x) {
 
 emm_pairs_df <- emm_bind(emm_pairs, kable = F)
 
-kable(head(sigAgeB <- emm_pairs_df %>%
-  filter(p.value <= 0.05) %>%
-  left_join(rownames_to_column(data$taxa_data, "Model"), by = "Model") %>%
-  mutate(
-    change = ifelse(estimate < 0, "Decrease", "Increase"),
-    timepoint = time
-  )))
+kable(head(
+  sigAgeB <- emm_pairs_df %>%
+    filter(p.value <= 0.05) %>%
+    left_join(rownames_to_column(data$taxa_data, "Model"), by = "Model") %>%
+    mutate(
+      change = ifelse(estimate < 0, "Decrease", "Increase"),
+      timepoint = time
+    )
+))
 ```
 
 ##### Effect Size
@@ -857,7 +822,6 @@ The default value used to standardise the effect size is the model's residual st
 #| eval: true
 #| label: sigArm-eff
 #| tbl-cap: Effect sizes calculated as a standardized mean difference similar to Cohen's d.
-
 emmEff <- lapply(1:length(emm_pairs), function(i) {
   eff_size(
     emm_pairs[[i]],
@@ -895,14 +859,12 @@ mth12v15 <- sigAgeBeff %>%
 mth12v18 <- sigAgeBeff %>%
   filter(str_detect(contrast, "12mths")) %>%
   filter(str_detect(contrast, "18mths"))
-
 ```
 
 ```{r}
 #| eval: true
 #| label: fig-phyla-emms
 #| fig-cap: Estimated marginal mean differences between infants who started intervention at 12 months vs those who were 15 months old at baseline and endpoint
-
 plotPhylaEMMs(mth12v15) +
   facet_wrap(~timepoint, scales = "free")
 ```
@@ -911,7 +873,6 @@ plotPhylaEMMs(mth12v15) +
 #| eval: true
 #| label: fig-phyla-emms
 #| fig-cap: Estimated marginal mean differences between infants who started intervention at 12 months vs those who were 18 months old at baseline and endpoint
-
 plotPhylaEMMs(mth12v18) +
   facet_wrap(~timepoint, scales = "free")
 ```
@@ -945,7 +906,6 @@ trend <- lapply(fits, function(x) {
 #| eval: true
 #| label: tbl-emm-arm-trend-compare
 #| tbl-cap: Comparison of the rates of change from baseline to endpoint in abundance EMMs between intervention arms.
-
 slopes <- lapply(trend, function(x) {
   contrast(
     x,
@@ -972,7 +932,6 @@ The default value used to standardise the effect size is the model's residual st
 #| label: sigArm-eff
 #| fig-cap: NA
 #| tbl-cap: Effect sizes calculated as a standardized mean difference similar to Cohen's d.
-
 emmEff <- lapply(1:length(slopes), function(i) {
   eff_size(
     slopes[[i]],
@@ -1010,23 +969,26 @@ mth12v15 <- sigArmsTimeEff %>%
 mth12v18 <- sigArmsTimeEff %>%
   dplyr::filter(str_detect(contrast, "12mths")) %>%
   dplyr::filter(str_detect(contrast, "18mths"))
-
 ```
 
 ```{r}
 #| eval: true
 #| label: fig-phyla-emms
 #| fig-cap: Estimated marginal mean differences between infants who started intervention at 12 months vs those who were 15 months old at baseline and endpoint
-
-plotPhylaEMMs(dplyr::filter(mth12v15, abs(effect.size) >= 0.5), highlight_common = FALSE)
+plotPhylaEMMs(
+  dplyr::filter(mth12v15, abs(effect.size) >= 0.5),
+  highlight_common = FALSE
+)
 ```
 
 ```{r}
 #| eval: true
 #| label: fig-phyla-emms
 #| fig-cap: Estimated marginal mean differences between infants who started intervention at 12 months vs those who were 18 months old at baseline and endpoint
-
-plotPhylaEMMs(dplyr::filter(mth12v18, abs(effect.size) >= 0.5), highlight_common = FALSE)
+plotPhylaEMMs(
+  dplyr::filter(mth12v18, abs(effect.size) >= 0.5),
+  highlight_common = FALSE
+)
 ```
 
 #### OGU EMM changes over time (ignoring baseline age)
@@ -1036,7 +998,6 @@ plotPhylaEMMs(dplyr::filter(mth12v18, abs(effect.size) >= 0.5), highlight_common
 #| label: Changes in estimated marginal means for OGU abundances
 #| warning: false
 #| message: false
-
 emm_time <- lapply(fits, function(x) {
   # Get EMMs for arm at each time point
   emm <- emmeans(
@@ -1049,22 +1010,21 @@ emm_time <- lapply(fits, function(x) {
   levels(emm)$time <- c("Baseline", "Endpoint")
   return(emm)
 })
-
 ```
 
 ```{r}
 #| eval: true
 #| label: tbl-emm-time
 #| tbl-cap: Changes in abundance marginal mean estimates over time.
-
 time_cont <- lapply(emm_time, pairs, reverse = TRUE)
 
 time_cont_df <- emm_bind(time_cont, kable = F) %>%
   left_join(rownames_to_column(data$taxa_data, "Model"), by = "Model") %>%
   mutate(Species = ifelse(Species == "", Genus, Species))
 
-kable(head(sigTime <- time_cont_df %>%
-  filter(p.value <= 0.05)
+kable(head(
+  sigTime <- time_cont_df %>%
+    filter(p.value <= 0.05)
 ))
 ```
 
@@ -1079,7 +1039,6 @@ The default value used to standardise the effect size is the model's residual st
 #| label: sigArm-eff
 #| fig-cap: NA
 #| tbl-cap: Effect sizes calculated as a standardized mean difference similar to Cohen's d.
-
 emmEff <- lapply(1:length(time_cont), function(i) {
   eff_size(
     time_cont[[i]],
@@ -1113,27 +1072,30 @@ sigTimeEff <- left_join(
   by = c("Model")
 )
 
-kable(head(time_cont_df <- time_cont_df %>%
-  left_join(emmEff_df, by = "Model")))
+kable(head(
+  time_cont_df <- time_cont_df %>%
+    left_join(emmEff_df, by = "Model")
+))
 ```
 
 Of `r nrow(time_cont_df)` OGUs sucessfully fitted with ZI-GLMMs: 
 
-- `r nrow(time_cont_df %>% filter(magnitude == "medium" | magnitude == "large"))` had an effect size of medium or more
-- `r nrow(time_cont_df %>% filter(p.value <= 0.05)` OGUs had FDR \u2264 0.05
-- `r nrow(time_cont_df %>% filter(p.value <= 0.05, magnitude == "medium" | magnitude == "large"))` OGUs had FDR \u2264 0.05 and an effect size of medium or more
+- `r nrow(filter(time_cont_df,magnitude == "medium" | magnitude == "large"))` had an effect size of medium or more
+- `r nrow(filter(time_cont_df, p.value <= 0.05))` OGUs had FDR \u2264 0.05
+- `r nrow(filter(time_cont_df, p.value <= 0.05, magnitude == "medium" | magnitude == "large"))` OGUs had FDR \u2264 0.05 and an effect size of medium or more
 
 ```{r}
 #| eval: true
 #| label: tbl-eff-nums
 #| tbl-cap: Number of significant OGUs (FDR \u2264 0.05) with particular effect sizes
-
-kable(time_cont_df %>%
-  filter(p.value <= 0.05) %>%
-  mutate(direction = ifelse(effect.size < 0, "Decrease", "Increase")) %>%
-  group_by(magnitude, direction) %>%
-  mutate(count = 1) %>%
-  summarise(sum = sum(count)))
+kable(
+  time_cont_df %>%
+    filter(p.value <= 0.05) %>%
+    mutate(direction = ifelse(effect.size < 0, "Decrease", "Increase")) %>%
+    group_by(magnitude, direction) %>%
+    mutate(count = 1) %>%
+    summarise(sum = sum(count))
+)
 ```
 
 ```{r}
@@ -1141,7 +1103,6 @@ kable(time_cont_df %>%
 #| label: save-sigTime
 #| results: asis
 #| cache: false
-
 save_and_link(
   data = time_cont_df,
   filename = paste0(prefix, "ogu-emms-time-ZI.csv"),
@@ -1161,8 +1122,7 @@ save_and_link(
 #| eval: true
 #| label: fig-phyla-emms-effsize
 #| fig-cap: Estimated marginal mean differences between baseline and endpoint. Significant differences with an effect size > 0.5 (medium effect size) are shown in the plot.
-
-plotPhylaEMMs(
+#| plotPhylaEMMs(
   filter(sigTimeEff, abs(effect.size) >= 0.5),
   text_size = 8,
   highlight_common = FALSE
@@ -1177,7 +1137,6 @@ plotPhylaEMMs(
 #| eval: true
 #| label: tbl-emms
 #| tbl-cap: Zero-inflated estimated marginal means for OGU abundances within each timepoint
-
 emm_zi <- lapply(fits, function(x) {
   # Get EMMs for arm at each time point
   emm <- emmeans(
@@ -1209,7 +1168,6 @@ zi_probs <- lapply(emm_zi, regrid, transform = "logit")
 #| eval: true
 #| label: tbl-emm-pairs
 #| tbl-cap: Comparison of abundance marginal mean estimates (EMMs) betweeen intervention arm at baseline and endpoint
-
 emm_zi_pairs <- lapply(emm_zi, function(x) {
   contrast(
     x,
@@ -1245,7 +1203,6 @@ The "nonexposure" group in this context would be the reference age group of 12mt
 #| eval: false
 #| label: zi-odds
 #| tbl-cap: Effect size calculated as odds-ratio and converted to Cohen's d with respect to the rate of the desired outcome for zero-inflation component
-
 oddsEff <- Map(summarize_zi_contrasts, emm_zi, emm_zi_pairs, fits)
 
 oddsEff <- data.table::rbindlist(oddsEff, idcol = "Model") %>%
@@ -1330,7 +1287,6 @@ mth12v18 <- ZIsigArmsEff %>%
 #| eval: false
 #| label: fig-phyla-emms
 #| fig-cap: Estimated marginal mean differences between infants who started intervention at 12 months vs those who were 15 months old at baseline and endpoint
-
 plotPhylaEMMs(mth12v15, highlight_common = FALSE)
 ```
 
@@ -1338,7 +1294,6 @@ plotPhylaEMMs(mth12v15, highlight_common = FALSE)
 #| eval: false
 #| label: fig-phyla-emms
 #| fig-cap: Estimated marginal mean differences between infants who started intervention at 12 months vs those who were 18 months old at baseline and endpoint
-
 plotPhylaEMMs(mth12v18, highlight_common = FALSE)
 ```
 
@@ -1348,11 +1303,10 @@ plotPhylaEMMs(mth12v18, highlight_common = FALSE)
 #| eval: true
 #| label: tbl-emm-arm-trend
 #| tbl-cap: Rate of change per unit increase of abundance marginal mean estimates over time. The time.trend column represents the slope of the relationship with time.
-
 trend_zi <- lapply(fits, function(x) {
   emm <- emtrends(
     x,
-    ~ age_B,
+    ~age_B,
     var = "time",
     at = list(age_B = c(0.0529, 0.454, 0.859)),
     adjust = "fdr",
@@ -1375,7 +1329,6 @@ trend_zi <- lapply(fits, function(x) {
 #| eval: true
 #| label: tbl-emm-arm-trend-compare
 #| tbl-cap: Comparison of the rates of change from baseline to endpoint in abundance EMMs between intervention arms.
-
 slopes_zi <- lapply(trend_zi, function(x) {
   contrast(
     x,
@@ -1402,7 +1355,6 @@ The default value used to standardise the effect size is the model's residual st
 #| label: sigArm-eff
 #| fig-cap: NA
 #| tbl-cap: Effect sizes calculated as a standardized mean difference similar to Cohen's d.
-
 emmEff_zi <- lapply(1:length(slopes_zi), function(i) {
   eff_size(
     slopes_zi[[i]],
@@ -1444,23 +1396,26 @@ mth12v15 <- sigArmsTimeEff %>%
 mth12v18 <- sigArmsTimeEff %>%
   dplyr::filter(str_detect(contrast, "12mths")) %>%
   dplyr::filter(str_detect(contrast, "18mths"))
-
 ```
 
 ```{r}
 #| eval: true
 #| label: fig-phyla-emms
 #| fig-cap: Estimated marginal mean differences between infants who started intervention at 12 months vs those who were 15 months old at baseline and endpoint
-
-plotPhylaEMMs(dplyr::filter(mth12v15, abs(effect.size) >= 0.5), highlight_common = FALSE)
+plotPhylaEMMs(
+  dplyr::filter(mth12v15, abs(effect.size) >= 0.5),
+  highlight_common = FALSE
+)
 ```
 
 ```{r}
 #| eval: true
 #| label: fig-phyla-emms
 #| fig-cap: Estimated marginal mean differences between infants who started intervention at 12 months vs those who were 18 months old at baseline and endpoint
-
-plotPhylaEMMs(dplyr::filter(mth12v18, abs(effect.size) >= 0.5), highlight_common = FALSE)
+plotPhylaEMMs(
+  dplyr::filter(mth12v18, abs(effect.size) >= 0.5),
+  highlight_common = FALSE
+)
 ```
 
 ## Results Summary
@@ -1470,7 +1425,6 @@ plotPhylaEMMs(dplyr::filter(mth12v18, abs(effect.size) >= 0.5), highlight_common
 #| echo: false
 #| results: asis
 #| cache: false
-
 list_all_results()
 ```
 
@@ -1485,6 +1439,5 @@ generate_results_section(directory_naming = "both")
 ```{r}
 #| eval: true
 #| label: info
-
 print(sessionInfo(), locale = FALSE)
 ```
