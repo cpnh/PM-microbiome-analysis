@@ -1,73 +1,154 @@
+# Baseline Characterisitcs for Participants included in Microbiome Analysis
+
 ```{r}
 #| echo: false
 #| eval: true
 
 # This initial code block loads custom utility functions and environment variables
 # These are stored in separate files to keep the main analysis clean and organized
-source("utils/r-utils.r")
-source("_environment.required")
+suppressWarnings(suppressMessages({
+  if (file.exists("utils/r-utils.r")) {
+    source("utils/r-utils.r")
+  }
+  if (file.exists("_environment.required")) {
+    source("_environment.required")
+  }
+
+  library(promicrobialTools)
+
+  prefix <- ""
+
+  filepath <- get_results_dir(directory_naming = "parent")
+}))
+
 baseline_metadata <- readRDS("data/metadata/baseline-metadata.rds")
 ```
 
 ```{r}
 #| eval: true
 #| label:  metadata comparison data prep
-m1 <- baseline_metadata %>% 
-                rownames_to_column(var = "RowNames") %>%
-                select(
-                    `Age (months)` = agemonths_base, 
-                    Female = sexf, 
-                    `Intervention arm`=trt, 
-                    `Birth mode vaginal (vs. Caesarean)` = del_type,
-                    `Birth weight (kg)` =  bwt,
-                    `Current weight (kg)` = cwt,
-                    `Mid-upper arm circumference (cm)` = muac_avg,
-                    `Head circumference (cm)` = hc_avg,
-                    `Head circumference-for-age Z-score` = zhc,
-                    `Length (cm)` = ln_avg ,
-                    `Length-for-age Z-score (LAZ)` = zlen,
-                    `Stunting (LAZ < -2)` = stunt_base,
-                    `Weight-for-age Z-score (WAZ) ` = zwei ,
-                    `Underweight (WAZ < -2)` =  underwt_base,
-                    `Weight-for-length Z-score (WLZ) ` = zwfl,
-                    `Wasting (WLZ < -2)` =  wast_base,
-                    `Ferritin (ng/ml)` =  fer_base,
-                    `Iron deficiency (<12 ng/ml) ` = fer_def12_base,
-                    `Ferritin (ng/ml)* adjusted for CRP` = fer_crpadjbr , # using BRINDA
-                    `Iron deficiency (<12 ng/ml)* adjusted for CRP` = fer_crpbr_def12, # using BRINDA
-                    `Zinc (µg/dL)` = zinc,
-                    `Zinc deficiency (<70 µg/dL) ` =  zinc_def70, # <70 µg/dL
-                    `Hemoglobin (g/dl)` = hb_base,
-                    `Anemia (hemoglobin < 11 g/dl) ` =  anemia_base,
-                    `C-reactive protein (CRP) ≥ 5 mg/L ` = crp_elev5 ,
-                    `Diarrhea today or within past 4 weeks ` =  freq3diarr, # 1,2&3
-                    `Fever today or within past 4 weeks ` = freqfever ,# 1,2&3
-                    `Cough today or within past 4 weeks` =  freqcough, # 1,2&3
-                    `Observed features` = observed, 
-                    `Chao 1 Index` = chao1, 
-                    `Shannon Entropy`=diversity_shannon, 
-                    Evenness = evenness_pielou,
-                    `Faith's Phylogenetic Diversity` = pd) %>%
-                mutate_at(vars(everything()), str_trim) %>%
-                type.convert(., as.is = TRUE) %>%
-                mutate(
-                `Birth weight (kg)` =  (`Birth weight (kg)`)/1000,
-                `Current weight (kg)` = (`Current weight (kg)`),
-                `Low birth weight (<2.5 kg)` =  (`Birth weight (kg)`) <= 2.5,
-                `Birth mode vaginal (vs. Caesarean)` = case_when(
-                    `Birth mode vaginal (vs. Caesarean)` == "1" ~ "Vaginal",
-                    `Birth mode vaginal (vs. Caesarean)` == "2" ~ "Caesarian"),
-                `Diarrhea today or within past 4 weeks ` =  case_when(
-                    `Diarrhea today or within past 4 weeks ` == "1" ~ "Today",
-                    `Diarrhea today or within past 4 weeks ` == "2" ~ "Last 7 days",
-                    `Diarrhea today or within past 4 weeks ` == "3" ~ "Last 4 weeks"),
-                `Fever today or within past 4 weeks ` = case_when(
-                    `Fever today or within past 4 weeks ` == "1" ~ "Today",
-                    `Fever today or within past 4 weeks ` == "2" ~ "Last 7 days",
-                    `Fever today or within past 4 weeks ` == "3" ~ "Last 4 weeks"),
-                `Cough today or within past 4 weeks` = case_when(
-                    `Cough today or within past 4 weeks` == "1" ~ "Today",
-                    `Cough today or within past 4 weeks` == "2" ~ "Last 7 days",
-                    `Cough today or within past 4 weeks` == "3" ~ "Last 4 weeks")) %>%
-                mutate(subset = "All Baseline Samples")
+m1 <- baseline_metadata %>%
+  rownames_to_column(var = "RowNames") %>%
+  select(
+    `Age (months)` = agemonths_base,
+    Sex = sexf,
+    `Intervention arm` = arm,
+    `Birth mode vaginal (vs. Caesarean)` = del_type,
+    `Birth weight (kg)` = bwt,
+    `Current weight (kg)` = cwt,
+    `Mid-upper arm circumference (cm)` = muac_avg,
+    `Head circumference (cm)` = hc_avg,
+    `Head circumference-for-age Z-score` = zhc,
+    `Length (cm)` = ln_avg,
+    `Length-for-age Z-score (LAZ)` = zlen,
+    `Stunting (LAZ < -2)` = stunt_base,
+    `Weight-for-age Z-score (WAZ) ` = zwei,
+    `Underweight (WAZ < -2)` = underwt_base,
+    `Weight-for-length Z-score (WLZ) ` = zwfl,
+    `Wasting (WLZ < -2)` = wast_base,
+    `Ferritin (ng/ml)` = fer_base,
+    `Iron deficiency (<12 ng/ml) ` = fer_def12_base,
+    `Ferritin (ng/ml)* adjusted for CRP` = fer_crpadjbr, # using BRINDA
+    `Iron deficiency (<12 ng/ml)* adjusted for CRP` = fer_crpbr_def12, # using BRINDA
+    `Zinc (µg/dL)` = zinc,
+    `Zinc deficiency (<70 µg/dL) ` = zinc_def70, # <70 µg/dL
+    `Hemoglobin (g/dl)` = hb_base,
+    `Anemia (hemoglobin < 11 g/dl) ` = anemia_base,
+    `C-reactive protein (CRP) ≥ 5 mg/L ` = crp_elev5,
+    `GI symptoms` = gi_yn,
+    `Diarrhea today or within past 4 weeks` = freq3diarr,
+    Fever = fever_yn,
+    `Fever today or within past 4 weeks` = freqfever,
+    `Respiratory symptoms` = resp_yn,
+    `Cough today or within past 4 weeks` = freqcough,
+    `Observed features` = observed,
+    `Chao 1 Index` = chao1,
+    `Shannon Entropy` = diversity_shannon,
+    Evenness = evenness_pielou,
+    `Faith's Phylogenetic Diversity` = pd
+  ) %>%
+  mutate_at(vars(everything()), str_trim) %>%
+  type.convert(., as.is = TRUE) %>%
+  mutate(across(
+    c(`GI symptoms`, Fever, `Respiratory symptoms`),
+    ~ ifelse(.x == 0, "No", "Yes")
+  )) %>%
+  mutate(across(
+    c(
+      `Diarrhea today or within past 4 weeks`,
+      `Fever today or within past 4 weeks`,
+      `Cough today or within past 4 weeks`
+    ),
+    ~ case_when(
+      .x == "1" ~ "Today",
+      .x == "2" ~ "Last 7 days",
+      .x == "3" ~ "Last 4 weeks",
+      .x == "4" ~ "None",
+      .x == "8" ~ "Don't know"
+    )
+  )) %>%
+  mutate(
+    Sex = ifelse(Sex == 0, "Male", "Female"),
+    `Birth weight (kg)` = (`Birth weight (kg)`) / 1000,
+    `Current weight (kg)` = (`Current weight (kg)`),
+    `Low birth weight (<2.5 kg)` = (`Birth weight (kg)`) <= 2.5,
+    `Birth mode vaginal (vs. Caesarean)` = case_when(
+      `Birth mode vaginal (vs. Caesarean)` == "1" ~ "Vaginal",
+      `Birth mode vaginal (vs. Caesarean)` == "2" ~ "Caesarian"
+    ),
+    `Diarrhea today or within past 4 weeks` = ifelse(
+      `GI symptoms` == "No",
+      "None",
+      `Diarrhea today or within past 4 weeks`
+    ),
+    `Fever today or within past 4 weeks` = ifelse(
+      Fever == "No",
+      "None",
+      `Fever today or within past 4 weeks`
+    ),
+    `Cough today or within past 4 weeks` = ifelse(
+      `Respiratory symptoms` == "No",
+      "None",
+      `Cough today or within past 4 weeks`
+    )
+  )
 ```
+
+```{r}
+#| eval: true
+#| label: tbl-basemb
+#| tbl-cap: "Baseline characteristics of pearl millet trial participants who provided fecal samples for microbiome analysis, stratified by intervention arm. Continuous variables are presented as median (interquartile range; minimum-maximum). Categorical variables are presented as n/N (%). P-values from Wilcoxon rank sum test for continuous variables and Pearson's chi-squared test or Fisher's exact test for categorical variables. Q-values represent false discovery rate-adjusted p-values for multiple testing correction."
+m1 %>%
+  tbl_summary(
+    by = `Intervention arm`,
+    missing = "no",
+    statistic = list(
+      all_continuous() ~ "{median}  \n({IQR}; {min}-{max})", # stats and format for continuous columns
+      all_categorical() ~ "{n} / {N}  \n({p}%)"
+    )
+  ) %>% # stats and format for categorical columns
+  add_n() %>%
+  add_overall() %>%
+  add_p() %>%
+  add_q() %>%
+  bold_p(q = T) %>%
+  as_kable_extra(booktabs = TRUE) %>%
+  kable_styling(latex_options = "scale_down") %>%
+  landscape()
+```
+
+## Results
+
+### Intervention Group Comparison
+
+Of the 168 participants with available microbiome sequencing data, 82 (49%) were allocated to the control pearl millet (CPM) group and 86 (51%) to the iron and zinc fortified pearl millet (FeZnPM) intervention group. Baseline characteristics were well-balanced between intervention arms, with no statistically significant differences observed after correction for multiple testing (all q-values > 0.90) (@tbl-basemb).
+
+Demographic characteristics were similar between groups, with median ages of 15.03 months in the CPM group compared to 14.39 months in the FeZnPM group (p = 0.44). Sex distribution was balanced, with females comprising 48% and 52% of the CPM and FeZnPM groups, respectively (p = 0.54). Birth mode and birth weight were comparable between arms (p = 0.54 and p = 0.57, respectively).
+
+Anthropometric measurements and nutritional status indicators showed no significant differences. Stunting prevalence was 24% in the CPM group versus 33% in the FeZnPM group (p = 0.24), whilst underweight (24% vs. 23%, p = 0.86) and wasting (9.8% vs. 7.0%, p = 0.51) were similar between groups.
+
+Micronutrient status was comparable between intervention arms. Iron deficiency affected 63% of the CPM group compared to 57% of the FeZnPM group (p = 0.44), whilst zinc deficiency was present in 15% and 22% of participants, respectively (p = 0.31). Anaemia prevalence was similar between groups (66% vs. 64%, p = 0.80).
+
+Clinical symptoms showed similar patterns across intervention arms. Gastrointestinal symptoms were reported by 13% of the CPM group versus 9.5% of the FeZnPM group (p = 0.49), fever by 37% versus 39% (p = 0.82), and respiratory symptoms by 46% versus 47% (p = 0.91), respectively.
+
+Microbiome diversity metrics were well-balanced between groups, with median observed features of 1,941 in the CPM group compared to 1,840 in the FeZnPM group (p = 0.45). Shannon entropy (3.34 vs. 3.34, p = 0.98) and other alpha diversity measures showed no significant differences, confirming appropriate randomisation for microbiome analyses.
