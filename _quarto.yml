@@ -2,6 +2,9 @@ project:
   type: book
   output-dir: _output
   execute-dir: project
+
+from: markdown+emoji
+
 book:
   title: "Project Sabal ID 14768"
   subtitle: "Bacterial Metagenome Analysis"
@@ -83,33 +86,69 @@ book:
     - part: analysis/10-Fe-subgroup-analysis/index.qmd
       chapters: 
         - analysis/10-Fe-subgroup-analysis/iron-status.qmd
+    
+    - part: analysis/100-Appendix/index.qmd
+      chapters:
+        - analysis/100-Appendix/Appendix-1-Bowtie.qmd 
+        - analysis/100-Appendix/Appendix-2-REI.qmd 
+        - analysis/100-Appendix/Appendix-3-Antibiotic-use-baseline.qmd
+        - analysis/100-Appendix/Appendix-4-no-samples-compare.qmd 
+        - analysis/100-Appendix/Appendix-5-EVIDENT.qmd
+
     - part: "References"
       chapters: 
         - manuscript/references.qmd
+    
 
+env: NULL
 execute:
-  enabled: true #juputr notebooks only- allows code blocks to be executed
-  cache: true
-  freeze: auto #auto/true; false forces recomputation
+  freeze: false #auto/true; false forces recomputation
+  cache: false
+  
 engine: knitr
+
 cite-method: citeproc
-csl: _assets/british-journal-of-nutrition.csl
+csl: _assets/harvard-cite-them-right.csl
 bibliography: manuscript/Bacterial-Microbiome-Analysis.bib
+papersize: A4
+
+# Title page
+titlepage: "true"
+titlepage-background: _assets/cpnh-background-logo-v2.pdf
+titlepage-header: College of Human Ecology | Cornell University
+
+# Visual settings
 code-block-bg: true
 code-block-border-left: "#EF9F76"
-highlight-style: oblivion
+highlight-style: ayu
 code-line-numbers: true
 code-overflow: wrap
+syntax-highlighting: idiomatic
+
+# Figure settings
 fig-prefix: "Figure"
 fig-height: 18
 fig-width: 22
 fig-cap-location: bottom
-mainfont: Liberation Sans
+
+# Typography
+mainfont: "Liberation Sans"
+
+# Numbering
 number-sections: true
 number-depth: 3
+
+# Table of contents
 toc-depth: 6
 toc-expand: true
-toc-title: Contents
+toc-title: "Contents"
+lof: true
+lot: true
+
+# Resources
+resources:
+  - "_assets/images"
+  
 format:
   html:
     code-fold: true
@@ -117,11 +156,60 @@ format:
     code-summary: View code cell contents
     default-image-extension: svg
     fig-format: svg
-    theme: _assets/frappe.scss
+    theme: _assets/styles/frappe.scss
     toc: true
     toc-location: right-body #body, left-body, right-body, left, right
     page-layout: full
     gutter-width: 0.5em
+    embed-resources: true
+  pdf: 
+    keep-tex: true
+    code-block-border-left: false
+    geometry:
+      - heightrounded
+      - left=1in
+      - top=1in
+      - bottom=1in
+      - textwidth=26.5pc # changes width of main body text
+      - marginparsep=2pc   
+      - marginparwidth=15pc # changes width towards the right of margin text
+      - textheight=44\baselineskip
+      - headheight=\baselineskip
+      - headsep=2\baselineskip
+    mainfont: Inter
+    monofont: Courier New
+    monofontoptions: Scale=0.75
+    pdf-engine: xelatex
+    default-image-extension: png
+    toc: true
+    toc-depth: 6
+    fig-format: png
+    fig-width: 8
+    fig-height: 6
+    fig-cap-location: bottom
+    fig-prefix: "Figure"
+    number-sections: true
+    template: _assets/basic_pdf_template.tex
+    include-in-header:
+      text: |
+        \usepackage{longtable}
+        \usepackage{booktabs}
+        \usepackage{placeins}
+        \let\oldlongtable\longtable
+        \let\endoldlongtable\endlongtable
+        \renewenvironment{longtable}{\FloatBarrier\oldlongtable}{\endoldlongtable\FloatBarrier}
+        \usepackage{fvextra}
+        \DefineVerbatimEnvironment{Highlighting}{Verbatim}{
+          breaklines,
+          breaksymbolleft={},
+          showspaces=false,
+          showtabs=false,
+          commandchars=\\\{\}
+        }
+
+reference-location: margin
+citation-location: document
+
 custom-callout: #https://github.com/coatless-quarto/custom-callout/
   h0:
     title: "Null Hypothesis" 
@@ -140,6 +228,13 @@ custom-callout: #https://github.com/coatless-quarto/custom-callout/
     icon-symbol: 🗒
     color: "#BABBF1"
     collapse: true
+  quote:
+    title: "Definition"
+    icon-symbol: "fa-quote-left"
+    color: "#414559"
+filters:
+  - custom-callout
+
 knitr:
   opts_chunk:
     R.options:

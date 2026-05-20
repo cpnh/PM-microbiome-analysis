@@ -1,1 +1,30 @@
 # Appendix
+
+## Changes to bacterial taxonomy
+
+The lineages file used with Woltka contains now out of data phyla names. Here, phyla names are changed to reflect recent changes in nomenclature [@Oren2021; @Oren2023].
+
+```bash
+
+sed -i.bak \
+    -e 's/Firmicutes/Bacillota/g' \
+    -e 's/Actinobacteria/Actinomycetota/g' \
+    -e 's/Proteobacteria/Pseudomonadota/g' \
+    -e 's/Bacteroidetes/Bacteroidota/g' \
+    -e 's/Epsilonbacteraeota/Campylobacterota/g' \
+    -e 's/Verrucomicrobia/Verrucomicrobiota/g' \
+    $REF/WoL2-Woltka/taxonomy/lineages.txt
+
+```
+
+```{r}
+#| eval: true
+tax <- read.delim(file.path(REF, "WoL2-Woltka/taxonomy/lineages.txt"),header = FALSE, col.names = c("OGU", "V2")) %>% 
+        separate(V2, sep = "; ", #include single space
+                c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")) %>%
+        mutate_at(vars(everything()), str_remove,".__") %>%
+        mutate_at(vars(everything()), str_remove,"_.*") %>%
+        mutate(across(!OGU, ~ifelse(. == "", OGU, .)))
+
+write.csv(tax, file.path(REF, "WoL2-Woltka/taxonomy/lineages.csv"), row.names = FALSE)
+```
