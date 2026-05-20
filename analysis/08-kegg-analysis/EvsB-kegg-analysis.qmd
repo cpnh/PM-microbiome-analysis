@@ -1,0 +1,1435 @@
+## Baseline to Endpoint Functional Analysis
+
+```{r}
+#| echo: false
+#| eval: true
+#| label: setup
+#| cache: false
+
+# This initial code block loads custom utility functions and environment variables
+# These are stored in separate files to keep the main analysis clean and organized
+
+suppressWarnings(suppressMessages({
+  source(normalizePath("utils/r-utils.r"))
+  source(normalizePath("_environment.required"))
+  load(normalizePath("data/seqdata.RData"))
+
+  metadata <- read_delim(normalizePath(METADATA))
+  bac_base_end_meta <- readRDS(normalizePath(
+    "data/metadata/base-end-metadata.rds"
+  ))
+
+  kegg <- readRDS(file.path(WOLTKA_OUT, "kegg/kegg.rds"))
+
+  library(edgeR)
+  library(ComplexHeatmap)
+  library(pairwiseAdonis)
+  library(Glimma)
+  library(GUniFrac)
+  library(ANCOMBC)
+  library(limma)
+  library(promicrobialTools)
+
+  #to save for consistancy:
+  pathway_class_col <- c(
+    "Carbohydrate metabolism" = "#A6CEE3",
+    "Lipid metabolism" = "#5399C6",
+    "Metabolism of cofactors and vitamins" = "#3F8EAA",
+    "Amino acid metabolism" = "#99CD91",
+    "Nucleotide metabolism" = "#79C360",
+    "Biosynthesis of other secondary metabolites" = "#3E9F32",
+    "Xenobiotics biodegradation and metabolism" = "#B89B74",
+    "Metabolism of other amino acids" = "#F47676",
+    "Glycan biosynthesis and metabolism" = "#E52829",
+    "Metabolism of terpenoids and polyketides" = "#F06C45",
+    "Energy metabolism" = "#FDB762",
+    "Metabolic pathways" = "#FE901E",
+    "Microbial metabolism in diverse environments" = "#ED8F47",
+    "Carbon metabolism" = "#CCAFCA",
+    "2-Oxocarboxylic acid metabolism" = "#9471B4",
+    "Degradation of aromatic compounds" = "#825D99",
+    "Biosynthesis of amino acids" = "#DDD399",
+    "Biosynthesis of cofactors" = "#E0BE6D",
+    "Biosynthesis of nucleotide sugars" = "#B15928"
+  )
+
+  base_end_paired_samples <- read.csv(
+    "data/metadata/base-end-paired-samples.csv"
+  )
+
+  # kegg pathway annotation files
+  pathways <- read.csv(
+    file.path(REF, "/WoL2-Woltka/function", "pathways.csv")
+  )
+
+  prefix <- "EvsB-KO-"
+  filepath <- get_results_dir(directory_naming = "both")
+}))
+```
+
+Results will be saved to ``r filepath``.
+
+### Pathways with 70% or more completeness
+
+#### Percentage of pathways in each timepoint
+
+```{r}
+#| eval: true
+#| label: baseline-endpoint pathway coverage filtering
+
+kegg_be <-
+  subset(
+    subset(
+      kegg,
+      sample %in% base_end_paired_samples$sample
+    ),
+    timepoint %in% c("Baseline", "Endpoint")
+  ) %>%
+  mutate(
+    timepoint = case_when(
+      str_detect(timepoint, "Baseline") ~ "Baseline",
+      str_detect(timepoint, "Endpoint") ~ "Endpoint"
+    )
+  ) %>%
+  dplyr::filter(percent_cov >= 70) %>%
+  mutate(n = 1)
+
+```
+
+::: report
+
+`r report::report(kegg_be)`
+
+:::
+
+```{r}
+#| eval: true
+#| label: tbl-unique-ko
+#| tbl-cap: Total number of unique pathways (ko terms) at baseline and endpoint in each intervention arm.
+
+kegg_be %>%
+  group_by(timepoint, arm) %>%
+  summarise(n_distinct(ko)) %>%
+  kable()
+```
+
+```{r}
+#| eval: true
+
+tmp <- kegg_be %>%
+  dplyr::select(!c(trt, pathway_group)) %>%
+  arrange(desc(percent_cov)) %>%
+  group_by(timepoint, arm) %>%
+  mutate(total_samples = n_distinct(sample)) %>%
+  ungroup() %>%
+  reframe(
+    samples_with_pathway = sum(n),
+    percent_samples = samples_with_pathway / total_samples * 100,
+    .by = c(timepoint, arm, pathway_name, pathway_class, total_samples)
+  )
+
+tmp2 <- tmp %>%
+  group_by(pathway_name, arm, timepoint) %>%
+  summarise(path_presence = mean(percent_samples)) %>%
+  dplyr::filter(path_presence < 95)
+```
+
+
+::: {#fig-box}
+
+```{r}
+#| eval: true
+#| label: fig-ms-4
+#| fig-width: 22
+#| fig-height: 18
+
+tmp %>%
+  dplyr::filter(pathway_name %in% tmp2$pathway_name) %>%
+  ggplot(aes(
+    y = reorder(pathway_name, dplyr::desc(pathway_class)),
+    x = percent_samples,
+    fill = pathway_class
+  )) +
+  geom_col(position = "dodge") +
+  xlab("Percentage of Samples") +
+  ylab(NULL) +
+  scale_fill_manual(values = pathway_class_col) +
+  ggh4x::facet_nested_wrap(~ timepoint + arm)
+```
+
+**Percentage of KEGG pathways present in samples among intervention arms at baseline and endpoint:** There were `r length(unique(kegg_be$ko))` unique functional pathways with $\geq$ 70% completeness identified across all samples. Those present in $\geq$ 95% of samples are plotted in graph, separated by timepoint and intervention arm. Pathway terms are color coded according to their parent pathway class.
+
+:::
+
+#### Differential KEGG pathway abundance analysis
+
+##### Cross-sectional comparisons
+
+```{r}
+#| eval: true
+
+base <- kegg_be %>% filter(timepoint == "Baseline")
+end <- kegg_be %>% filter(timepoint == "Endpoint")
+```
+
+###### Baseline arm differences
+
+####### Data preparation
+
+```{r}
+#| eval: true
+#| label: testing for de abundant pathways
+base_counts <- base %>%
+  dplyr::select(ko, sample, count) %>%
+  pivot_wider(names_from = sample, values_from = count, values_fill = 0) %>%
+  as.data.frame()
+
+base_counts <- DGEList(as.data.frame(base_counts))
+
+base_counts$samples$arm <- as.factor(kegg$arm[match(
+  rownames(base_counts$samples),
+  kegg$sample
+)])
+
+base_counts$samples$group <- NULL
+
+base_counts$genes <- base_counts$genes %>%
+  mutate(
+    pathway_name = kegg$pathway_name[match(ko, kegg$ko)],
+    pathway_class = kegg$pathway_class[match(ko, kegg$ko)]
+  )
+
+base_counts.keep <- rowSums(base_counts$counts == 0) == ncol(base_counts$counts)
+base_counts <- base_counts[base_counts.keep == FALSE, ]
+
+base_counts <- normLibSizes(base_counts)
+```
+
+####### Contrast design
+
+:::h0
+
+$H_0$: KEGG pathways are not differentially abundant between arms at baseline
+
+:::
+
+::: h1
+
+$H_1$: There is a difference between KEGG pathway abundance between arms at baseline
+    $H_1a$: KEGG pathway abundance *increases* between arms at baseline
+    $H_1b$: KEGG pathway abundance *decreases* between arms at baseline
+
+:::
+
+```{r}
+#| eval: true
+#| label: KEGG pathway differences between baseline and endpoint
+#Linear Model
+#Contrasts
+design <- stats::model.matrix(~arm, data = base_counts$samples)
+
+contrasts <- makeContrasts(
+  CPMvsFeZnPM = armFeZnPM,
+  levels = design
+)
+```
+
+```{r}
+#| eval: true
+#| label: fig-base-glmQLfit
+#| fig-cap: KEGG pathway differences in FeZnPM at baseline compared to CPM based on a negative binomial generalized log-linear model with quasi-dispersions and empirical Bayes moderation.
+
+fit <- glmQLFit(base_counts, design)
+
+qlf <- glmQLFTest(fit, contrast = contrasts)
+glm_results <- topTags(qlf, n = Inf) %>%
+  as.data.frame() %>%
+  arrange(ko)
+
+glm_results %>%
+  filter(abs(logFC) >= log2(2)) %>%
+  ggplot(aes(y = reorder(pathway_name, logFC), x = logFC)) +
+  geom_bar(
+    position = position_dodge(),
+    stat = "identity",
+    aes(fill = pathway_class)
+  ) +
+  xlab(bquote(bold("Fold change (" ~ Log[2] ~ "FC )"))) +
+  ylab(NULL) + #labels the y axis
+  scale_fill_manual(values = pathway_class_col)
+```
+
+####### Empirical Bayes Statistics for Differential Expression 
+
+```{r}
+#| eval: true
+#Transform raw count data to log2-base_counts per million (logCPM), estimate the mean-variance relationship and use this to compute appropriate observation-level weights. The data are then ready for linear modelling.
+
+#If the DGEList object has been scale-normalized in edgeR (or before), then leave normalize.method="none" in voom, i.e., the logCPM values should not usually be re-normalized in the voom call.
+#KEGG abundance values have not been normalised
+# use updated edgeR voom procedure
+v <- voomLmFit(base_counts, design, normalize.method = "none")
+#v <- voom(base_counts, design, normalize.method="none") #Transforms count data to log2-base_counts per million
+#vfit <- lmFit(v, design)
+vfit <- contrasts.fit(v, contrasts = contrasts)
+efit <- eBayes(vfit) #estimation of QL dispersions
+```
+
+```{r}
+#| eval: true
+#| label: tbl-fdr5
+#| tbl-cap: OGUs that are significantly differentially abundant from zero for each contrast from a fit object (eBayes) containing p-values and test statistics. An FDR of 0.05 was used.
+
+knitr::kable(summary(
+  FDR5 <- decideTests(efit, adjust.method = "BH", p.value = 0.05, fc = 0)
+))
+
+write.fit(
+  fit = efit,
+  results = FDR5,
+  file = file.path(
+    filepath,
+    paste0(prefix, "limma-write-fit-baseline-results-FDR5-eBayes.csv")
+  ),
+  row.names = F
+)
+```
+
+####### Ordination Analysis and PERMANOVA of differences between arms at baseline
+
+```{r}
+#| eval: true
+#| label: tbl-mds
+#| tbl-cap: Results of PERMANOVA test investigating abundance differences between arms at baseline in paired samples.
+#unsupervised learning: MDS plot
+group_colours <- base_counts$samples$arm
+levels(group_colours) <- c("CPM" = "#FC8D62", "FeZnPM" = "#8DA0CB")
+group_colours <- as.character(group_colours)
+df <- as.data.frame(t(base_counts$counts))
+df <- cbind(df, group = base_counts$samples$arm)
+
+#PERMANOVA testing differenital abundances between timepoints
+mds_stat <- pairwiseAdonis::pairwise.adonis2(
+  df[, 1:(ncol(df) - 1)] ~ group,
+  data = df,
+  method = 'eu'
+) #returns non-adjusted p-values
+
+#output table
+knitr::kable(mds_stat[2])
+
+```
+
+```{r}
+#| eval: true
+#| label: tbl-mds-sum
+#| tbl-cap: Results of PERMANOVA test investigating abundance differences between arms at baseline in paired samples.
+
+pv <- lapply(2:length(mds_stat), function(x) {
+  w <- mds_stat[[x]][1, 4]
+  y <- mds_stat[[x]][1, 5]
+  z <- names(mds_stat)[x]
+  data.frame(contrast = z, p = y, F.stat = w)
+})
+pv <- bind_rows(pv)
+knitr::kable(
+  pv %>%
+    mutate(p.adj = round(p.adjust(p, method = "BH"), 4)) %>%
+    mutate(
+      sig = case_when(
+        p.adj <= 0.0001 ~ "****",
+        p.adj <= 0.001 ~ "***",
+        p.adj <= 0.01 ~ "**",
+        p.adj <= 0.05 ~ "*",
+        p.adj > 0.05 ~ "ns"
+      )
+    )
+)
+```
+
+The p-value ($Pr(>F)$) for `r base_counts$samples$arm` is `r pv$p`, which is greater than the conventional significance level of 0.05. This suggests that we cannot reject the null hypothesis, implying that there is no significant overall difference in microbial pathway abundance between baseline and endpoint.
+
+The `plotMDS()` function accepts "any data object that can be coerced to a matrix of log-expression values, for example an ExpressionSet or an EList" [@Gentleman2025]. If the `edgeR::voomLmFit()` function was used the `EList` object can be obtained using `fit$EList`
+
+```{r}
+#| eval: true
+#| label: fig-mds-baseArms
+#| fig-cap: MDS plot comparing arms at baseline in paired samples.
+
+xmax = max(
+  plotMDS(
+    v$EList,
+    col = group_colours,
+    dim.plot = c(1, 2),
+    pch = 16,
+    gene.selection = "common"
+  )$x
+) -
+  0.05
+ymax = max(
+  plotMDS(
+    v$EList,
+    col = group_colours,
+    dim.plot = c(1, 2),
+    pch = 16,
+    gene.selection = "common"
+  )$y
+) -
+  0.05
+
+par(mar = c(7.1, 5.1, 5.1, 5.1), xpd = TRUE)
+plotMDS(
+  v$EList,
+  col = group_colours,
+  dim.plot = c(1, 2),
+  pch = 16,
+  gene.selection = "common"
+)
+legend(
+  "bottom",
+  pch = 16,
+  col = unique(group_colours),
+  legend = levels(v$targets$arm),
+  inset = c(0, -0.165),
+  bty = "n",
+  ncol = 2
+)
+text(
+  x = xmax - 0.05,
+  y = ymax,
+  labels = bquote(R^2 == .(round(as.data.frame(mds_stat[2])[1, 3], 3)))
+)
+text(
+  x = xmax - 0.05,
+  y = ymax - 0.12,
+  labels = bquote(p == .(round(as.data.frame(mds_stat[2])[1, 5], 3)))
+)
+```
+
+There are two obvious clusters that are not due to arm in the MDS graph.
+
+###### Endpoint arm differences
+
+####### Data preparation
+
+```{r}
+#| eval: true
+#| label: testing for de abundant pathways
+end_counts <- end %>%
+  dplyr::select(ko, sample, count) %>%
+  pivot_wider(names_from = sample, values_from = count, values_fill = 0) %>%
+  as.data.frame()
+
+end_counts <- DGEList(as.data.frame(end_counts))
+
+end_counts$samples$arm <- as.factor(kegg$arm[match(
+  rownames(end_counts$samples),
+  kegg$sample
+)])
+
+end_counts$samples$group <- NULL
+
+end_counts$genes <- end_counts$genes %>%
+  mutate(
+    pathway_name = kegg$pathway_name[match(ko, kegg$ko)],
+    pathway_class = kegg$pathway_class[match(ko, kegg$ko)]
+  )
+
+end_counts.keep <- rowSums(end_counts$counts == 0) == ncol(end_counts$counts)
+end_counts <- end_counts[end_counts.keep == FALSE, ]
+
+end_counts <- normLibSizes(end_counts)
+```
+
+####### Contrast design
+
+:::h0
+
+$H_0$: KEGG pathways are not differentially abundant between arms at endline
+
+:::
+
+::: h1
+
+$H_1$: There is a difference between KEGG pathway abundance between arms at endline
+    $H_1a$: KEGG pathway abundance *increases* between arms at endline
+    $H_1b$: KEGG pathway abundance *decreases* between arms at endline
+
+:::
+
+```{r}
+#| eval: true
+#| label: KEGG pathway differences between arms at endpoint
+#Linear Model
+#Contrasts
+design <- stats::model.matrix(~arm, data = end_counts$samples)
+
+contrasts <- makeContrasts(
+  CPMvsFeZnPM = armFeZnPM,
+  levels = design
+)
+```
+
+```{r}
+#| eval: true
+#| label: fig-end-glmQLfit
+#| fig-cap: KEGG pathway differences in FeZnPM at endpoint compared to CPM based on a negative binomial generalized log-linear model with quasi-dispersions and empirical Bayes moderation.
+fit <- glmQLFit(end_counts, design)
+
+qlf <- glmQLFTest(fit, contrast = contrasts)
+glm_results <- topTags(qlf, n = Inf) %>%
+  as.data.frame() %>%
+  arrange(ko)
+
+glm_results %>%
+  filter(abs(logFC) >= log2(2)) %>%
+  ggplot(aes(y = reorder(pathway_name, logFC), x = logFC)) +
+  geom_bar(
+    position = position_dodge(),
+    stat = "identity",
+    aes(fill = pathway_class)
+  ) +
+  xlab(bquote(bold("Fold change (" ~ Log[2] ~ "FC )"))) +
+  ylab(NULL) + #labels the y axis
+  scale_fill_manual(values = pathway_class_col)
+```
+
+####### Empirical Bayes Statistics for Differential Expression 
+
+```{r}
+#| eval: true
+#Transform raw count data to log2-end_counts per million (logCPM), estimate the mean-variance relationship and use this to compute appropriate observation-level weights. The data are then ready for linear modelling.
+
+#If the DGEList object has been scale-normalized in edgeR (or before), then leave normalize.method="none" in voom, i.e., the logCPM values should not usually be re-normalized in the voom call.
+#KEGG abundance values have not been normalised
+# use updated edgeR voom procedure
+v <- voomLmFit(end_counts, design, normalize.method = "none")
+#v <- voom(end_counts, design, normalize.method="none") #Transforms count data to log2-end_counts per million
+#vfit <- lmFit(v, design)
+vfit <- contrasts.fit(v, contrasts = contrasts)
+efit <- eBayes(vfit) #estimation of QL dispersions
+```
+
+```{r}
+#| eval: true
+#| label: tbl-fdr5
+#| tbl-cap: OGUs that are significantly differentially abundant from zero for each contrast from a fit object (eBayes) containing p-values and test statistics. An FDR of 0.05 was used.
+
+knitr::kable(summary(
+  FDR5 <- decideTests(efit, adjust.method = "BH", p.value = 0.05, fc = 0)
+))
+
+write.fit(
+  fit = efit,
+  results = FDR5,
+  file = file.path(
+    filepath,
+    paste0(prefix, "limma-write-fit-endpoint-results-FDR5-eBayes.csv")
+  ),
+  row.names = F
+)
+```
+
+####### Ordination Analysis and PERMANOVA of differences between arms at endline
+
+```{r}
+#| eval: true
+#| label: tbl-mds
+#| tbl-cap: Results of PERMANOVA test investigating abundance differences between arms at endline in paired samples.
+#unsupervised learning: MDS plot
+group_colours <- end_counts$samples$arm
+levels(group_colours) <- c("CPM" = "#FC8D62", "FeZnPM" = "#8DA0CB")
+group_colours <- as.character(group_colours)
+df <- as.data.frame(t(end_counts$counts))
+df <- cbind(df, group = end_counts$samples$arm)
+
+#PERMANOVA testing differenital abundances between timepoints
+mds_stat <- pairwiseAdonis::pairwise.adonis2(
+  df[, 1:(ncol(df) - 1)] ~ group,
+  data = df,
+  method = 'eu'
+) #returns non-adjusted p-values
+
+#output table
+knitr::kable(mds_stat[2])
+```
+
+```{r}
+#| eval: true
+#| label: tbl-mds-sum
+#| tbl-cap: Results of PERMANOVA test investigating abundance differences between arms at endline in paired samples.
+
+pv <- lapply(2:length(mds_stat), function(x) {
+  w <- mds_stat[[x]][1, 4]
+  y <- mds_stat[[x]][1, 5]
+  z <- names(mds_stat)[x]
+  data.frame(contrast = z, p = y, F.stat = w)
+})
+pv <- bind_rows(pv)
+knitr::kable(
+  pv %>%
+    mutate(p.adj = round(p.adjust(p, method = "BH"), 4)) %>%
+    mutate(
+      sig = case_when(
+        p.adj <= 0.0001 ~ "****",
+        p.adj <= 0.001 ~ "***",
+        p.adj <= 0.01 ~ "**",
+        p.adj <= 0.05 ~ "*",
+        p.adj > 0.05 ~ "ns"
+      )
+    )
+)
+```
+
+The p-value ($Pr(>F)$) for `r end_counts$samples$arm` is `r pv$p`, which is greater than the conventional significance level of 0.05. This suggests that we cannot reject the null hypothesis, implying that there is no significant overall difference in microbial pathway abundance between endline and endpoint.
+
+The `plotMDS()` function accepts "any data object that can be coerced to a matrix of log-expression values, for example an ExpressionSet or an EList" [@Gentleman2025]. If the `edgeR::voomLmFit()` function was used the `EList` object can be obtained using `fit$EList`
+
+```{r}
+#| eval: true
+#| label: fig-mds-endArm
+#| fig-cap: MDS plot comparing arms at endline in paired samples.
+
+xmax = max(
+  plotMDS(
+    v$EList,
+    col = group_colours,
+    dim.plot = c(1, 2),
+    pch = 16,
+    gene.selection = "common"
+  )$x
+) -
+  0.05
+ymax = max(
+  plotMDS(
+    v$EList,
+    col = group_colours,
+    dim.plot = c(1, 2),
+    pch = 16,
+    gene.selection = "common"
+  )$y
+) -
+  0.05
+
+par(mar = c(7.1, 5.1, 5.1, 5.1), xpd = TRUE)
+plotMDS(
+  v$EList,
+  col = group_colours,
+  dim.plot = c(1, 2),
+  pch = 16,
+  gene.selection = "common"
+)
+legend(
+  "bottom",
+  pch = 16,
+  col = unique(group_colours),
+  legend = levels(v$targets$arm),
+  inset = c(0, -0.165),
+  bty = "n",
+  ncol = 2
+)
+text(
+  x = xmax - 0.05,
+  y = ymax,
+  labels = bquote(R^2 == .(round(as.data.frame(mds_stat[2])[1, 3], 3)))
+)
+text(
+  x = xmax - 0.05,
+  y = ymax - 0.12,
+  labels = bquote(p == .(round(as.data.frame(mds_stat[2])[1, 5], 3)))
+)
+```
+
+There are two obvious clusters that are not due to arm in the MDS graph.
+
+##### Change in abundances overtime
+
+###### Data preparation
+
+```{r}
+#| eval: true
+#| label: testing for de abundant pathways
+counts <- kegg_be %>%
+  dplyr::select(ko, sample, count) %>%
+  pivot_wider(names_from = sample, values_from = count, values_fill = 0) %>%
+  as.data.frame()
+
+counts <- DGEList(counts)
+
+counts$samples$timepoint <- as.factor(str_remove_all(
+  kegg$timepoint[match(rownames(counts$samples), kegg$sample)],
+  "1|3"
+))
+
+counts$samples$group <- as.factor(kegg$arm[match(
+  rownames(counts$samples),
+  kegg$sample
+)])
+
+counts$genes <- counts$genes %>%
+  mutate(
+    pathway_name = kegg$pathway_name[match(ko, kegg$ko)],
+    pathway_class = kegg$pathway_class[match(ko, kegg$ko)]
+  )
+
+counts.keep <- rowSums(counts$counts == 0) == ncol(counts$counts)
+counts <- counts[counts.keep == FALSE, ]
+
+counts <- normLibSizes(counts)
+counts <- estimateDisp(counts)
+```
+
+###### Contrast design
+
+:::h0
+
+$H_0$: KEGG pathways are not differentially abundant between baseline and endpoint
+
+$H_0: \mu_{\text{Endpoint}} - \mu_{\text{Baseline}} = 0$
+
+:::
+
+::: h1
+
+$H_1$: There is a difference between KEGG pathway abundance between baseline and endpoint
+    $H_1a$: KEGG pathway abundance *increases* between baseline and endpoint
+    $H_1b$: KEGG pathway abundance *decreases* between baseline and endpoint
+
+Two-Sided Alternative:
+$$
+H_A: \mu_{\text{Endpoint}} - \mu_{\text{Baseline}} \neq 0
+$$
+
+Interpretation: KEGG pathways are differentially abundant between timepoints (could be higher or lower at endpoint)
+
+One-Sided Alternatives:
+
+Alternative 1: Increase at Endpoint
+$$
+H_A: \mu_{\text{Endpoint}} - \mu_{\text{Baseline}} > 0
+$$
+
+Interpretation: KEGG pathways are more abundant at endpoint than baseline
+
+Alternative 2: Decrease at Endpoint
+$$
+H_A: \mu_{\text{Endpoint}} - \mu_{\text{Baseline}} < 0
+$$
+
+Interpretation: KEGG pathways are less abundant at endpoint than baseline
+:::
+
+The intercept represents the expected value at baseline for the reference group (CPM), while
+`timepointEndpoint` represents the change from baseline to endpoint (i.e. the difference between timepoints averaged across groups)
+
+
+```{r}
+#| eval: true
+#| label: KEGG pathway differences between baseline and endpoint
+#Linear Model
+#Contrasts
+(design <- stats::model.matrix(~timepoint, data = counts$samples))
+colnames(design) <- c("Intercept", "Endpoint")
+
+contrasts <- makeContrasts(
+  EvsB = Endpoint,
+  levels = design
+)
+```
+
+```{r}
+#| eval: true
+#| label: fig-EvsB-glmQLfit
+#| fig-cap: KEGG pathway differences at endpoint compared to baseline based on a negative binomial generalized log-linear model with quasi-dispersions and empirical Bayes moderation.
+fit <- glmQLFit(counts, design)
+
+qlf <- glmQLFTest(fit, contrast = contrasts)
+glm_results <- topTags(qlf, n = Inf) %>%
+  as.data.frame() %>%
+  arrange(ko)
+
+glm_results %>%
+  filter(abs(logFC) >= log2(2)) %>%
+  ggplot(aes(y = reorder(pathway_name, logFC), x = logFC)) +
+  geom_bar(
+    position = position_dodge(),
+    stat = "identity",
+    aes(fill = pathway_class)
+  ) +
+  xlab(bquote(bold("Fold change (" ~ Log[2] ~ "FC )"))) +
+  ylab(NULL) + #labels the y axis
+  scale_fill_manual(values = pathway_class_col)
+```
+
+###### Empirical Bayes Statistics for Differential Expression 
+
+```{r}
+#| eval: true
+#Transform raw count data to log2-counts per million (logCPM), estimate the mean-variance relationship and use this to compute appropriate observation-level weights. The data are then ready for linear modelling.
+
+#If the DGEList object has been scale-normalized in edgeR (or before), then leave normalize.method="none" in voom, i.e., the logCPM values should not usually be re-normalized in the voom call.
+#KEGG abundance values have not been normalised
+# use updated edgeR voom procedure
+v <- voomLmFit(counts, design, normalize.method = "none") #Transforms count data to log2-counts per million
+vfit <- contrasts.fit(v, contrasts = contrasts)
+efit <- eBayes(vfit) #estimation of QL dispersions
+fc1.2 <- treat(vfit, fc = 1.2)
+fc2 <- treat(vfit, fc = 2)
+```
+
+```{r}
+#| eval: true
+
+top_efit <- as.data.frame(topTable(efit, n = Inf)) %>%
+  select(
+    ko,
+    EvsB = logFC,
+    PValue = P.Value,
+    FDR = adj.P.Val
+  )
+
+top_efit %>%
+  arrange(ko) %>%
+  mutate(EvsB_FC = 2^abs(EvsB)) %>%
+  tibble()
+```
+
+```{r}
+#| eval: true
+#| label: tbl-fdr5
+#| tbl-cap: OGUs that are significantly differentially abundant from zero for each contrast from a fit object (eBayes) containing p-values and test statistics. An FDR of 0.05 was used.
+
+knitr::kable(summary(
+  FDR5 <- decideTests(efit, adjust.method = "BH", p.value = 0.05, fc = 0)
+))
+
+```
+
+```{r}
+#| eval: true
+#| label: tbl-fdr5-fc1.2
+#| tbl-cap: OGUs with a fold change of 1.2 or more that are significantly differentially abundant for each contrast. An FDR of 0.05 was used.
+
+knitr::kable(summary(
+  FDR5.FC1.2 <- decideTests(fc1.2, adjust.method = "BH", p.value = 0.05)
+))
+
+```
+
+```{r}
+#| eval: true
+#| label: tbl-fdr-fc2
+#| tbl-cap: OGUs with a fold change of 2 or more that are significantly differentially abundant for each contrast. An FDR of 0.05 was used.
+
+knitr::kable(summary(
+  FDR5.FC2 <- decideTests(fc2, adjust.method = "BH", p.value = 0.05)
+))
+
+write.fit(
+  fit = fc2,
+  results = FDR5.FC2,
+  file = file.path(
+    filepath,
+    paste0(prefix, "limma-write-fit-results-FDR5-FC2.csv")
+  ),
+  row.names = F
+)
+```
+
+###### Raw abundance changes
+
+Check results make sense by comparing the average abundance of features that have changed
+
+```{r}
+#| eval: true
+#| label: tbl-total-da
+#| tbl-cap: Based on raw counts alone, fold OGU differences at endpoint compared to baseline are shown.
+(cnt <- kegg_be %>%
+  group_by(ko, timepoint) %>%
+  summarise(average_count = mean(count)) %>%
+  pivot_wider(
+    names_from = timepoint,
+    values_from = average_count,
+    values_fill = 0
+  ) %>%
+  mutate(EvsB = `Endpoint` - `Baseline`) %>%
+  mutate(
+    fold_difference = fc(Endpoint, Baseline),
+    difference = case_when(
+      EvsB < 0 ~ "Decrease",
+      EvsB > 0 ~ "Increase",
+      EvsB == 0 ~ "None",
+      TRUE ~ NA
+    )
+  ))
+```
+
+```{r}
+#| eval: true
+#| label: tbl-cnt-sum
+#| tbl-cap: Based on raw counts alone, the total number of OGUs increases and decreases at endpoint compared to baseline are shown.
+cnt %>%
+  group_by(difference) %>%
+  summarise(total = n()) %>%
+  kable()
+
+```
+
+Numbers are very similar to those found in DA.
+
+###### Volcano Plot
+
+```{r}
+#| eval: true
+#| label: fig-vol-fdr5-fc2
+#| fig-cap: Volcano plot of the limma-voom differential abundance multiple-testing results.
+par(
+  # Margins: bottom, left, top, right
+  mar = c(5, 5, 4, 2),
+  # White background
+  bg = "white",
+  # Horizontal axis labels
+  las = 1,
+  # L-shaped box
+  bty = "l",
+  # Bold axis labels
+  font.lab = 2,
+  # Smaller text size
+  cex.axis = 0.8,
+  # Default point size
+  cex = 1.2
+)
+volcanoplot(
+  fc2,
+  coef = 1,
+  names = fc2$genes$ko,
+  highlight = nrow(fc2),
+  style = "p-value"
+)
+
+grid(
+  # Line type
+  lty = "dotted",
+  # Grid line color
+  col = "gray90"
+)
+
+box(
+  # Box type
+  bty = "l",
+  # Line width
+  lwd = 2
+)
+
+abline(
+  h = 1.3, # Horizontal line at -log10(0.05)
+  col = "indianred", # Line color
+  lty = 2, # Line type (dashed)
+  lwd = 1 # Line width
+)
+```
+
+###### Annotation of Significantly Differentially Abundant Pathways
+
+```{r}
+#| eval: true
+#| label: identify diff abund pathways FRD5 FC>2
+
+dekegg <- read.delim(
+  file = file.path(
+    filepath,
+    paste0(prefix, "limma-write-fit-results-FDR5-FC2.csv")
+  ),
+  header = T
+)
+
+colnames(dekegg) <- str_remove(colnames(dekegg), "Genes.")
+
+dekegg <- dekegg %>%
+  dplyr::select(
+    AveExpr,
+    Coef = `Coef`,
+    `t-statistic` = `t`,
+    `P-value` = `P.value`,
+    Result = `Results`,
+    ko
+  ) %>%
+  mutate(
+    fold_change = case_when(
+      Coef >= 0 ~ 2^Coef,
+      Coef < 0 ~ -(2^abs(Coef))
+    ),
+    # For validation
+    raw_fc = cnt$fold_difference[match(ko, cnt$ko)]
+  ) %>%
+  dplyr::filter(Result != 0) %>%
+  mutate(
+    Result = case_when(
+      Result == -1 ~ "Decreased abundance",
+      Result == 1 ~ "Increased abundance"
+    )
+  )
+
+dekegg <- dekegg %>%
+  mutate(
+    pathway_group = pathways$group[match(.$ko, pathways$id)],
+    pathway_class = pathways$class[match(.$ko, pathways$id)],
+    pathway_name = pathways$name[match(.$ko, pathways$id)]
+  ) %>%
+  mutate(pathway_class = coalesce(pathway_class, pathway_name)) %>%
+  mutate(pathway_group = coalesce(pathway_group, pathway_class))
+```
+
+```{r}
+#| eval: true
+#| label: save-fdr5
+#| results: asis
+
+save_and_link(
+  data = dekegg,
+  filename = paste0(prefix, "limma-treat-significant-results-FDR5-FC2.csv"),
+  description = "Differentially abundant pathways (FRD5 FC>2) identified by limma treat",
+  directory_naming = "both"
+)
+```
+
+::: {#fig-box}
+
+Changes in differential abundance of KEGG pathways over time: `r length(unique(dekegg$ko))` KEGG pathways with at least 70% completeness were found to be differentially abundant at endpoint compared to baseline. All pathways changed a minimum of two-fold over time, and changes were not different between intervention arm. Pathway terms are color coded according to their parent class.
+
+```{r}
+#| eval: true
+#| label: fig-ms-10
+#| fig-height: 18
+#| fig-width: 14
+
+dekegg %>%
+  ggplot(aes(y = reorder(pathway_name, Coef), x = Coef)) +
+  geom_bar(
+    position = position_dodge(),
+    stat = "identity",
+    aes(fill = pathway_class)
+  ) +
+  xlab(bquote(bold("Fold change (" ~ Log[2] ~ "FC )"))) +
+  ylab(NULL) + #labels the y axis
+  scale_fill_manual(values = pathway_class_col)
+
+```
+
+:::
+
+###### Ordination Analysis and PERMANOVA of differences between timepoints
+
+```{r}
+#| eval: true
+#| label: tbl-mds
+#| tbl-cap: Results of PERMANOVA test investigating abundance differences between timepoints.
+#unsupervised learning: MDS plot
+group_colours <- counts$samples$timepoint
+levels(group_colours) <- c("Baseline" = "#66C2A5", "Endpoint" = "#E78AC3")
+group_colours <- as.character(group_colours)
+df <- as.data.frame(t(counts$counts))
+df <- cbind(df, group = counts$samples$timepoint)
+
+#PERMANOVA testing differenital abundances between timepoints
+mds_stat <- pairwiseAdonis::pairwise.adonis2(
+  df[, 1:(ncol(df) - 1)] ~ group,
+  data = df,
+  method = 'eu'
+) #returns non-adjusted p-values
+
+#output table
+knitr::kable(mds_stat[2])
+```
+
+```{r}
+#| eval: true
+#| label: tbl-mds-sum
+#| tbl-cap: Results of PERMANOVA test investigating abundance differences between timepoints.
+
+pv <- lapply(2:length(mds_stat), function(x) {
+  w <- mds_stat[[x]][1, 4]
+  y <- mds_stat[[x]][1, 5]
+  z <- names(mds_stat)[x]
+  data.frame(contrast = z, p = y, F.stat = w)
+})
+pv <- bind_rows(pv)
+knitr::kable(
+  pv %>%
+    mutate(p.adj = round(p.adjust(p, method = "BH"), 4)) %>%
+    mutate(
+      sig = case_when(
+        p.adj <= 0.0001 ~ "****",
+        p.adj <= 0.001 ~ "***",
+        p.adj <= 0.01 ~ "**",
+        p.adj <= 0.05 ~ "*",
+        p.adj > 0.05 ~ "ns"
+      )
+    )
+)
+```
+
+The p-value ($Pr(>F)$) for `r counts$samples$timepoint` is `r pv$p`, which is greater than the conventional significance level of 0.05. This suggests that we cannot reject the null hypothesis, implying that there is no significant overall difference in microbial pathway abundance between baseline and endpoint.
+
+The `plotMDS()` function accepts "any data object that can be coerced to a matrix of log-expression values, for example an ExpressionSet or an EList" [@Gentleman2025]. If the `edgeR::voomLmFit()` function was used the `EList` object can be obtained using `fit$EList`
+
+```{r}
+#| eval: true
+#| label: MDS plot comparing timepoints
+
+xmax = max(
+  plotMDS(
+    v$EList,
+    col = group_colours,
+    dim.plot = c(1, 2),
+    pch = 16,
+    gene.selection = "common"
+  )$x
+) -
+  0.05
+ymax = max(
+  plotMDS(
+    v$EList,
+    col = group_colours,
+    dim.plot = c(1, 2),
+    pch = 16,
+    gene.selection = "common"
+  )$y
+) -
+  0.05
+
+par(mar = c(7.1, 5.1, 5.1, 5.1), xpd = TRUE)
+plotMDS(
+  v$EList,
+  col = group_colours,
+  dim.plot = c(1, 2),
+  pch = 16,
+  gene.selection = "common"
+)
+legend(
+  "bottom",
+  pch = 16,
+  col = unique(group_colours),
+  legend = levels(v$targets$timepoint),
+  inset = c(0, -0.165),
+  bty = "n",
+  ncol = 2
+)
+text(
+  x = xmax - 0.05,
+  y = ymax,
+  labels = bquote(R^2 == .(round(as.data.frame(mds_stat[2])[1, 3], 3)))
+)
+text(
+  x = xmax - 0.05,
+  y = ymax - 0.12,
+  labels = bquote(p == .(round(as.data.frame(mds_stat[2])[1, 5], 3)))
+)
+```
+
+There are two obvious clusters that are not due to timepoint in the MDS graph. Another PERMANOVA test to 
+
+```{r}
+#| eval: false
+#| label: tbl-mds-time
+#| tbl-cap: Results of PERMANOVA test investigating abundance differences between timepoints.
+#unsupervised learning: MDS plot
+group_colours <- v$targets$arm
+levels(group_colours) <- c("Baseline" = "#66C2A5", "Endpoint" = "#E78AC3")
+group_colours <- as.character(group_colours)
+df <- as.data.frame(t(v$EList$E))
+df$group <- v$targets$arm[match(rownames(df), rownames(v$targets))]
+
+#PERMANOVA testing differenital abundances between timepoints
+mds_stat <- pairwiseAdonis::pairwise.adonis2(
+  df[, 1:(ncol(df) - 1)] ~ group,
+  data = df,
+  method = 'eu'
+) #returns non-adjusted p-values
+
+#output table
+knitr::kable(mds_stat[2])
+```
+
+```{r}
+#| eval: false
+#| label: cluster analysis
+
+metaRDA <- bac_base_end_meta %>%
+  select(
+    timepoint,
+    arm,
+    chao1,
+    diversity_shannon,
+    evenness_pielou,
+    pd,
+    avg_iron,
+    avg_zinc,
+    avg_bajra,
+    agemonths_base,
+  )
+
+metaRDA <- bac_base_end_meta %>%
+  select(
+    `Age (months)` = agemonths_base,
+    Female = sexf,
+    `Intervention arm` = trt,
+    `Birth mode vaginal (vs. Caesarean)` = del_type,
+    `Birth weight (kg)` = bwt,
+    `Current weight (kg)` = cwt,
+    `Mid-upper arm circumference (cm)` = muac_avg,
+    `Head circumference (cm)` = hc_avg,
+    `Head circumference-for-age Z-score` = zhc,
+    `Length (cm)` = ln_avg,
+    `Length-for-age Z-score (LAZ)` = zlen,
+    `Stunting (LAZ < -2)` = stunt_base,
+    `Weight-for-age Z-score (WAZ) ` = zwei,
+    `Underweight (WAZ < -2)` = underwt_base,
+    `Weight-for-length Z-score (WLZ) ` = zwfl,
+    `Wasting (WLZ < -2)` = wast_base,
+    `Ferritin (ng/ml)` = fer_base,
+    `Iron deficiency (<12 ng/ml) ` = fer_def12_base,
+    `Ferritin (ng/ml)* adjusted for CRP` = fer_crpadjbr, # using BRINDA
+    `Iron deficiency (<12 ng/ml)* adjusted for CRP` = fer_crpbr_def12, # using BRINDA
+    `Zinc (µg/dL)` = zinc,
+    `Zinc deficiency (<70 µg/dL) ` = zinc_def70, # <70 µg/dL
+    `Hemoglobin (g/dl)` = hb_base,
+    `Anemia (hemoglobin < 11 g/dl) ` = anemia_base,
+    `C-reactive protein (CRP) ≥ 5 mg/L ` = crp_elev5,
+    `Diarrhea today or within past 4 weeks ` = freq3diarr, # 1,2&3
+    `Fever today or within past 4 weeks ` = freqfever, # 1,2&3
+    `Cough today or within past 4 weeks` = freqcough, # 1,2&3
+    `Observed features` = observed,
+    `Chao 1 Index` = chao1,
+    `Shannon Entropy` = diversity_shannon,
+    Evenness = evenness_pielou,
+    `Faith's Phylogenetic Diversity` = pd
+  )
+
+rda(X = da_mat, Y = metaRDA)
+
+da <- data.frame(v$EList$genes, v$EList$E)
+rownames(da) <- NULL
+
+da_mat <- da %>% column_to_rownames("ko") %>% t() #is now a data matrix because of t() function
+rownames(da_mat) <- str_remove(rownames(da_mat), "SO_8465_")
+df <- data.frame(Timepoint = v$targets$timepoint, Arm = v$targets$arm)
+
+row_annotation <- HeatmapAnnotation(
+  df = df,
+  show_legend = T,
+  col = list(
+    timepoint = c("Baseline" = "#66C2A5", "Endpoint" = "#E78AC3"),
+    arm = c("CPM" = "#FC8D62", "FeZnCPM" = "#8DA0CB")
+  ),
+  which = "row",
+  annotation_legend_param = list(
+    title_gp = gpar(fontsize = 15, fontface = "bold"),
+    labels_gp = gpar(fontsize = 15),
+    grid_height = unit(8, "mm"),
+    grid_width = unit(4, "mm")
+  )
+)
+
+Heatmap(
+  da_mat,
+  width = unit(0.5, "npc"),
+  cluster_rows = T,
+  show_row_dend = T,
+  col = c('#0571b0', '#92c5de', '#f4a582', '#ca0020'),
+  row_names_side = "left",
+  row_names_gp = gpar(cex = 1, fontface = "bold"),
+  show_column_names = F,
+  show_heatmap_legend = T,
+  right_annotation = row_annotation,
+  heatmap_legend_param = list(
+    title = "log2 fold change",
+    title_gp = gpar(fontsize = 15, fontface = "bold"),
+    labels_gp = gpar(fontsize = 15),
+    grid_height = unit(8, "mm"),
+    grid_width = unit(4, "mm")
+  ),
+)
+
+```
+
+#### KEGG Differential Abundace with ANCOM-BC
+
+##### Change in abundances overtime (ignoring arm)
+
+```{r}
+#| eval: true
+#| label: data-prep
+#| fig-cap: NA
+#| tbl-cap: NA
+
+otu <- kegg_be %>%
+  select(ko, sample, count) %>%
+  pivot_wider(names_from = sample, values_from = count, values_fill = 0) %>%
+  column_to_rownames(var = "ko") %>%
+  otu_table(taxa_are_rows = TRUE)
+
+meta <- bac_base_end_meta %>%
+  column_to_rownames(var = "sample_names") %>%
+  sample_data()
+
+kegg_phy <- phyloseq(otu, meta)
+```
+
+```{r}
+#| eval: true
+#| label: ancombc
+#| fig-cap: NA
+#| tbl-cap: NA
+
+time_results <- ancombc2(
+  kegg_phy,
+  taxa_are_rows = TRUE,
+  assay_name = "abundance",
+  rank = tax_level,
+  tax_level = NULL,
+  fix_formula = "timepoint",
+  p_adj_method = "BH",
+  pseudo = 0,
+  pseudo_sens = TRUE,
+  prv_cut = 0.1,
+  lib_cut = 0,
+  s0_perc = 0.05,
+  group = "timepoint",
+  struc_zero = TRUE,
+  neg_lb = FALSE,
+  alpha = 0.05,
+  n_cl = 1,
+  verbose = TRUE,
+  global = FALSE,
+  pairwise = FALSE,
+  dunnet = FALSE,
+  trend = FALSE,
+  iter_control = list(tol = 0.01, max_iter = 20, verbose = FALSE),
+  em_control = list(tol = 1e-05, max_iter = 100),
+  lme_control = lme4::lmerControl(),
+  mdfdr_control = list(fwer_ctrl_method = "holm", B = 100),
+  trend_control = list(contrast = NULL, node = NULL, solver = "ECOS", B = 100)
+)
+
+time_prim <- time_results$res
+```
+
+```{r}
+#| eval: true
+#| label: save
+#| results: asis
+
+save_and_link(
+  data = time_prim,
+  filename = paste0(prefix, "ancombc.csv"),
+  description = "Differential abundances between Endpoint and Baseline",
+  directory_naming = "both"
+)
+```
+
+```{r}
+#| eval: true
+#| label: tbl-EvsB
+#| tbl-cap: Differentially abundant KEGG terms at Endpoint Compared to Baseline. Significant terms were determined to be so if they had a FDR adjusted p-value $\leq$ 0.05 and a fold change of 2 or more
+tmp <- time_prim %>%
+  select(ko = taxon, ends_with("_timepointEndpoint")) %>%
+  filter(passed_ss_timepointEndpoint == TRUE)
+
+colnames(tmp) <- str_remove(colnames(tmp), "_timepointEndpoint")
+
+EvsB <- tmp %>%
+  filter(abs(lfc) >= log(2) & q <= 0.05) %>%
+  mutate(
+    pathway_group = pathways$group[match(.$ko, pathways$id)],
+    pathway_class = pathways$class[match(.$ko, pathways$id)],
+    pathway_name = pathways$name[match(.$ko, pathways$id)]
+  ) %>%
+  mutate(pathway_class = coalesce(pathway_class, pathway_name)) %>%
+  mutate(pathway_group = coalesce(pathway_group, pathway_class))
+
+kable(EvsB)
+```
+
+```{r}
+#| eval: true
+#| label: fig-EvsB
+#| fig-cap: Differentially abundant KEGG terms at Endpoint Compared to Baseline. Significant terms were determined to be so if they had a FDR adjusted p-value $\leq$ 0.05 and a fold change of 2 or more
+plotDAvol(
+  tmp,
+  title = "Differentially abundant KEGG terms at Endpoint Compared to Baseline",
+  p.fdr = q
+)
+
+```
+
+```{r}
+#| eval: true
+#| label: fig-ancom-anno
+#| fig-cap: Differentially abundant KEGG pathways at Endpoint Compared to Baseline
+EvsB %>%
+  ggplot(aes(y = reorder(pathway_name, lfc), x = lfc)) +
+  geom_bar(
+    position = position_dodge(),
+    stat = "identity",
+    aes(fill = pathway_class)
+  ) +
+  xlab(bquote(bold("Fold change (" ~ Log[2] ~ "FC )"))) +
+  ylab(NULL) + #labels the y axis
+  scale_fill_manual(values = pathway_class_col)
+
+```
+
+## Results Summary
+
+```{r}
+#| eval: true
+#| echo: false
+#| results: asis
+
+list_all_results()
+```
+
+```{r}
+#| eval: true
+#| echo: false
+#| results: asis
+generate_results_section(directory_naming = "both")
+```
+
+## Appendix
+
+### ANCOM-BC Fold Change 1.2
+
+```{r}
+#| eval: true
+#| label: ancom-fc-1.2
+#| fig-cap: NA
+#| tbl-cap: NA
+tmp %>%
+  filter(abs(lfc) >= log(1.2) & q <= 0.05 & passed_ss == TRUE) %>%
+  mutate(
+    pathway_group = pathways$group[match(.$ko, pathways$id)],
+    pathway_class = pathways$class[match(.$ko, pathways$id)],
+    pathway_name = pathways$name[match(.$ko, pathways$id)]
+  ) %>%
+  mutate(pathway_class = coalesce(pathway_class, pathway_name)) %>%
+  mutate(pathway_group = coalesce(pathway_group, pathway_class)) %>%
+  ggplot(aes(y = reorder(pathway_name, lfc), x = lfc)) +
+  geom_bar(
+    position = position_dodge(),
+    stat = "identity",
+    aes(fill = pathway_class)
+  ) +
+  xlab(bquote(bold("Fold change (" ~ Log[2] ~ "FC )"))) +
+  ylab(NULL) + #labels the y axis
+  scale_fill_manual(values = pathway_class_col)
+```
+
+```{r}
+#| eval: true
+#| echo: false
+#| label: info
+
+print(sessionInfo(), locale = FALSE)
+```

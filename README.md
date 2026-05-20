@@ -23,6 +23,21 @@ Analysis was conducted in R 4.4.2 and package requirements and versions are avai
 - Functional analysis (KEGG pathways and GO terms)
 - Iron status subgroup analysis
 
+### Docker Image
+
+A Dockerfile has also been provided to replicate the R environment. To build the docker image locally run the following:
+
+```bash
+docker build ./ --progress=plain ./ --tag pm-microbiome &> build.log
+```
+
+```bash
+dir=$(pwd)
+IMAGE=biohpc_nc564/pm-microbiome-analysis
+
+docker run -v "$dir"/:/home/workdir --rm $IMAGE quarto render workdir --log .logs/quarto-render.log --log-level info
+```
+
 ## Citation
 
 Huey, S.L., Cole, N.L., Pagani, I., González, A., Finkelstein, J.L., Haas, J.D., Udipi, S.A., Ghugre, P., Potdar, R.D., Knight, R., Mehta, S., (in preperation). Effect of a complementary feeding intervention on the gut microbiota in 12–18-month-old children.

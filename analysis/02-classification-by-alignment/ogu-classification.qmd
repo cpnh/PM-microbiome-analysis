@@ -4,9 +4,7 @@
 
 The following files have been curated to match the WoL2 phylogeny and need to be downloaded to be able to run *Woltka*.
 
-```{bash}
-#| eval: false
-#| label: Woltka download
+```bash
 
 mkdir -p $REF/WoL2-Woltka
 
@@ -21,13 +19,13 @@ parallel -j 5 --eta "wget -N -P $REF/WoL2-Woltka -r -np -nH --cut-dirs=2 {}"
 
 *Woltka* does not directly accept `.bam` files but they can be piped into it `.sam` files are not available (`-` stands for stdout).
 
-```{bash}
+```bash
 samtools view input.bam | woltka classify -i - -o output.biom
 ```
 
 or for a directory of files:
 
-```{bash}
+```bash
 find "$WOL_OUT" -maxdepth 1 -type f -name "*.bam" | \
   while read -r bam; do \
     sam="${bam/.bam/.sam}" 
@@ -38,16 +36,11 @@ find "$WOL_OUT" -maxdepth 1 -type f -name "*.bam" | \
 
 :::
 
-```{bash}
-#| label: fastp script contents
-#| eval: false
-#| code-summary: View script contents
+```bash
 {{< include ../../scripts/wol2sop.sh >}}
 ```
 
-```{bash}
-#| eval: false
-#| label: woltka classify
+```bash
 
 bash scripts/wol2sop.sh --db $REF/WoL2-Woltka --input $WOL_OUT --output $WOLTKA_OUT --outfmt tsv --filext .sam --fundbs go,kegg --compound --coverage --idmaps 2>&1 | tee $LOGS/wol2-woltka-classify.log
 ```
@@ -56,9 +49,7 @@ bash scripts/wol2sop.sh --db $REF/WoL2-Woltka --input $WOL_OUT --output $WOLTKA_
 
 If you opt for biom format instead of tsv, you can convert to tsv using the code below:
 
-```{bash}
-#| eval: false
-#| label: biom file conversion to tsv
+```bash
 
 #convert the biom table to a .tsv table to read more easily
 find $WOLTKA_OUT -type f -maxdepth 1 -name "*.biom" | \                         

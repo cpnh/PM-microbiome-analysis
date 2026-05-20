@@ -6,13 +6,11 @@ The Woltka lineage file has been edited to reflect recent updates to bacterial t
 
 The [script](../../scripts/read-rarefaction.r) below rarefies reads to the sample with the lowest number of reads. This depth was chosen so to keep all samples from the study considering that the study design was longitudinal and the sample size already small.
 
-```{sh}
+```bash
 {{< include ../../scripts/read-rarefaction.r >}}
 ```
 
-```{bash}
-#| eval: false
-#| label: read rarefaction
+```bash
 
 Rscript $WORKDIR/scripts/read-rarefaction.r -f $WOLTKA_OUT/ogu-taxonomy/ogu.tsv -m $METADATA -t $REF/WoL2-Woltka/taxonomy/lineages.txt -p $REF/WoL2-Woltka/phylogeny/tree.nwk -o $RARE_RESULTS --verbose 2>&1 | tee $LOGS/read-rarefaction.log
 

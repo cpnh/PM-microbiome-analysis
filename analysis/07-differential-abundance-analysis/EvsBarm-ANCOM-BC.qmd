@@ -3,8 +3,8 @@
 ```{r}
 #| echo: false
 #| eval: true
-#| label: setup
 #| cache: false
+#| label: setup
 suppressWarnings(suppressMessages({
   source(normalizePath("utils/r-utils.r"))
   source(normalizePath("_environment.required"))

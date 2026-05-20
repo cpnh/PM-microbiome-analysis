@@ -12,7 +12,6 @@ Four different distance metrics were calculated:
 ```{r}
 #| echo: false
 #| eval: true
-#| label: setup
 #| cache: false
 
 # This initial code block loads custom utility functions and environment variables
@@ -351,7 +350,7 @@ etasq(adonis2(
 
 There are some concerns over the use of $\eta^2_p$ to determine effect size. As it describes the ratio of variance explained by a predictor variable ($x$), it is often deemed analogous to $r^2$. $\eta^2_p$ is thus a biased estimate of how much population variance is explained by the model (it measures the variance explained of the sample, not the population, meaning that it will always overestimate the effect size). Each additional variable added to the model will automatically increase $\eta^2_p$ (the more overparamaterised a model is the closer to a "perfect" fit it becomes i.e. the model accounts for total variance).
 
-Omega-squared ($\omega^2$) provides a less biased measure of effect size for ANOVA-type analyses by accounting for the mean-squared error of the observed samples [@Olejnik2009]
+Omega-squared ($\omega^2$) provides a less biased measure of effect size for ANOVA-type analyses by accounting for the mean-squared error of the observed samples [@Olejnik2003]
 
 $$
 \omega^2 = \frac{SS_A - (a-1)\frac{SS_W}{(N-a)}}{SS_T +\frac{SS_W}{(N-a)}}

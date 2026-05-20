@@ -3,7 +3,6 @@
 ```{r}
 #| echo: false
 #| eval: true
-#| label: setup
 #| cache: false
 
 # This initial code block loads custom utility functions and environment variables
@@ -33,13 +32,13 @@ Preparation of data from Woltka output for use in R
 #| eval: true
 #| label: kegg pathway annotation files
 pathways <- read.delim(
-  file.path(REF, "/WoL2-Woltka/function/kegg", "pathway_name.txt"),
+  file.path(REF, "/WoL2-Woltka/function", "pathway_name.txt"),
   header = F,
   col.names = c("id", "name")
 )
 
 path_class <- read.delim(
-  file.path(REF, "/WoL2-Woltka/function/kegg", "pathway-to-class.map"),
+  file.path(REF, "/WoL2-Woltka/function", "pathway-to-class.map"),
   header = F,
   col.names = c("id", "group", "class")
 )
@@ -49,7 +48,7 @@ pathways <- left_join(pathways, path_class) %>%
 
 write.csv(
   pathways,
-  file.path(REF, "/WoL2-Woltka/function/kegg", "pathways.csv"),
+  file.path(REF, "/WoL2-Woltka/function", "pathways.csv"),
   row.names = F
 )
 ```

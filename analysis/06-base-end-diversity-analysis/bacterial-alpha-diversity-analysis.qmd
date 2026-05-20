@@ -1,17 +1,31 @@
 ## Baseline and Endpoint Alpha Diversity
 
-### Data Preparation
-
 ```{r}
 #| echo: false
 #| eval: true
 #| label: setup
+#| cache: false
 
 # This initial code block loads custom utility functions and environment variables
-# These are stored in separate files to keep the main analysis clean and organized
-source("utils/r-utils.r")
-source("_environment.required")
+suppressWarnings(suppressMessages({
+  if (file.exists("utils/r-utils.r")) {
+    source("utils/r-utils.r")
+  }
+  if (file.exists("_environment.required")) {
+    source("_environment.required")
+  }
+
+  library(promicrobialTools)
+
+  prefix <- ""
+
+  filepath <- get_results_dir(directory_naming = "parent")
+}))
 ```
+
+Results will be saved to ``r filepath``.
+
+### Data Preparation
 
 ```{r}
 #| eval: true
@@ -28,7 +42,7 @@ Load previously rarefied (normalized) bacterial sequence data:
 #| label: load rarefied read data
 #| cache: false
 
-(seqdata_bac <- readRDS(paste0(RARE_RESULTS, "/rarefied_bacteria.rds")))
+(seqdata_bac <- readRDS(paste0(RARE_RESULTS, "/bacterial-OGUs-phyloseq.rds")))
 
 sample_data(seqdata_bac)$timepoint <- str_remove(
   sample_data(seqdata_bac)$timepoint,

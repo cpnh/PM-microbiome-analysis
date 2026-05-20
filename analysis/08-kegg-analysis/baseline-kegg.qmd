@@ -1,13 +1,10 @@
-## Endpoint KEGG Enrichment Analysis
-
-::: {.callout-important}
-This cross-sectional analysis contains all available endpoint samples (n = 109).
-:::
+## Baseline KEGG Enrichment Analysis
 
 ```{r}
 #| echo: false
 #| eval: true
 #| cache: false
+#| label: setup
 
 # This initial code block loads custom utility functions and environment variables
 # These are stored in separate files to keep the main analysis clean and organized
@@ -16,15 +13,15 @@ suppressWarnings(suppressMessages({
   source(normalizePath("_environment.required"))
   load(normalizePath("data/seqdata.RData"))
   metadata <- read_delim(normalizePath(METADATA))
-  endpoint_metadata <- readRDS(normalizePath(
-    "data/metadata/endpoint-metadata.rds"
+  baseline_metadata <- readRDS(normalizePath(
+    "data/metadata/baseline-metadata.rds"
   ))
 
   library(edgeR)
   library(limma)
   library(ComplexHeatmap)
   library(pairwiseAdonis)
-
+  library(Glimma)
   library(promicrobialTools)
 
   #to save for consistancy:
@@ -52,7 +49,7 @@ suppressWarnings(suppressMessages({
 
   kegg <- readRDS(file.path(WOLTKA_OUT, "kegg/kegg.rds"))
 
-  prefix <- "endKO-"
+  prefix <- "baseKO-"
   filepath <- get_results_dir(directory_naming = "both")
 }))
 ```
@@ -68,37 +65,32 @@ Strong evidence: 70-100% complete
 ```{r}
 #| eval: true
 #| label: pathway coverage filtering
-kegg_end <- kegg %>%
-  dplyr::filter(str_detect(timepoint, "Endpoint") & percent_cov >= 70)
+#| results: asis
+kegg_base <- kegg %>%
+  dplyr::filter(str_detect(timepoint, "Baseline") & percent_cov >= 70)
 
-tmp <- kegg_end %>%
+tmp <- kegg_base %>%
   arrange(desc(percent_cov)) %>%
   group_by(ko) %>%
   mutate(n = 1) %>%
   mutate(percent_samples = sum(n) / length(unique(.$sample)) * 100)
-```
-
-```{r}
-#| eval: true
-#| label: save
-#| results: asis
 
 save_and_link(
   data = tmp,
   filename = paste0(prefix, "ko-pathways-70percent-complete.csv"),
-  description = "KO pathways at endpoint with at least 70% gene completion",
+  description = "KO pathways at baseline with at least 70% gene completion",
   directory_naming = "both"
 )
 ```
 
-There are `r length(unique(kegg_end$ko))` unique pathways with $\geq$ 70% completeness
+There are `r length(unique(kegg_base$ko))` unique pathways with $\geq$ 70% completeness
 
 ```{r}
 #| eval: true
-#| label: fig-end-pathway-presence
+#| label: fig-base-pathway-presence
 #| fig-height: 18
 #| fig-width: 16
-#| fig-cap: KEGG pathway presence at endpoint
+#| fig-cap: KEGG pathway presence at baseline
 
 tmp %>%
   ggplot(aes(
@@ -117,46 +109,21 @@ tmp %>%
 
 ```
 
-```{r}
-#| eval: true
-#| label: fig-end-pathway-presence
-#| fig-height: 18
-#| fig-width: 16
-#| fig-cap: KEGG pathway presence at endpoint between intervention arms
-
-tmp %>%
-  ggplot(aes(
-    y = reorder(pathway_name, dplyr::desc(pathway_class)),
-    x = percent_samples,
-    fill = pathway_class
-  )) +
-  geom_col(position = "dodge") +
-  xlab("Percentage of Samples") +
-  ylab(NULL) +
-  scale_fill_manual(values = pathway_class_col) +
-  theme(
-    legend.text = element_text(size = 12, face = 'bold', color = 'black'),
-    legend.location = "plot"
-  ) +
-  facet_wrap(~arm)
-
-```
-
-### KEGG endpoint differential abundance analysis on pathways with $\geq$ 70% completeness
+### KEGG baseline differential abundance analysis on pathways with $\geq$ 70% completeness
 
 #### Assigning KEGG counts to DGEList
 
 ```{r}
 #| eval: true
-#| label: endpoint kegg da
-counts <- kegg_end %>%
+#| label: baseline kegg da
+counts <- kegg_base %>%
   dplyr::select(ko, sample, count) %>%
   pivot_wider(names_from = sample, values_from = count, values_fill = 0) %>%
   as.data.frame()
 
 counts <- DGEList(as.data.frame(counts))
 
-paste("There are", nrow(counts), "unique KO terms at endpoint")
+paste("There are", nrow(counts), "unique KO terms at baseline")
 
 counts$samples
 counts$samples$arm <- as.factor(kegg$arm[match(
@@ -178,21 +145,21 @@ counts <- counts[counts.keep == FALSE, ]
 counts <- normLibSizes(counts)
 ```
 
-$H_0$: KEGG pathways are not differentially abundant between intervention arm at endpoint
-$H_1$: There is a difference between KEGG pathway abundance between intervention arm at endpoint
+$H_0$: KEGG pathways are not differentially abundant between intervention arm at baseline
+$H_1$: There is a difference between KEGG pathway abundance between intervention arm at baseline
 
-#### KEGG pathway differences between treatment arms at endpoint
+#### KEGG pathway differences between treatment arms at baseline
 
 ```{r}
 #| eval: true
-#| label: tbl-end-arm-kegg
-#| tbl-cap: Summary of the number of KEGG pathways that are significantly increased or decreased in the intervention arm (FeZnPM) compared to control (CPM) at endpoint.
+#| label: tbl-base-arm-kegg
+#| tbl-cap: Summary of the number of KEGG pathways that are significantly increased or decreased in the intervention arm (FeZnPM) compared to control (CPM) at baseline.
 
 #Contrasts
-design <- stats::model.matrix(~ counts$samples$arm)
-colnames(design) <- c("Intercept", "FeZnPM")
+design <- stats::model.matrix(~ 0 + counts$samples$arm)
+colnames(design) <- levels(counts$samples$arm)
 
-contrasts <- makeContrasts(CPMvsFeZnPM = FeZnPM, levels = design)
+contrasts <- makeContrasts(CPMvsFeZnPM = CPM - FeZnPM, levels = design)
 
 #Transform raw count data to log2-counts per million (logCPM), estimate the mean-variance relationship and use this to compute appropriate observation-level weights. The data are then ready for linear modelling.
 
@@ -208,7 +175,7 @@ FDR5 <- decideTests(efit, adjust.method = "BH", p.value = 0.05, lfc = 0) #Identi
 knitr::kable(summary(FDR5))
 ```
 
-###### Endpoint KEGG MDS plot and PERMANOVA results
+###### Baseline KEGG MDS plot and PERMANOVA results
 
 ```{r}
 #| eval: true
@@ -235,7 +202,7 @@ Based on the PERMANOVA output, we can conclude that the variable arm has no sign
 
 ```{r}
 #| eval: true
-#| tab-cap: Summary table of PERMANOVA results for differences between intervention arm KEGG pathways at endpoint
+#| tab-cap: Summary table of PERMANOVA results for differences between intervention arm KEGG pathways at baseline
 pv <- lapply(2:length(mds_stat), function(x) {
   r <- mds_stat[[x]][1, 3]
   w <- mds_stat[[x]][1, 4]
@@ -260,14 +227,14 @@ knitr::kable(
 )
 ```
 
-The p-value ($Pr(>F)$) for counts$samples$arm is r pv$p, which is greater than the conventional significance level of 0.05. This suggests that we cannot reject the null hypothesis, implying that there is no significant difference in microbial pathway abundance between intervention arms at endpoint.
+The p-value ($Pr(>F)$) for counts$samples$arm is r pv$p, which is greater than the conventional significance level of 0.05. This suggests that we cannot reject the null hypothesis, implying that there is no significant difference in microbial pathway abundance between intervention arms at baseline.
 
-**MDS plot comparing arms at endpoint**
+**MDS plot comparing arms at baseline**
 
 ```{r}
 #| eval: true
-#| label: MDS plot comparing arms at endpoint
-#| fig-cap: Multidimensional scaling plot comparing the abundance of KEGG pathways between intervention arms at endpoint
+#| label: MDS plot comparing arms at baseline
+#| fig-cap: Multidimensional scaling plot comparing the abundance of KEGG pathways between intervention arms at baseline
 
 xmax = max(
   plotMDS(
@@ -326,16 +293,16 @@ There is a very clear divide in the data, just not due to intervention arm.
 ```{r}
 #| eval: true
 #| label: fig-ms-2
-#| fig-cap: "Relative abundance of KEGG functional pathway classes at endpoint: Individual samples are represented by stacked barplots depicting the relative abundance of KEGG functional pathway classes that had 70% or more of pathway completeness. Pathways have been ordered in decreasing abundance of carbohydrate metabolism pathways."
+#| fig-cap: "Relative abundance of KEGG functional pathway classes at baseline: Individual samples are represented by stacked barplots depicting the relative abundance of KEGG functional pathway classes that had 70% or more of pathway completeness. Pathways have been ordered in decreasing abundance of carbohydrate metabolism pathways."
 #| fig-width: 15
 #| fig-height: 10
-## top pathways at endpoint for each individual
-relAbund_kegg_end <- kegg_end %>%
+## top pathways at baseline for each individual
+relAbund_kegg_base <- kegg_base %>%
   group_by(sample) %>%
   mutate(relAbund = count / sum(count))
 
 #order by carbohydrate metabolism pathway abundance within arm
-tmp <- relAbund_kegg_end %>%
+tmp <- relAbund_kegg_base %>%
   dplyr::select(!c(ko, pathway_name, pathway_group, percent_cov)) %>%
   group_by(sample, pathway_class, arm) %>%
   summarize(sum_class_abund = sum(relAbund, na.rm = TRUE)) %>%
@@ -370,7 +337,7 @@ tmp %>%
   geom_vline(
     aes(
       xintercept = nrow(distinct(
-        dplyr::filter(relAbund_kegg_end, arm == "CPM"),
+        dplyr::filter(relAbund_kegg_base, arm == "CPM"),
         sample
       )) +
         0.5
@@ -381,7 +348,7 @@ tmp %>%
   annotate(
     geom = "text",
     x = nrow(distinct(
-      dplyr::filter(relAbund_kegg_end, arm == "CPM"),
+      dplyr::filter(relAbund_kegg_base, arm == "CPM"),
       sample
     )) /
       2,
@@ -391,9 +358,9 @@ tmp %>%
   ) +
   annotate(
     geom = "text",
-    x = nrow(distinct(relAbund_kegg_end, sample)) -
+    x = nrow(distinct(relAbund_kegg_base, sample)) -
       nrow(distinct(
-        dplyr::filter(relAbund_kegg_end, arm == "FeZnPM"),
+        dplyr::filter(relAbund_kegg_base, arm == "FeZnPM"),
         sample
       )) /
         2,
@@ -409,31 +376,32 @@ tmp %>%
 #| results: asis
 
 save_and_link(
-  data = relAbund_kegg_end,
-  filename = paste0(prefix, "indv-endpoint-kegg-pathway-percent-reads.csv"),
-  description = "Individual KEGG pathway relative abundances at endpoint",
+  data = relAbund_kegg_base,
+  filename = paste0(prefix, "indv-baseline-kegg-pathway-percent-reads.csv"),
+  description = "Individual KEGG pathway relative abundances at baseline",
   directory_naming = "both"
 )
 ```
 
+
 ```{r}
 #| eval: false
 #| label: fig-age-kegg
-#| fig-cap: "Relative abundance of KEGG functional pathway classes at endpoint: Individual samples are represented by stacked barplots depicting the relative abundance of KEGG functional pathway classes that had 70% or more of pathway completeness. Pathways have been ordered by increasing age in months."
+#| fig-cap: "Relative abundance of KEGG functional pathway classes at baseline: Individual samples are represented by stacked barplots depicting the relative abundance of KEGG functional pathway classes that had 70% or more of pathway completeness. Pathways have been ordered by increasing age in months."
 #| fig-width: 18
 #| fig-height: 16
-endpoint_metadata <- readRDS(normalizePath(
-  "data/metadata/endpoint-metadata.rds"
+baseline_metadata <- readRDS(normalizePath(
+  "data/metadata/baseline-metadata.rds"
 ))
 
 ## order samples by age
-age_labels <- endpoint_metadata %>%
+age_labels <- baseline_metadata %>%
   dplyr::select(sample = displayid, agedays_rounded) %>%
   arrange(agedays_rounded)
 #$data$Sample <- factor(p$data$Sample, levels = age_labels$rowname)
 
 #order by carbohydrate metabolism pathway abundamnce within arm
-tmp <- relAbund_kegg_end %>%
+tmp <- relAbund_kegg_base %>%
   dplyr::select(!c(ko, pathway_name, pathway_group, percent_cov)) %>%
   group_by(sample, pathway_class, arm) %>%
   summarize(sum_class_abund = sum(relAbund, na.rm = TRUE)) %>%
@@ -467,7 +435,7 @@ tmp %>%
   geom_vline(
     aes(
       xintercept = nrow(distinct(
-        dplyr::filter(relAbund_kegg_end, arm == "CPM"),
+        dplyr::filter(relAbund_kegg_base, arm == "CPM"),
         sample
       )) +
         0.5
@@ -478,7 +446,7 @@ tmp %>%
   annotate(
     geom = "text",
     x = nrow(distinct(
-      dplyr::filter(relAbund_kegg_end, arm == "CPM"),
+      dplyr::filter(relAbund_kegg_base, arm == "CPM"),
       sample
     )) /
       2,
@@ -488,9 +456,9 @@ tmp %>%
   ) +
   annotate(
     geom = "text",
-    x = nrow(distinct(relAbund_kegg_end, sample)) -
+    x = nrow(distinct(relAbund_kegg_base, sample)) -
       nrow(distinct(
-        dplyr::filter(relAbund_kegg_end, arm == "FeZnPM"),
+        dplyr::filter(relAbund_kegg_base, arm == "FeZnPM"),
         sample
       )) /
         2,
@@ -526,7 +494,7 @@ tmp %>%
 
 #Edit: 27-08-24
 #Checking out what those metabolic pathway annotations are about. Unclassified? They all have the same KO number; ko01100
-df <- relAbund_kegg_end %>%
+df <- relAbund_kegg_base %>%
   group_by(sample) %>%
   summarise(Total_kegg = sum(count))
 
@@ -551,8 +519,6 @@ There is no pattern where the difference between the WoL2 and KEGG mapped reads 
 
 ```{r}
 #| eval: false
-#png(paste("07-Research_Q_analysis/06-Functional_analysis/01-Endpoint_analysis/01-Bacteria/01-KEGG/indv_endpoint_kegg_pathway_percent_reads", "Mumbai_ID14768", format(Sys.time(), "%b_%d_%Y_%I:%M"), "NC.png", sep = "_"), width = 2200, height = 1000)
-
 ggplot(
   tmp,
   aes(
@@ -593,13 +559,11 @@ ggplot(
       'stripe'
     )
   )
-
-#dev.off()
 ```
 
 ```{r}
 #| eval: false
-#| label: endpoint kegg clustering
+#| label: baseline kegg clustering
 tmp <- tmp %>%
   pivot_wider(
     id_cols = sample,
@@ -625,6 +589,7 @@ row_annotation <- HeatmapAnnotation(
   )
 )
 
+
 Heatmap(
   t(mat),
   width = unit(0.75, "npc"),
@@ -642,6 +607,119 @@ Heatmap(
     grid.text(sprintf("%.1f", mat[i, j]), x, y, gp = gpar(fontsize = 10))
   }
 )
+```
+
+##### Stratification 
+
+https://github.com/qiyunzhu/woltka/blob/58ddd0c10e66e3acfc719f630b905ee2c9d5deef/doc/stratify.md
+
+
+### ANCOM differential abundances
+
+```{r}
+#| eval: true
+#| label: setup
+#| fig-cap: NA
+#| tbl-cap: NA
+
+library(ANCOMBC)
+
+dir.create(
+  file.path(RESULTS, "baseline-kegg/ANCOM-BC"),
+  showWarnings = FALSE,
+  recursive = TRUE
+)
+```
+
+```{r}
+#| eval: true
+#| label: data-prep
+#| fig-cap: NA
+#| tbl-cap: NA
+
+otu <- kegg_base %>%
+  select(ko, sample, count) %>%
+  pivot_wider(names_from = sample, values_from = count) %>%
+  column_to_rownames(var = "ko") %>%
+  otu_table(taxa_are_rows = TRUE)
+
+meta <- baseline_metadata %>%
+  mutate(sample_names.1 = sample_names) %>%
+  column_to_rownames(var = "sample_names.1") %>%
+  sample_data()
+
+kegg_phy <- phyloseq(otu, meta)
+```
+
+```{r}
+#| eval: true
+#| label: ancombc
+#| fig-cap: NA
+#| tbl-cap: NA
+
+base_results <- ancombc2(
+  kegg_phy,
+  taxa_are_rows = TRUE,
+  assay_name = "abundance",
+  rank = tax_level,
+  tax_level = NULL,
+  fix_formula = "arm",
+  p_adj_method = "BH",
+  pseudo = 0,
+  pseudo_sens = TRUE,
+  prv_cut = 0.1,
+  lib_cut = 0,
+  s0_perc = 0.05,
+  group = "arm",
+  struc_zero = TRUE,
+  neg_lb = FALSE,
+  alpha = 0.05,
+  n_cl = 1,
+  verbose = TRUE,
+  global = FALSE,
+  pairwise = FALSE,
+  dunnet = FALSE,
+  trend = FALSE,
+  iter_control = list(tol = 0.01, max_iter = 20, verbose = FALSE),
+  em_control = list(tol = 1e-05, max_iter = 100),
+  lme_control = lme4::lmerControl(),
+  mdfdr_control = list(fwer_ctrl_method = "holm", B = 100),
+  trend_control = list(contrast = NULL, node = NULL, solver = "ECOS", B = 100)
+)
+
+base_prim <- base_results$res
+```
+
+```{r}
+#| eval: true
+#| label: save
+#| results: asis
+
+save_and_link(
+  data = base_prim,
+  filename = paste0(prefix, "arm-ancombc.csv"),
+  description = "Baseline KEGG term differential abundaces between arms",
+  directory_naming = "both"
+)
+```
+
+```{r}
+#| eval: true
+#| label: fig-base
+#| fig-cap: Differentially abundant taxa in the FeZnPM intervention group at Baseline. Significant taxa were determined to be so if they had a FDR adjusted p-value $\leq$ 0.05 and a fold change of 2 or more
+
+baseFiltered <- base_prim %>%
+  select(taxon, ends_with("_armFeZnPM")) %>%
+  dplyr::filter(passed_ss_armFeZnPM == TRUE)
+
+colnames(baseFiltered) <- str_remove(colnames(baseFiltered), "_armFeZnPM")
+
+plotDAvol(
+  baseFiltered,
+  title = "Differentially abundant OGUs in the FeZnPM intervention group at Baseline",
+  p.fdr = q
+)
+
 ```
 
 ## Results Summary
