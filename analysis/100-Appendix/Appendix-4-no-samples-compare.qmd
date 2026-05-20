@@ -1,0 +1,232 @@
+# Baseline Characterisitcs for Participants included in the Pearl Millet Trial
+
+```{r}
+#| echo: false
+#| eval: true
+#| label: setup
+#| cache: false
+# This initial code block loads custom utility functions and environment variables
+suppressWarnings(suppressMessages({
+  if (file.exists("utils/r-utils.r")) {
+    source("utils/r-utils.r")
+  }
+  if (file.exists("_environment.required")) {
+    source("_environment.required")
+  }
+
+  library(promicrobialTools)
+
+  prefix <- ""
+
+  filepath <- get_results_dir(directory_naming = "parent")
+}))
+```
+
+## Overview
+
+This analysis presents a comparative assessment of baseline characteristics between participants in the pearl millet trial (N = 223) who provided faecal samples (n = 199) for shotgun sequencing and those who did not (n = 24). The primary objective was to evaluate whether systematic differences existed between these groups that might influence the interpretation of microbiome findings. Understanding the characteristics of the sequenced cohort relative to the broader trial population is essential for assessing any potential selection bias.
+
+The pearl millet trial enrolled 223 participants, of whom 199 provided suitable faecal samples for shotgun metagenomic sequencing whilst 24 did not. Baseline characteristics including anthropometric measurements, nutritional status indicators, clinical symptoms, and sociodemographic factors were compared between these groups to identify potential selection bias.
+
+::: {.callout-note}
+The metadata file used here has been exported from SAS. Originally, regardless of export method (wizard, `proc`, excel, csv etc), the format would be wrong with what looked like new rows inserted randomly. I suspected that there were newline characters in some of the string columns which upon export/viewing would have been moved to their own row so I got AI to write me some SAS code to remove newlines and the export looks as I would expect:
+
+```sas
+data cleaned_dataset;
+    set TMP1.randomizedfortrialv2;
+    
+    /* Get list of all character variables */
+    array char_vars[*] _CHARACTER_;
+    
+    /* Loop through all character variables */
+    do i = 1 to dim(char_vars);
+        if not missing(char_vars[i]) then do;
+            /* Remove newlines */
+            char_vars[i] = compress(char_vars[i], '0A0D'x);
+        end;
+    end;
+    
+    drop i; /* Remove the loop counter variable */
+run;
+
+proc export data=cleaned_dataset
+    outfile="C:\path\to\file.csv"
+    dbms=csv replace;
+run;
+```
+:::
+
+## Load Metadata
+
+The trial metadata and microbiome sample information were loaded and merged to identify participants with available sequencing data. Only baseline visit data (`visit_typeno == 2`) was retained for this comparison.
+
+```{r}
+#| eval: true
+#| label: load-data
+df <- read_csv("data/metadata/randomizedfortrialv2.csv") %>% sanitiseColnames()
+mbdf <- read_delim(
+  "data/metadata/merged_sample_information_Mumbai_ID14768_NC_30-08-23.tsv"
+)
+
+df <- df %>%
+  mutate(
+    microbiome = ifelse(
+      displayid %in% mbdf$displayid,
+      "Microbiome available",
+      "No microbiome data"
+    )
+  ) %>%
+  filter(visit_typeno == 2)
+```
+
+Baseline characteristics were selected and standardised for comparative analysis. Variable recoding was performed to ensure consistent categorisation of anthropometric, clinical, and symptom variables across both groups.
+
+```{r}
+#| eval: true
+#| label:  metadata comparison data prep
+m1 <- df %>%
+  select(
+    `Microbiome Sequences` = microbiome,
+    `Age (months)` = agemonths_base,
+    Sex = sexf,
+    `Intervention arm` = trt,
+    `Birth mode vaginal (vs. Caesarean)` = del_type,
+    `Birth weight (kg)` = bwt,
+    `Current weight (kg)` = cwt,
+    `Mid-upper arm circumference (cm)` = muac_avg,
+    `Head circumference (cm)` = hc_avg,
+    `Length (cm)` = ln_avg,
+    `Stunting (LAZ < -2)` = stunt_base,
+    `Underweight (WAZ < -2)` = underwt_base,
+    `Head circumference-for-age Z-score` = zhc,
+    `Weight-for-age Z-score (WAZ)` = zwei,
+    `Length-for-age Z-score (LAZ)` = zlen,
+    `Weight-for-length Z-score (WLZ)` = zwfl,
+    `Wasting (WLZ < -2)` = wast_base,
+    `Ferritin (ng/ml)` = fer_base,
+    `Iron deficiency (<12 ng/ml)` = fer_def12_base,
+    `Ferritin (ng/ml)* adjusted for CRP` = fer_crpadjbr, # using BRINDA
+    `Iron deficiency (<12 ng/ml)* adjusted for CRP` = fer_crpbr_def12, # using BRINDA
+    `Zinc (µg/dL)` = zinc,
+    `Zinc deficiency (<70 µg/dL)` = zinc_def70, # <70 µg/dL
+    `Hemoglobin (g/dl)` = hb_base,
+    `Anemia (hemoglobin < 11 g/dl)` = anemia_base,
+    `C-reactive protein (CRP) ≥ 5 mg/L` = crp_elev5,
+    `GI symptoms` = gi_yn,
+    `Diarrhea today or within past 4 weeks` = freq3diarr,
+    Fever = fever_yn,
+    `Fever today or within past 4 weeks` = freqfever,
+    `Respiratory symptoms` = resp_yn,
+    `Cough today or within past 4 weeks` = freqcough
+  ) %>%
+  mutate_at(vars(everything()), str_trim) %>%
+  type.convert(., as.is = TRUE) %>%
+  mutate(across(
+    c(`GI symptoms`, Fever, `Respiratory symptoms`),
+    ~ ifelse(.x == 0, "No", "Yes")
+  )) %>%
+  mutate(across(
+    c(
+      `Diarrhea today or within past 4 weeks`,
+      `Fever today or within past 4 weeks`,
+      `Cough today or within past 4 weeks`
+    ),
+    ~ case_when(
+      .x == "1" ~ "Today",
+      .x == "2" ~ "Last 7 days",
+      .x == "3" ~ "Last 4 weeks",
+      .x == "4" ~ "None",
+      .x == "8" ~ "Don't know"
+    )
+  )) %>%
+  mutate(
+    Sex = ifelse(Sex == 0, "Male", "Female"),
+    `Birth weight (kg)` = (`Birth weight (kg)`) / 1000,
+    `Current weight (kg)` = (`Current weight (kg)`),
+    `Low birth weight (<2.5 kg)` = (`Birth weight (kg)`) <= 2.5,
+    `Birth mode vaginal (vs. Caesarean)` = case_when(
+      `Birth mode vaginal (vs. Caesarean)` == "1" ~ "Vaginal",
+      `Birth mode vaginal (vs. Caesarean)` == "2" ~ "Caesarian"
+    ),
+    `Diarrhea today or within past 4 weeks` = ifelse(
+      `GI symptoms` == "No",
+      "None",
+      `Diarrhea today or within past 4 weeks`
+    ),
+    `Fever today or within past 4 weeks` = ifelse(
+      Fever == "No",
+      "None",
+      `Fever today or within past 4 weeks`
+    ),
+    `Cough today or within past 4 weeks` = ifelse(
+      `Respiratory symptoms` == "No",
+      "None",
+      `Cough today or within past 4 weeks`
+    )
+  )
+```
+
+## Baseline Characteristics Comparison
+
+```{r}
+#| eval: true
+#| label: tbl-char
+#| tbl-cap: "Baseline characteristics of pearl millet trial participants stratified by availability of microbiome sequencing data. Continuous variables are presented as median (interquartile range; minimum-maximum). Categorical variables are presented as n/N (%). P-values from Wilcoxon rank sum test for continuous variables and Pearson's chi-squared test or Fisher's exact test for categorical variables. Q-values represent false discovery rate-adjusted p-values for multiple testing correction."
+m1 %>%
+  tbl_summary(
+    by = `Microbiome Sequences`,
+    missing = "no",
+    statistic = list(
+      all_continuous() ~ "{median}  \n({IQR}; {min}-{max})", # stats and format for continuous columns
+      all_categorical() ~ "{n} / {N}  \n({p}%)"
+    )
+  ) %>% # stats and format for categorical columns
+  add_n(statistic = "{N_nonmiss}/{N_obs}") %>%
+  add_overall() %>%
+  add_p() %>%
+  add_q() %>%
+  bold_p(q = T) %>%
+  as_kable_extra(booktabs = TRUE) %>%
+  kable_styling(latex_options = "scale_down") %>%
+  landscape()
+```
+
+### Results
+
+A comparison of baseline characteristics was conducted between participants with and without microbiome sequencing data. Statistical testing was performed using appropriate tests for variable type, with false discovery rate correction applied to account for multiple comparisons (@tbl-char).
+
+#### Participant Characteristics and Sample Availability
+
+Of the 223 participants enrolled in the pearl millet trial, 199 (89.2%) provided faecal samples suitable for shotgun metagenomic sequencing, whilst 24 (10.8%) did not. The median age was comparable between groups, with participants who provided samples having a median age of 14.57 months (IQR: 3.91; range: 11.58-19.04) compared to 14.40 months (IQR: 3.60; range: 11.75-18.94) for those who did not provide samples (p = 0.943).
+
+#### Demographic and Intervention Characteristics
+
+No significant differences were observed in sex distribution between groups (p = 0.512), with females comprising 51% of participants with sequencing data and 58% of those without. Intervention arm allocation was balanced, with 51% of participants with sequencing data assigned to the intervention group compared to 39% of those without sequencing data (p = 0.271). Birth mode distribution was similar between groups, with vaginal delivery occurring in 71% of participants with sequencing data and 75% of those without (p = 0.651).
+
+#### Anthropometric Measurements and Nutritional Status
+
+Anthropometric measurements showed no statistically significant differences between groups. Birth weight was comparable, with a median of 2.75 kg (IQR: 0.50; range: 1.40-4.50) in the sequenced group versus 2.50 kg (IQR: 0.56; range: 1.75-4.30) in the non-sequenced group (p = 0.154). However, the prevalence of low birth weight (<2.5 kg) showed a notable difference, affecting 42% of participants with sequencing data compared to 64% of those without, though this difference was not statistically significant after multiple testing correction (p < 0.05, q = 0.863).
+
+Current anthropometric measurements, including weight, mid-upper arm circumference, head circumference, and length, were similar between groups (all p > 0.60). Growth indicators, including stunting (30% vs. 17%, p = 0.182), underweight (26% vs. 21%, p = 0.609), and wasting (9.0% vs. 4.2%, p = 0.702), showed no significant differences between participants with and without sequencing data, respectively.
+
+#### Micronutrient Status and Anaemia
+
+Iron status was similar between groups, with median ferritin concentrations of 9 ng/ml in the sequenced group compared to 7 ng/ml in the non-sequenced group (p = 0.201). Iron deficiency (<12 ng/ml) affected 59% of participants with sequencing data versus 71% of those without (p = 0.35). After adjustment for C-reactive protein using BRINDA correction, iron deficiency prevalence increased to 68% and 79%, respectively (p = 0.555).
+
+Zinc status was comparable between groups, with median concentrations of 83 µg/dL in both groups (p = 0.498). Zinc deficiency (<70 µg/dL) was present in 17% of participants with sequencing data compared to 27% of those without (p = 0.419).
+
+Anaemia prevalence was similar between groups, affecting 66% of participants with sequencing data and 79% of those without sequencing data (p = 0.204). Median haemoglobin concentrations were 10.50 g/dl and 10.10 g/dl, respectively (p = 0.268).
+
+#### Clinical Symptoms and Inflammatory Markers
+
+The prevalence of gastrointestinal symptoms was identical between groups (11% in both, p = 1.0). Diarrhoea patterns within the past four weeks showed similar distributions, with the majority of participants (91-95%) reporting no diarrhoea (p = 0.528).
+
+Fever was reported by 37% of participants with sequencing data compared to 35% of those without (p = 0.849). The temporal distribution of fever episodes was similar between groups (p = 0.776).
+
+Respiratory symptoms showed the largest difference between groups, affecting 47% of participants with sequencing data versus 25% of those without sequencing data (p = 0.058), though this was not statistically significant after multiple testing correction (q = 0.863).
+
+Inflammatory status, as measured by elevated C-reactive protein (≥5 mg/L), was present in 11% of participants with sequencing data, whilst none of the participants without sequencing data had elevated CRP levels (p = 0.615).
+
+#### Multiple Testing Considerations
+
+After applying false discovery rate correction for multiple testing, no baseline characteristics showed statistically significant differences between participants with and without microbiome sequencing data (all q-values > 0.05). This suggests that the microbiome analysis cohort is representative of the broader trial population without evidence of systematic selection bias.
