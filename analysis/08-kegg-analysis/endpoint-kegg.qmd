@@ -1,14 +1,13 @@
 ## Endpoint KEGG Enrichment Analysis
 
 ::: {.callout-important}
-This cross-sectional analysis contains all available endpoint samples (n = 109).
+This cross-sectional analysis contains all available endpoint samples (n = 108).
 :::
 
 ```{r}
 #| echo: false
 #| eval: true
 #| cache: false
-
 # This initial code block loads custom utility functions and environment variables
 # These are stored in separate files to keep the main analysis clean and organized
 suppressWarnings(suppressMessages({
@@ -82,7 +81,6 @@ tmp <- kegg_end %>%
 #| eval: true
 #| label: save
 #| results: asis
-
 save_and_link(
   data = tmp,
   filename = paste0(prefix, "ko-pathways-70percent-complete.csv"),
@@ -99,7 +97,6 @@ There are `r length(unique(kegg_end$ko))` unique pathways with $\geq$ 70% comple
 #| fig-height: 18
 #| fig-width: 16
 #| fig-cap: KEGG pathway presence at endpoint
-
 tmp %>%
   ggplot(aes(
     y = reorder(pathway_name, dplyr::desc(pathway_class)),
@@ -114,7 +111,6 @@ tmp %>%
     legend.text = element_text(size = 12, face = 'bold', color = 'black'),
     legend.location = "plot"
   )
-
 ```
 
 ```{r}
@@ -123,7 +119,6 @@ tmp %>%
 #| fig-height: 18
 #| fig-width: 16
 #| fig-cap: KEGG pathway presence at endpoint between intervention arms
-
 tmp %>%
   ggplot(aes(
     y = reorder(pathway_name, dplyr::desc(pathway_class)),
@@ -139,7 +134,6 @@ tmp %>%
     legend.location = "plot"
   ) +
   facet_wrap(~arm)
-
 ```
 
 ### KEGG endpoint differential abundance analysis on pathways with $\geq$ 70% completeness
@@ -187,7 +181,6 @@ $H_1$: There is a difference between KEGG pathway abundance between intervention
 #| eval: true
 #| label: tbl-end-arm-kegg
 #| tbl-cap: Summary of the number of KEGG pathways that are significantly increased or decreased in the intervention arm (FeZnPM) compared to control (CPM) at endpoint.
-
 #Contrasts
 design <- stats::model.matrix(~ counts$samples$arm)
 colnames(design) <- c("Intercept", "FeZnPM")
@@ -268,7 +261,6 @@ The p-value ($Pr(>F)$) for counts$samples$arm is r pv$p, which is greater than t
 #| eval: true
 #| label: MDS plot comparing arms at endpoint
 #| fig-cap: Multidimensional scaling plot comparing the abundance of KEGG pathways between intervention arms at endpoint
-
 xmax = max(
   plotMDS(
     v,
@@ -407,7 +399,6 @@ tmp %>%
 #| eval: true
 #| label: save
 #| results: asis
-
 save_and_link(
   data = relAbund_kegg_end,
   filename = paste0(prefix, "indv-endpoint-kegg-pathway-percent-reads.csv"),
@@ -523,7 +514,6 @@ tmp %>%
 #| eval: true
 #| label: total number of reads mapped to pathways
 #| tab-cap: total number of reads mapped to KEGG pathways
-
 #Edit: 27-08-24
 #Checking out what those metabolic pathway annotations are about. Unclassified? They all have the same KO number; ko01100
 df <- relAbund_kegg_end %>%
@@ -650,7 +640,6 @@ Heatmap(
 #| eval: true
 #| echo: false
 #| results: asis
-
 list_all_results()
 ```
 
@@ -664,6 +653,5 @@ generate_results_section(directory_naming = "both")
 ```{r}
 #| eval: true
 #| label: info
-
 print(sessionInfo(), locale = FALSE)
 ```

@@ -317,7 +317,7 @@ overall_paired_wilcox_overtime <- dfB_E.stats %>%
 ```{r}
 #| eval: true
 #| label: baseline intervention arm alpha diversity plots
-#| fig-cap: Alpha diversity statistics among baseline and endpoint samples separated by intervention arm (n = 82).
+#| fig-cap: Alpha diversity statistics among baseline and endpoint samples separated by intervention arm (n = 81).
 
 plot_names <- c(
   'pd' = "Faith's Phylogentic Diversity",
@@ -367,7 +367,7 @@ dfB_E.stats %>%
 ```{r}
 #| eval: true
 #| label: tbl-ms-3
-#| tbl-cap: Microbiome composition and diversity statistics at baseline and endpoint (n = 82)
+#| tbl-cap: Microbiome composition and diversity statistics at baseline and endpoint (n = 81)
 
 aggregate_phyla <- microbiome::aggregate_taxa(bac_base_end, level = "Phylum")
 phyla_list <- names(as.data.frame(t(otu_df(aggregate_phyla))))
