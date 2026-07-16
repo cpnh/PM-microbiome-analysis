@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/1189627157.svg)](https://doi.org/10.5281/zenodo.21399383)
+
 # Microbiome Analysis of Iron/Zinc-Biofortified Pearl Millet Trial
 
 This repository contains the analysis pipeline for a randomized controlled feeding trial investigating the effects of iron/zinc-biofortified pearl millet (FeZnPM) on the gut microbiome of children in Mumbai, India (Clinical Trials.gov ID: [NCT02233764](https://clinicaltrials.gov/study/NCT02233764?term=NCT02233764&rank=1)).
