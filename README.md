@@ -42,4 +42,4 @@ docker run -v "$dir"/:/home/workdir --rm $IMAGE quarto render workdir --log .log
 
 ## Citation
 
-Huey, S.L., Cole, N.L., Pagani, I., González, A., Finkelstein, J.L., Haas, J.D., Udipi, S.A., Ghugre, P., Potdar, R.D., Knight, R., Mehta, S., (in preperation). Effect of a complementary feeding intervention on the gut microbiota in 12–18-month-old children.
+Huey, S.L., Cole, N.L., Pagani, I. et al. Effect of a complementary feeding intervention based on iron- and zinc-biofortified pearl millet on the gut microbiota in 12–18-month-old children: a randomized trial. Nat Commun (2026). https://doi.org/10.1038/s41467-026-75674-6
